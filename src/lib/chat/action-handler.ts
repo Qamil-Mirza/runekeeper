@@ -118,6 +118,21 @@ async function handleGenerateSchedule(
     await db.select().from(timeBlocks).where(eq(timeBlocks.userId, userId))
   ).map(dbBlockToTimeBlock);
 
+  // Find uncommitted Runekeeper blocks to delete
+  const uncommittedBlocks = existingBlocks.filter(
+    (b) => !b.committed && b.source !== "google_calendar"
+  );
+
+  // Reset linked tasks back to "unscheduled" so the scheduler picks them up
+  for (const block of uncommittedBlocks) {
+    if (block.taskId) {
+      await db
+        .update(tasks)
+        .set({ status: "unscheduled", updatedAt: new Date() })
+        .where(eq(tasks.id, block.taskId));
+    }
+  }
+
   // Delete existing uncommitted Runekeeper blocks (preserve Google Calendar imports)
   await db
     .delete(timeBlocks)
@@ -129,9 +144,14 @@ async function handleGenerateSchedule(
       )
     );
 
+  // Reload tasks after status reset so the scheduler sees them as unscheduled
+  const refreshedTasks = (
+    await db.select().from(tasks).where(eq(tasks.userId, userId))
+  ).map(dbTaskToTask);
+
   // Run scheduler
   const result = schedule({
-    tasks: userTasks,
+    tasks: refreshedTasks,
     busyWindows: existingBlocks.filter((b) => b.committed),
     preferences,
     weekRange: { start: weekStart, end: weekEnd },
