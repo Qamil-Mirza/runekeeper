@@ -1,0 +1,165 @@
+@import "tailwindcss";
+
+@theme {
+  /* ── Surface & Tonal Architecture ── */
+  --color-surface: #fff9ed;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #faf3e3;
+  --color-surface-container: #f5edda;
+  --color-surface-container-high: #f0e8d0;
+  --color-surface-container-highest: #ebe2c7;
+  --color-surface-dim: #e3dabb;
+  --color-surface-bright: #fffdf7;
+
+  /* ── Accents & Emphasis ── */
+  --color-primary: #5f5e5e;
+  --color-primary-container: #d4d0c8;
+  --color-on-primary: #ffffff;
+  --color-secondary: #9b4342;
+  --color-secondary-container: #e8c4c3;
+  --color-on-secondary: #ffffff;
+  --color-tertiary: #745b29;
+  --color-tertiary-container: #c9ad6c;
+  --color-on-tertiary: #ffffff;
+
+  /* ── Text & Surface Content ── */
+  --color-on-surface: #373220;
+  --color-on-surface-variant: #5c5644;
+  --color-outline: #817b64;
+  --color-outline-variant: #bab298;
+
+  /* ── Inverse ── */
+  --color-inverse-surface: #100e08;
+  --color-inverse-on-surface: #f5edda;
+
+  /* ── Typography Scale ── */
+  --font-display: "Newsreader", serif;
+  --font-body: "Newsreader", serif;
+  --font-label: "Work Sans", sans-serif;
+
+  --text-display-lg: 3.5rem;
+  --text-headline-lg: 2rem;
+  --text-headline-md: 1.5rem;
+  --text-body-lg: 1rem;
+  --text-body-md: 0.875rem;
+  --text-label-lg: 0.875rem;
+  --text-label-md: 0.75rem;
+  --text-label-sm: 0.6875rem;
+
+  /* ── Spacing Scale (Design Doc) ── */
+  --spacing-micro: 0.35rem;
+  --spacing-rhythm: 1.4rem;
+  --spacing-editorial: 5.5rem;
+
+  /* ── Shadows ── */
+  --shadow-ambient: 0 8px 50px rgba(55, 50, 32, 0.05);
+  --shadow-float: 0 12px 60px rgba(55, 50, 32, 0.08);
+}
+
+/* ── Paper Grain Texture ── */
+.paper-grain {
+  position: relative;
+}
+
+.paper-grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.04;
+  pointer-events: none;
+  z-index: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+
+.paper-grain > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Ink-Wash Glassmorphism ── */
+.vellum-overlay {
+  background: rgba(250, 243, 227, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ── Ghost Border ── */
+.ghost-border {
+  box-shadow: inset 0 0 0 1px rgba(186, 178, 152, 0.15);
+}
+
+/* ── Archivist Scroll Custom Scrollbar ── */
+.archivist-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.archivist-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.archivist-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    to bottom,
+    var(--color-primary),
+    var(--color-primary-container)
+  );
+  border-radius: 0;
+}
+
+/* ── Base Styles ── */
+html {
+  font-family: var(--font-body);
+  color: var(--color-on-surface);
+  background-color: var(--color-surface);
+}
+
+body {
+  min-height: 100dvh;
+}
+
+/* ── Selection ── */
+::selection {
+  background-color: var(--color-tertiary-container);
+  color: var(--color-on-surface);
+}
+
+/* ── Focus Ring ── */
+:focus-visible {
+  outline: 2px solid var(--color-outline-variant);
+  outline-offset: 2px;
+}
+
+/* ── Keyframes ── */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes goldShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.gold-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(116, 91, 41, 0.15) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: goldShimmer 1.5s ease-in-out;
+}
+
+/* ── Reduce Motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
