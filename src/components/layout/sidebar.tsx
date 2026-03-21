@@ -2,8 +2,8 @@
 
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
-
-type ViewId = "chat" | "inventory" | "map" | "settings";
+import type { ViewId } from "@/context/planner-context";
+import { usePlanner } from "@/context/planner-context";
 
 interface SidebarProps {
   currentView: ViewId;
@@ -12,13 +12,16 @@ interface SidebarProps {
 }
 
 const navItems: { id: ViewId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: "home", label: "Hearth", icon: HearthIcon },
   { id: "chat", label: "Chronicle", icon: QuillIcon },
-  { id: "inventory", label: "Inventory", icon: ScrollIcon },
-  { id: "map", label: "Map", icon: MapIcon },
+  { id: "quest-log", label: "Quest Log", icon: ScrollIcon },
+  { id: "calendar", label: "Calendar", icon: CalendarIcon },
   { id: "settings", label: "Settings", icon: GearIcon },
 ];
 
 export function Sidebar({ currentView, onNavigate, collapsed }: SidebarProps) {
+  const { user } = usePlanner();
+
   return (
     <aside
       className={cn(
@@ -64,10 +67,10 @@ export function Sidebar({ currentView, onNavigate, collapsed }: SidebarProps) {
       {/* User */}
       <div className={cn("pb-6", collapsed ? "px-2" : "px-5")}>
         <div className="flex items-center gap-3">
-          <Avatar initials="AH" size="sm" />
+          <Avatar initials={user.initials} size="sm" />
           {!collapsed && (
             <span className="font-label text-label-md text-on-surface-variant">
-              Alex H.
+              {user.name.split(" ")[0]}
             </span>
           )}
         </div>
@@ -77,6 +80,16 @@ export function Sidebar({ currentView, onNavigate, collapsed }: SidebarProps) {
 }
 
 /* ── Inline SVG icons (minimal, thematic) ── */
+
+function HearthIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22c-4-3-8-7-8-12a5 5 0 018-4 5 5 0 018 4c0 5-4 9-8 12z" />
+      <path d="M12 13v5" />
+      <path d="M9 18h6" />
+    </svg>
+  );
+}
 
 function QuillIcon({ className }: { className?: string }) {
   return (
@@ -100,13 +113,13 @@ function ScrollIcon({ className }: { className?: string }) {
   );
 }
 
-function MapIcon({ className }: { className?: string }) {
+function CalendarIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="7" height="7" />
-      <rect x="14" y="3" width="7" height="7" />
-      <rect x="3" y="14" width="7" height="7" />
-      <rect x="14" y="14" width="7" height="7" />
+      <rect x="3" y="4" width="18" height="18" rx="0" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
     </svg>
   );
 }

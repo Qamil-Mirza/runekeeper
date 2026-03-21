@@ -3,7 +3,7 @@ import type { TimeBlock, WeekRange } from "@/lib/types";
 export interface FreeSlot {
   start: Date;
   end: Date;
-  dayOfWeek: number; // 0=Mon, 1=Tue, ..., 6=Sun
+  dayOfWeek: number; // 0=Sun, 1=Mon, ..., 6=Sat (JS convention)
 }
 
 export function buildFreeTimeMap(
@@ -18,11 +18,12 @@ export function buildFreeTimeMap(
   }
 ): FreeSlot[] {
   const freeSlots: FreeSlot[] = [];
+  const now = new Date();
 
-  // Generate working hour slots for each weekday (Mon-Fri)
+  // Generate slots for all 7 days of the week (Mon–Sun)
   const weekStart = new Date(weekRange.start + "T00:00:00");
 
-  for (let dayOffset = 0; dayOffset < 5; dayOffset++) {
+  for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
     const day = new Date(weekStart);
     day.setDate(weekStart.getDate() + dayOffset);
 
@@ -32,13 +33,29 @@ export function buildFreeTimeMap(
     const dayEnd = new Date(day);
     dayEnd.setHours(preferences.workingHoursEnd, 0, 0, 0);
 
-    // Start with the full working day as free
+    // Skip if the entire day is in the past
+    if (dayEnd <= now) continue;
+
+    // Start with the full day as free
     let intervals: { start: Date; end: Date }[] = [
       { start: new Date(dayStart), end: new Date(dayEnd) },
     ];
 
-    // Subtract lunch break (centered in the working day)
-    if (preferences.lunchDurationMinutes > 0) {
+    // Clip today's slots to start from now (don't schedule in the past)
+    if (day.toDateString() === now.toDateString()) {
+      intervals = intervals
+        .map((interval) => ({
+          start: interval.start < now ? new Date(now) : interval.start,
+          end: interval.end,
+        }))
+        .filter((interval) => interval.start < interval.end);
+    }
+
+    // Subtract lunch break (centered in the working day) — weekdays only
+    const jsDay = day.getDay(); // 0=Sun, 6=Sat
+    const isWeekday = jsDay >= 1 && jsDay <= 5;
+
+    if (preferences.lunchDurationMinutes > 0 && isWeekday) {
       const midpoint =
         preferences.workingHoursStart +
         (preferences.workingHoursEnd - preferences.workingHoursStart) / 2;
@@ -53,12 +70,10 @@ export function buildFreeTimeMap(
     }
 
     // Subtract busy windows (with meeting buffer)
+    const dayStr = day.toISOString().split("T")[0];
     const dayBusy = busyWindows.filter((b) => {
       const bStart = new Date(b.start);
-      return (
-        bStart.toISOString().split("T")[0] ===
-        day.toISOString().split("T")[0]
-      );
+      return bStart.toISOString().split("T")[0] === dayStr;
     });
 
     for (const busy of dayBusy) {
@@ -82,11 +97,10 @@ export function buildFreeTimeMap(
       const durationMinutes =
         (interval.end.getTime() - interval.start.getTime()) / 60000;
       if (durationMinutes >= 15) {
-        // Minimum 15-minute slot
         freeSlots.push({
           start: interval.start,
           end: interval.end,
-          dayOfWeek: dayOffset,
+          dayOfWeek: day.getDay(),
         });
       }
     }
@@ -104,14 +118,11 @@ function subtractInterval(
 
   for (const interval of intervals) {
     if (removeEnd <= interval.start || removeStart >= interval.end) {
-      // No overlap
       result.push(interval);
     } else {
-      // Before the removal
       if (removeStart > interval.start) {
         result.push({ start: interval.start, end: new Date(removeStart) });
       }
-      // After the removal
       if (removeEnd < interval.end) {
         result.push({ start: new Date(removeEnd), end: interval.end });
       }

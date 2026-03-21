@@ -39,8 +39,11 @@ async function handleCreateTasks(
   userId: string
 ): Promise<ActionResult> {
   const created: Task[] = [];
+  const proposedBlocks: TimeBlock[] = [];
 
   for (const def of taskDefs) {
+    const hasSpecificTime = !!def.startTime;
+
     const [row] = await db
       .insert(tasks)
       .values({
@@ -50,14 +53,39 @@ async function handleCreateTasks(
         priority: def.priority ?? "P1",
         estimateMinutes: def.estimateMinutes ?? 30,
         dueDate: def.dueDate ?? null,
-        status: "unscheduled",
+        status: hasSpecificTime ? "scheduled" : "unscheduled",
       })
       .returning();
 
-    created.push(dbTaskToTask(row));
+    const task = dbTaskToTask(row);
+    created.push(task);
+
+    // If a specific start time was provided, create a time block at that time
+    if (hasSpecificTime) {
+      const startTime = new Date(def.startTime);
+      const endTime = new Date(startTime.getTime() + (def.estimateMinutes ?? 30) * 60_000);
+
+      const [blockRow] = await db
+        .insert(timeBlocks)
+        .values({
+          userId,
+          taskId: task.id,
+          title: task.title,
+          startTime,
+          endTime,
+          blockType: "task",
+          committed: false,
+        })
+        .returning();
+
+      proposedBlocks.push(dbBlockToTimeBlock(blockRow));
+    }
   }
 
-  return { tasksCreated: created };
+  return {
+    tasksCreated: created,
+    ...(proposedBlocks.length > 0 ? { proposedBlocks } : {}),
+  };
 }
 
 async function handleGenerateSchedule(

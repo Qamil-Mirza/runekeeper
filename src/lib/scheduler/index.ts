@@ -21,7 +21,6 @@ export function schedule(input: SchedulerInput): SchedulerOutput {
       const pDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
       if (pDiff !== 0) return pDiff;
 
-      // Earlier due dates first
       if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
       if (a.dueDate) return -1;
       if (b.dueDate) return 1;
@@ -38,20 +37,25 @@ export function schedule(input: SchedulerInput): SchedulerOutput {
     let remainingMinutes = task.estimateMinutes;
     let blockIndex = 0;
 
+    // Determine the deadline for slot search
+    const deadline = task.dueDate
+      ? new Date(task.dueDate + "T23:59:59")
+      : null;
+
     while (remainingMinutes > 0) {
       const blockMinutes = Math.min(
         remainingMinutes,
         preferences.maxBlockMinutes
       );
 
-      const slot = findSlot(freeSlots, usedRanges, blockMinutes);
+      const slot = findSlot(freeSlots, usedRanges, blockMinutes, deadline);
 
       if (!slot) {
         if (blockIndex === 0) {
-          unschedulable.push({
-            task,
-            reason: `No available ${blockMinutes}-minute slot in working hours`,
-          });
+          const reason = deadline
+            ? `No available ${blockMinutes}-minute slot before ${task.dueDate}`
+            : `No available ${blockMinutes}-minute slot in working hours`;
+          unschedulable.push({ task, reason });
         } else {
           unschedulable.push({
             task,
@@ -69,9 +73,7 @@ export function schedule(input: SchedulerInput): SchedulerOutput {
         id: `proposed-${task.id}-${blockIndex}`,
         taskId: task.id,
         title:
-          blockIndex > 0
-            ? `${task.title} (${blockIndex + 1})`
-            : task.title,
+          blockIndex > 0 ? `${task.title} (${blockIndex + 1})` : task.title,
         start: blockStart.toISOString(),
         end: blockEnd.toISOString(),
         type: inferBlockType(task),
@@ -92,30 +94,35 @@ export function schedule(input: SchedulerInput): SchedulerOutput {
 function findSlot(
   freeSlots: FreeSlot[],
   usedRanges: { start: Date; end: Date }[],
-  durationMinutes: number
+  durationMinutes: number,
+  deadline: Date | null
 ): { start: Date; end: Date } | null {
   for (const slot of freeSlots) {
-    // Try to find a gap within this free slot
-    let candidateStart = new Date(slot.start);
+    // Skip slots that start after the deadline
+    if (deadline && slot.start > deadline) continue;
 
-    while (candidateStart.getTime() + durationMinutes * 60000 <= slot.end.getTime()) {
+    let candidateStart = new Date(slot.start);
+    const slotEnd = deadline
+      ? new Date(Math.min(slot.end.getTime(), deadline.getTime()))
+      : slot.end;
+
+    while (
+      candidateStart.getTime() + durationMinutes * 60000 <=
+      slotEnd.getTime()
+    ) {
       const candidateEnd = new Date(candidateStart);
       candidateEnd.setMinutes(candidateEnd.getMinutes() + durationMinutes);
 
-      // Check if this candidate overlaps with any used range
       const conflict = usedRanges.some(
-        (used) =>
-          candidateStart < used.end && candidateEnd > used.start
+        (used) => candidateStart < used.end && candidateEnd > used.start
       );
 
       if (!conflict) {
         return { start: candidateStart, end: candidateEnd };
       }
 
-      // Move past the conflicting range
       const overlapping = usedRanges.find(
-        (used) =>
-          candidateStart < used.end && candidateEnd > used.start
+        (used) => candidateStart < used.end && candidateEnd > used.start
       );
       if (overlapping) {
         candidateStart = new Date(overlapping.end);
@@ -131,7 +138,21 @@ function findSlot(
 function inferBlockType(task: Task): BlockType {
   const lower = task.title.toLowerCase();
   if (lower.includes("meeting") || lower.includes("call")) return "meeting";
-  if (lower.includes("gym") || lower.includes("lunch") || lower.includes("break"))
+  if (
+    lower.includes("gym") ||
+    lower.includes("run") ||
+    lower.includes("workout") ||
+    lower.includes("exercise")
+  )
+    return "personal";
+  if (
+    lower.includes("lunch") ||
+    lower.includes("dinner") ||
+    lower.includes("breakfast") ||
+    lower.includes("coffee") ||
+    lower.includes("movie") ||
+    lower.includes("break")
+  )
     return "personal";
   if (lower.includes("admin") || lower.includes("email")) return "admin";
   if (lower.includes("class") || lower.includes("lecture")) return "class";

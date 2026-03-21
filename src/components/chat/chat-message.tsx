@@ -38,6 +38,7 @@ export function ChatMessage({ message, onQuickAction, isLast }: ChatMessageProps
         <div
           className={cn(
             "px-4 py-3 max-w-prose",
+            "rounded-lg",
             isUser
               ? "bg-surface-container-high text-on-surface"
               : "bg-surface-container-lowest shadow-ambient text-on-surface"

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { inkSpread } from "@/lib/animations";
@@ -20,32 +21,74 @@ const priorityVariant = {
 
 export function TaskItem({ task, onToggleDone, even }: TaskItemProps) {
   const isDone = task.status === "done";
+  const [completing, setCompleting] = useState(false);
+
+  const handleToggle = useCallback(() => {
+    if (isDone) {
+      // Uncompleting — instant
+      onToggleDone(task.id);
+      return;
+    }
+    if (completing) return;
+    setCompleting(true);
+    setTimeout(() => onToggleDone(task.id), 700);
+  }, [isDone, completing, onToggleDone, task.id]);
+
+  const showDone = isDone || completing;
 
   return (
     <motion.div
-      variants={inkSpread}
-      initial="hidden"
-      animate="visible"
+      variants={completing ? undefined : inkSpread}
+      initial={completing ? undefined : "hidden"}
+      animate={
+        completing
+          ? { opacity: 0, height: 0, paddingTop: 0, paddingBottom: 0 }
+          : "visible"
+      }
+      transition={
+        completing
+          ? {
+              opacity: { delay: 0.35, duration: 0.3 },
+              height: { delay: 0.55, duration: 0.2 },
+              paddingTop: { delay: 0.55, duration: 0.2 },
+              paddingBottom: { delay: 0.55, duration: 0.2 },
+            }
+          : undefined
+      }
       className={cn(
-        "flex items-start gap-3 px-4 py-3",
+        "flex items-start gap-3 px-4 py-3 overflow-hidden",
         even ? "bg-surface-container-low" : "bg-surface"
       )}
     >
       {/* Checkbox */}
       <button
-        onClick={() => onToggleDone(task.id)}
+        onClick={handleToggle}
+        disabled={completing}
         className={cn(
           "mt-0.5 w-4 h-4 shrink-0 border border-outline-variant flex items-center justify-center transition-all duration-300",
-          isDone && "bg-tertiary/20 border-tertiary"
+          showDone && "bg-tertiary/20 border-tertiary scale-110"
         )}
         aria-label={isDone ? `Mark "${task.title}" as incomplete` : `Mark "${task.title}" as complete`}
         role="checkbox"
-        aria-checked={isDone}
+        aria-checked={showDone}
       >
-        {isDone && (
-          <svg className="w-2.5 h-2.5 text-tertiary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
+        {showDone && (
+          <motion.svg
+            className="w-2.5 h-2.5 text-tertiary"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <motion.polyline
+              points="20 6 9 17 4 12"
+              initial={completing ? { pathLength: 0 } : {}}
+              animate={{ pathLength: 1 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+            />
+          </motion.svg>
         )}
       </button>
 
@@ -54,9 +97,14 @@ export function TaskItem({ task, onToggleDone, even }: TaskItemProps) {
         <div className="flex items-center gap-2">
           <span
             className={cn(
-              "font-body text-body-lg leading-tight truncate",
-              isDone && "line-through text-outline-variant"
+              "font-body text-body-lg leading-tight truncate transition-all duration-300",
+              showDone && "text-outline-variant"
             )}
+            style={{
+              textDecorationLine: showDone ? "line-through" : "none",
+              textDecorationColor: showDone ? "var(--color-outline-variant)" : "transparent",
+              textDecorationThickness: "1.5px",
+            }}
           >
             {task.title}
           </span>
@@ -67,8 +115,8 @@ export function TaskItem({ task, onToggleDone, even }: TaskItemProps) {
 
         {task.notes && (
           <p className={cn(
-            "font-body text-body-md text-on-surface-variant mt-0.5 truncate",
-            isDone && "line-through opacity-50"
+            "font-body text-body-md text-on-surface-variant mt-0.5 truncate transition-opacity duration-300",
+            showDone && "line-through opacity-50"
           )}>
             {task.notes}
           </p>
@@ -83,7 +131,7 @@ export function TaskItem({ task, onToggleDone, even }: TaskItemProps) {
               Due {new Date(task.dueDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
             </span>
           )}
-          {task.status === "scheduled" && (
+          {task.status === "scheduled" && !completing && (
             <span className="font-label text-label-sm text-tertiary">
               Scheduled
             </span>

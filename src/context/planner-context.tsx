@@ -52,6 +52,8 @@ function getWeekRange(date: Date): WeekRange {
 
 // ─── Context Types ───────────────────────────────────────────────────────────
 
+export type ViewId = "home" | "chat" | "quest-log" | "calendar" | "settings";
+
 interface PlannerState {
   user: User;
   tasks: Task[];
@@ -59,7 +61,7 @@ interface PlannerState {
   messages: ChatMessage[];
   isTyping: boolean;
   isLoading: boolean;
-  currentView: "chat" | "inventory" | "map" | "settings";
+  currentView: ViewId;
   drawerOpen: boolean;
   weekRange: WeekRange;
 }
@@ -68,7 +70,7 @@ interface PlannerActions {
   sendMessage: (content: string) => void;
   toggleTaskDone: (taskId: string) => void;
   addTask: (title: string) => void;
-  setCurrentView: (view: "chat" | "inventory" | "map" | "settings") => void;
+  setCurrentView: (view: ViewId) => void;
   toggleDrawer: () => void;
   commitProposedBlocks: () => void;
   navigateWeek: (direction: -1 | 1) => void;
@@ -90,9 +92,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentView, setCurrentView] = useState<
-    "chat" | "inventory" | "map" | "settings"
-  >("chat");
+  const [currentView, setCurrentView] = useState<ViewId>("home");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [weekRange, setWeekRange] = useState<WeekRange>(
     getWeekRange(new Date())
@@ -165,10 +165,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         };
         setMessages((prev) => [...prev, assistantMsg]);
 
-        // Refresh data if actions were taken
-        if (result.actions?.length) {
-          await loadData();
-        }
+        // Always refresh data after chat — the server may have created tasks or blocks
+        await loadData();
       } catch (err) {
         console.error("Chat error:", err);
         const errorMsg: ChatMessage = {
