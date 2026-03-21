@@ -43,14 +43,19 @@ export function ScheduledBlocks() {
       .sort((a, b) => a.start.localeCompare(b.start));
   }, [blocks]);
 
-  if (todayBlocks.length === 0) return null;
-
   return (
     <section className="mt-10">
       <h3 className="px-6 mb-4 font-display text-headline-md text-on-surface">
         Scheduled Blocks
       </h3>
 
+      {todayBlocks.length === 0 ? (
+        <div className="px-6">
+          <p className="font-body text-body-lg text-on-surface-variant/60 italic">
+            No quests mapped for today. Open the Chronicle to plan your day.
+          </p>
+        </div>
+      ) : (
       <motion.div
         variants={staggerChildren}
         initial="hidden"
@@ -131,6 +136,7 @@ export function ScheduledBlocks() {
           );
         })}
       </motion.div>
+      )}
     </section>
   );
 }
