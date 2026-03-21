@@ -48,6 +48,7 @@ export interface ChatMessage {
   schedulePreview?: TimeBlock[];
   diffPreview?: DiffPreview;
   quickActions?: string[];
+  actionSummary?: string;
 }
 
 export interface DiffChange {

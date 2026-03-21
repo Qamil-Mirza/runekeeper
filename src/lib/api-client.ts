@@ -156,6 +156,7 @@ export function chatWithAssistant(data: {
     quickActions?: string[];
     diffPreview?: any;
     schedulePreview?: any[];
+    actionSummary?: string;
   }>("/api/chat", {
     method: "POST",
     body: JSON.stringify(data),

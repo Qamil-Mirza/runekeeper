@@ -165,6 +165,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
           quickActions: result.quickActions,
           diffPreview: result.diffPreview,
           schedulePreview: result.schedulePreview,
+          actionSummary: result.actionSummary,
         };
         setMessages((prev) => [...prev, assistantMsg]);
 

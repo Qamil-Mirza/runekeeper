@@ -165,6 +165,9 @@ export async function POST(req: Request) {
   const schedulePreview = actionResults.find((r) => r.proposedBlocks)
     ?.proposedBlocks;
 
+  // Build action summary from actual results
+  const actionSummary = buildActionSummary(actionResults);
+
   // Save assistant message
   await db.insert(chatMessages).values({
     userId,
@@ -175,6 +178,7 @@ export async function POST(req: Request) {
       quickActions,
       diffPreview,
       schedulePreview,
+      actionSummary,
       actions: actionResults,
     },
   });
@@ -195,6 +199,7 @@ export async function POST(req: Request) {
     quickActions,
     diffPreview,
     schedulePreview,
+    actionSummary,
   });
 }
 
@@ -527,4 +532,51 @@ function resolveSpecificTime(
   const h = String(hours).padStart(2, "0");
   const m = String(minutes).padStart(2, "0");
   return `${date}T${h}:${m}:00`;
+}
+
+// ── Action summary builder ──────────────────────────────────────────────────
+
+function buildActionSummary(results: ActionResult[]): string | null {
+  if (results.length === 0) return null;
+
+  const parts: string[] = [];
+
+  // Tasks created
+  const allCreated = results.flatMap((r) => r.tasksCreated ?? []);
+  if (allCreated.length > 0) {
+    const names = allCreated.map((t) => t.title);
+    if (names.length === 1) {
+      parts.push(`Added quest: ${names[0]}`);
+    } else {
+      parts.push(`Added ${names.length} quests: ${names.join(", ")}`);
+    }
+  }
+
+  // Blocks proposed
+  const allProposed = results.flatMap((r) => r.proposedBlocks ?? []);
+  if (allProposed.length > 0) {
+    parts.push(`${allProposed.length} time block${allProposed.length > 1 ? "s" : ""} proposed`);
+  }
+
+  // Unschedulable
+  const allUnschedulable = results.flatMap((r) => r.unschedulable ?? []);
+  if (allUnschedulable.length > 0) {
+    const names = allUnschedulable.map((u) => u.task.title);
+    parts.push(`Could not schedule: ${names.join(", ")}`);
+  }
+
+  // Committed
+  const wasCommitted = results.some((r) => r.committed);
+  if (wasCommitted) {
+    parts.push("Plan committed to calendar");
+  }
+
+  // Diff summary
+  const diff = results.find((r) => r.diff)?.diff;
+  if (diff?.summary && diff.summary !== "No changes") {
+    parts.push(diff.summary);
+  }
+
+  if (parts.length === 0) return null;
+  return parts.join(" · ");
 }
