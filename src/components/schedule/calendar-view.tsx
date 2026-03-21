@@ -97,7 +97,7 @@ function NowMarker({ startHour }: { startHour: number }) {
 
 // ─── Event Card ──────────────────────────────────────────────────────────────
 
-function EventCard({ block }: { block: TimeBlock }) {
+function EventCard({ block, isDone }: { block: TimeBlock; isDone?: boolean }) {
   const start = new Date(block.start);
   const end = new Date(block.end);
   const durationMinutes =
@@ -108,7 +108,7 @@ function EventCard({ block }: { block: TimeBlock }) {
     ((start.getHours() * 60 + start.getMinutes() - START_HOUR * 60) / 60) *
     HOUR_HEIGHT;
 
-  const isExternal = block.source === "google_calendar";
+  const isExternal = (block as any).source === "google_calendar";
   const accent = blockAccent[block.type] || blockAccent.focus;
   const isLarge = height >= 80;
 
@@ -120,6 +120,7 @@ function EventCard({ block }: { block: TimeBlock }) {
         isExternal
           ? "bg-surface-container/50 border-l-2 border-l-[#4285F4]/60 pointer-events-none"
           : accent.bg,
+        isDone && "opacity-50",
         !block.committed && !isExternal && "opacity-70 border-dashed border border-outline-variant/40"
       )}
       style={{
@@ -133,17 +134,21 @@ function EventCard({ block }: { block: TimeBlock }) {
         <div className="flex items-start justify-between gap-2">
           <h4 className={cn(
             "font-display text-body-lg font-semibold leading-snug",
-            isExternal ? "text-on-surface/70" : "text-on-surface"
+            isExternal ? "text-on-surface/70" : "text-on-surface",
+            isDone && "line-through text-on-surface/50"
           )}>
             {block.title}
           </h4>
-          <span className="text-base shrink-0 mt-0.5" aria-hidden="true">
-            {isExternal ? (
-              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#4285F4]/15 text-[10px] font-bold text-[#4285F4]">G</span>
-            ) : (
-              blockEmoji[block.type]
-            )}
-          </span>
+          {/* Done checkmark or Google badge */}
+          {isDone ? (
+            <span className="shrink-0 mt-0.5 w-5 h-5 rounded-full bg-tertiary/15 flex items-center justify-center">
+              <svg className="w-3 h-3 text-tertiary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </span>
+          ) : isExternal ? (
+            <span className="shrink-0 mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#4285F4]/15 text-[10px] font-bold text-[#4285F4]">G</span>
+          ) : null}
         </div>
 
         {/* Subtitle / location */}
@@ -344,9 +349,12 @@ export function CalendarView() {
                 initial="hidden"
                 animate="visible"
               >
-                {dayBlocks.map((block) => (
-                  <EventCard key={block.id} block={block} />
-                ))}
+                {dayBlocks.map((block) => {
+                  const linkedTask = block.taskId ? tasks.find((t) => t.id === block.taskId) : undefined;
+                  return (
+                    <EventCard key={block.id} block={block} isDone={linkedTask?.status === "done"} />
+                  );
+                })}
               </motion.div>
             </div>
 
