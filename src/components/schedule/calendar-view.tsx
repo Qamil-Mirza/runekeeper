@@ -100,13 +100,15 @@ function NowMarker({ startHour }: { startHour: number }) {
 function EventCard({ block, isDone }: { block: TimeBlock; isDone?: boolean }) {
   const start = new Date(block.start);
   const end = new Date(block.end);
-  const durationMinutes =
-    (end.getHours() * 60 + end.getMinutes()) -
-    (start.getHours() * 60 + start.getMinutes());
+
+  // Clamp to visible range
+  const startMin = Math.max(start.getHours() * 60 + start.getMinutes(), START_HOUR * 60);
+  const endMin = Math.min(end.getHours() * 60 + end.getMinutes(), END_HOUR * 60);
+  const durationMinutes = endMin - startMin;
+  if (durationMinutes <= 0) return null;
+
   const height = (durationMinutes / 60) * HOUR_HEIGHT;
-  const top =
-    ((start.getHours() * 60 + start.getMinutes() - START_HOUR * 60) / 60) *
-    HOUR_HEIGHT;
+  const top = ((startMin - START_HOUR * 60) / 60) * HOUR_HEIGHT;
 
   const isExternal = (block as any).source === "google_calendar";
   const accent = blockAccent[block.type] || blockAccent.focus;
@@ -224,11 +226,18 @@ export function CalendarView() {
     });
   };
 
-  // Blocks for selected day
+  // Blocks for selected day (exclude blocks entirely outside visible hours)
   const dayBlocks = useMemo(
     () =>
       blocks
-        .filter((b) => isoToLocalDate(b.start) === selectedDateStr)
+        .filter((b) => {
+          if (isoToLocalDate(b.start) !== selectedDateStr) return false;
+          const startHour = new Date(b.start).getHours();
+          const endHour = new Date(b.end).getHours() + (new Date(b.end).getMinutes() > 0 ? 1 : 0);
+          // Skip if entirely outside the visible range
+          if (endHour <= START_HOUR || startHour >= END_HOUR) return false;
+          return true;
+        })
         .sort((a, b) => a.start.localeCompare(b.start)),
     [blocks, selectedDateStr]
   );

@@ -36,9 +36,11 @@ export async function listEvents(
     const params = new URLSearchParams();
     if (syncToken) {
       params.set("syncToken", syncToken);
+      params.set("showDeleted", "true");
     } else {
       params.set("timeMin", timeMin);
       params.set("timeMax", timeMax);
+      params.set("showDeleted", "true");
     }
     params.set("singleEvents", "true");
     params.set("orderBy", "startTime");

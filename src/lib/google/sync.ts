@@ -24,6 +24,18 @@ export async function syncCalendarEvents(
   let syncToken = user?.syncToken ?? undefined;
 
   try {
+    // Full resync: clear existing google_calendar blocks so stale events are removed
+    if (!syncToken) {
+      await db
+        .delete(timeBlocks)
+        .where(
+          and(
+            eq(timeBlocks.userId, userId),
+            eq(timeBlocks.source, "google_calendar")
+          )
+        );
+    }
+
     // If no time range specified and no sync token, sync current month
     if (!timeMin && !syncToken) {
       const now = new Date();
@@ -45,7 +57,7 @@ export async function syncCalendarEvents(
     for (const event of result.events) {
       if (!event.id) continue;
 
-      // Skip cancelled events
+      // Skip cancelled events — delete from our DB
       if (event.status === "cancelled") {
         await db
           .delete(timeBlocks)
@@ -57,6 +69,9 @@ export async function syncCalendarEvents(
           );
         continue;
       }
+
+      // Skip all-day events (they use date instead of dateTime)
+      if (!event.start?.dateTime || !event.end?.dateTime) continue;
 
       const blockData = mapGoogleEventToTimeBlock(event);
 
