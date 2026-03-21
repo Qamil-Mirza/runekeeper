@@ -94,7 +94,7 @@ npm run db:migrate
 ### 5. Pull the Ollama model
 
 ```sh
-ollama pull qwen3
+ollama pull qwen3.5
 ```
 
 ### 6. Run the dev server
