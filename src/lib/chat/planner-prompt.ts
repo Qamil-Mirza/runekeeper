@@ -1,34 +1,24 @@
-import type { Task, TimeBlock, User } from "@/lib/types";
+import type { User } from "@/lib/types";
 import { toLocalDateStr } from "@/lib/utils";
 
 export function buildSystemPrompt(context: {
   user: Pick<User, "name" | "timezone" | "preferences">;
-  tasks: Task[];
-  blocks: TimeBlock[];
+  todaySchedule: string;
+  questSummary: string;
+  weekOverview: string;
   weekStart: string;
   weekEnd: string;
+  memoryDigest?: string;
 }): string {
-  const { user, tasks, blocks, weekStart, weekEnd } = context;
-
-  const taskList =
-    tasks.length > 0
-      ? tasks
-          .map(
-            (t) =>
-              `- [${t.priority}] ${t.title} (${t.estimateMinutes}min, ${t.status})${t.dueDate ? ` due ${t.dueDate}` : ""}`
-          )
-          .join("\n")
-      : "No tasks yet.";
-
-  const blockList =
-    blocks.length > 0
-      ? blocks
-          .map(
-            (b) =>
-              `- ${b.title}: ${formatTime(b.start)} – ${formatTime(b.end)} (${b.type}${b.committed ? "" : ", proposed"})`
-          )
-          .join("\n")
-      : "No scheduled blocks yet.";
+  const {
+    user,
+    todaySchedule,
+    questSummary,
+    weekOverview,
+    weekStart,
+    weekEnd,
+    memoryDigest,
+  } = context;
 
   const now = new Date();
   const todayStr = toLocalDateStr(now);
@@ -78,12 +68,15 @@ ${upcomingDays}
 - Week: ${weekStart} to ${weekEnd}
 
 When the user says "today", "tomorrow", "tmr", "this Friday", etc., look up the correct date from the table above. ALWAYS use absolute dates (YYYY-MM-DD) in dueDate and startTime fields. NEVER guess or calculate dates — use the lookup table.
+${memoryDigest ? `\n## What I Remember About You\n${memoryDigest}\n` : ""}
+## Today's Schedule
+${todaySchedule}
 
-## Current Tasks
-${taskList}
+## Active Quests
+${questSummary}
 
-## Current Schedule
-${blockList}
+## This Week
+${weekOverview}
 
 ## Action Types
 - create_tasks: Create tasks. Each task needs title, priority (P0/P1/P2), estimateMinutes. Optional: dueDate (YYYY-MM-DD), startTime (ISO datetime like ${todayStr}T20:00:00 — include ONLY when user specifies a specific time like "at 8pm").
@@ -101,13 +94,4 @@ ${blockList}
 7. Do NOT repeatedly ask "Would you like me to confirm/commit?" — if the user already confirmed, act on it.
 
 /no_think`;
-}
-
-function formatTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-  });
 }

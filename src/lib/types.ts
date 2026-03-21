@@ -1,6 +1,7 @@
 export type Priority = "P0" | "P1" | "P2";
 export type TaskStatus = "unscheduled" | "scheduled" | "done";
 export type BlockType = "focus" | "admin" | "personal" | "meeting" | "class";
+export type BlockSource = "runekeeper" | "google_calendar";
 
 export interface User {
   id: string;
@@ -36,6 +37,7 @@ export interface TimeBlock {
   end: string; // ISO datetime
   type: BlockType;
   committed: boolean; // false = proposed, true = committed
+  source?: BlockSource;
 }
 
 export interface ChatMessage {
@@ -112,6 +114,7 @@ export interface DbTimeBlock {
   endTime: string;
   blockType: string;
   committed: boolean;
+  source: string;
   googleEventId: string | null;
   googleCalendarId: string | null;
   googleEtag: string | null;
@@ -148,5 +151,6 @@ export function dbBlockToTimeBlock(row: DbTimeBlock | Record<string, any>): Time
     end: endTime,
     type: row.blockType as BlockType,
     committed: row.committed,
+    source: (row.source as BlockSource) ?? "runekeeper",
   };
 }

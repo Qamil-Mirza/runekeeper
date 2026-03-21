@@ -13,6 +13,8 @@ import { handleAction, type ActionResult } from "@/lib/chat/action-handler";
 import { dbTaskToTask, dbBlockToTimeBlock } from "@/lib/types";
 import { jsonResponse, errorResponse } from "@/lib/api-helpers";
 import { toLocalDateStr } from "@/lib/utils";
+import { extractMemories, getMemoryDigest, saveMemories } from "@/lib/chat/memory";
+import { buildTieredContext } from "@/lib/chat/context-builder";
 
 function getWeekRange() {
   const now = new Date();
@@ -78,11 +80,23 @@ export async function POST(req: Request) {
       content: m.content,
     }));
 
+  // Load cross-session memory digest
+  const memoryDigest = await getMemoryDigest(userId);
+  const userTimezone = user?.timezone || "America/New_York";
+
+  // Build tiered context for the LLM
+  const tieredContext = buildTieredContext({
+    blocks: userBlocks,
+    tasks: userTasks,
+    weekRange,
+    timezone: userTimezone,
+  });
+
   // Build system prompt
   const systemPrompt = buildSystemPrompt({
     user: {
       name: user?.name || "User",
-      timezone: user?.timezone || "America/New_York",
+      timezone: userTimezone,
       preferences: (user?.preferences as any) ?? {
         workingHoursStart: 9,
         workingHoursEnd: 18,
@@ -91,10 +105,12 @@ export async function POST(req: Request) {
         meetingBuffer: 10,
       },
     },
-    tasks: userTasks,
-    blocks: userBlocks,
+    todaySchedule: tieredContext.todaySchedule,
+    questSummary: tieredContext.questSummary,
+    weekOverview: tieredContext.weekOverview,
     weekStart: weekRange.start,
     weekEnd: weekRange.end,
+    memoryDigest: memoryDigest || undefined,
   });
 
   let structured: StructuredResponse;
@@ -162,6 +178,16 @@ export async function POST(req: Request) {
       actions: actionResults,
     },
   });
+
+  // Extract and save memories from user message (non-blocking)
+  try {
+    const memories = extractMemories(message);
+    if (memories.length > 0) {
+      await saveMemories(userId, memories);
+    }
+  } catch (err) {
+    console.error("Memory extraction failed:", err);
+  }
 
   return jsonResponse({
     response: structured.message,

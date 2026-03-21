@@ -85,6 +85,10 @@ export async function syncCalendarEvents(
           })
           .where(eq(timeBlocks.id, existing.id));
       } else {
+        // Skip events that originated from Runekeeper (re-import prevention)
+        const extProps = (event as any).extendedProperties?.private;
+        if (extProps?.runekeeperId) continue;
+
         await db.insert(timeBlocks).values({
           userId,
           title: blockData.title,
@@ -92,6 +96,7 @@ export async function syncCalendarEvents(
           endTime: new Date(blockData.endTime),
           blockType: blockData.blockType,
           committed: true,
+          source: "google_calendar",
           googleEventId: event.id,
           googleCalendarId: calendarId,
           googleEtag: blockData.googleEtag,

@@ -73,7 +73,7 @@ async function handleCreateTasks(
           title: task.title,
           startTime,
           endTime,
-          blockType: "task",
+          blockType: "focus",
           committed: false,
         })
         .returning();
@@ -118,11 +118,15 @@ async function handleGenerateSchedule(
     await db.select().from(timeBlocks).where(eq(timeBlocks.userId, userId))
   ).map(dbBlockToTimeBlock);
 
-  // Delete existing uncommitted blocks
+  // Delete existing uncommitted Runekeeper blocks (preserve Google Calendar imports)
   await db
     .delete(timeBlocks)
     .where(
-      and(eq(timeBlocks.userId, userId), eq(timeBlocks.committed, false))
+      and(
+        eq(timeBlocks.userId, userId),
+        eq(timeBlocks.committed, false),
+        eq(timeBlocks.source, "runekeeper")
+      )
     );
 
   // Run scheduler
@@ -169,12 +173,17 @@ async function handleGenerateSchedule(
 }
 
 async function handleConfirmPlan(userId: string): Promise<ActionResult> {
-  // Mark all uncommitted blocks as committed
+  // Mark all uncommitted Runekeeper-sourced blocks as committed
+  // Google Calendar blocks are already committed on import, but guard anyway
   await db
     .update(timeBlocks)
     .set({ committed: true, updatedAt: new Date() })
     .where(
-      and(eq(timeBlocks.userId, userId), eq(timeBlocks.committed, false))
+      and(
+        eq(timeBlocks.userId, userId),
+        eq(timeBlocks.committed, false),
+        eq(timeBlocks.source, "runekeeper")
+      )
     );
 
   return { committed: true };

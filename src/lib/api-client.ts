@@ -77,6 +77,12 @@ export function deleteBlock(id: string) {
   return apiFetch(`/api/blocks/${id}`, { method: "DELETE" });
 }
 
+// ─── Calendar Sync ──────────────────────────────────────────────────────────
+
+export function syncCalendar() {
+  return apiFetch<any>("/api/calendar/events");
+}
+
 // ─── Plan Sessions ───────────────────────────────────────────────────────────
 
 export function fetchSessions() {
