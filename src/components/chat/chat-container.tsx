@@ -27,7 +27,7 @@ export function ChatContainer() {
       >
         <div className="flex flex-col gap-6 max-w-4xl mx-auto">
           {messages.length === 0 && (
-            <WelcomeMessage name={user.name.split(" ")[0]} />
+            <WelcomeMessage name={user.name.split(" ")[0]} onSend={sendMessage} />
           )}
           {messages.map((msg, i) => (
             <ChatMessage
@@ -56,7 +56,7 @@ const greetings = [
     `The tome stirs at your presence, ${name}. Share your quests for the days ahead, and together we'll forge a worthy schedule.`,
 ];
 
-function WelcomeMessage({ name }: { name: string }) {
+function WelcomeMessage({ name, onSend }: { name: string; onSend: (msg: string) => void }) {
   const greeting = useMemo(() => {
     const pick = greetings[Math.floor(Math.random() * greetings.length)];
     return pick(name);
@@ -76,12 +76,13 @@ function WelcomeMessage({ name }: { name: string }) {
       </p>
       <div className="flex flex-wrap justify-center gap-2 mt-2">
         {["Plan my week", "Show my quests", "What's on today?"].map((hint) => (
-          <span
+          <button
             key={hint}
-            className="font-label text-label-sm text-outline border border-outline-variant/40 rounded-none px-3 py-1"
+            onClick={() => onSend(hint)}
+            className="font-label text-label-sm text-outline border border-outline-variant/40 rounded-none px-3 py-1 hover:bg-surface-container-highest/30 hover:text-on-surface transition-colors cursor-pointer"
           >
             {hint}
-          </span>
+          </button>
         ))}
       </div>
     </div>
