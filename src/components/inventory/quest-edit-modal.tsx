@@ -146,7 +146,7 @@ export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: Q
     <AnimatePresence>
       {task && (
         <motion.div
-          className="fixed inset-0 z-50 flex flex-col sm:flex-row sm:items-center justify-center"
+          className="fixed inset-0 z-50 flex flex-col sm:items-center sm:justify-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
