@@ -174,7 +174,7 @@ export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: Q
             exit={{ y: 40, opacity: 0 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
           >
-            <div className="p-5 space-y-4">
+            <div className="p-5 space-y-4 max-h-[85vh] overflow-y-auto">
               {/* Header */}
               <div className="flex items-center justify-between">
                 <h2 className="font-display text-headline-md text-on-surface uppercase tracking-wider">
@@ -234,54 +234,50 @@ export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: Q
                 </div>
               </div>
 
-              {/* Due Date, Start Time & Estimate row */}
-              <div className="flex gap-4">
-                <div className="flex-1">
-                  <Input
-                    id="quest-due-date"
-                    label="Due Date"
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
+              {/* Due Date & Start Time row */}
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  id="quest-due-date"
+                  label="Due Date"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                />
+                <Input
+                  id="quest-start-time"
+                  label="Start Time"
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                />
+              </div>
+
+              {/* Estimate */}
+              <div className="flex flex-col gap-micro">
+                <label
+                  htmlFor="quest-estimate"
+                  className="font-label text-label-sm font-medium tracking-wide uppercase text-on-surface-variant"
+                >
+                  Estimate
+                </label>
+                <div className="relative w-32">
+                  <input
+                    id="quest-estimate"
+                    type="number"
+                    min={5}
+                    step={5}
+                    value={estimateMinutes}
+                    onChange={(e) => setEstimateMinutes(Number(e.target.value) || 5)}
+                    className={cn(
+                      "w-full bg-surface-container-high border-0 border-b-2 border-primary/30 rounded-none",
+                      "px-3 py-2.5 pr-10 font-body text-body-lg text-on-surface",
+                      "focus:border-tertiary focus:outline-none",
+                      "transition-colors duration-200"
+                    )}
                   />
-                </div>
-                <div className="flex-1">
-                  <Input
-                    id="quest-start-time"
-                    label="Start Time"
-                    type="time"
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                  />
-                </div>
-                <div className="w-28">
-                  <div className="flex flex-col gap-micro">
-                    <label
-                      htmlFor="quest-estimate"
-                      className="font-label text-label-sm font-medium tracking-wide uppercase text-on-surface-variant"
-                    >
-                      Estimate
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="quest-estimate"
-                        type="number"
-                        min={5}
-                        step={5}
-                        value={estimateMinutes}
-                        onChange={(e) => setEstimateMinutes(Number(e.target.value) || 5)}
-                        className={cn(
-                          "w-full bg-surface-container-high border-0 border-b-2 border-primary/30 rounded-none",
-                          "px-3 py-2.5 pr-10 font-body text-body-lg text-on-surface",
-                          "focus:border-tertiary focus:outline-none",
-                          "transition-colors duration-200"
-                        )}
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 font-label text-label-sm text-outline-variant">
-                        min
-                      </span>
-                    </div>
-                  </div>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 font-label text-label-sm text-outline-variant">
+                    min
+                  </span>
                 </div>
               </div>
 
