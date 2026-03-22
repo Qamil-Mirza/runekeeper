@@ -17,14 +17,16 @@ export async function PATCH(
   const { id } = await params;
   const body = await req.json();
 
-  // Convert date strings to Date objects if present
-  const updates: Record<string, unknown> = { ...body, updatedAt: new Date() };
-  if (body.startTime) updates.startTime = new Date(body.startTime);
-  if (body.endTime) updates.endTime = new Date(body.endTime);
+  // Allowlist: only permit safe fields to be updated
+  const allowed: Record<string, unknown> = { updatedAt: new Date() };
+  if (body.title !== undefined) allowed.title = body.title;
+  if (body.startTime !== undefined) allowed.startTime = new Date(body.startTime);
+  if (body.endTime !== undefined) allowed.endTime = new Date(body.endTime);
+  if (body.blockType !== undefined) allowed.blockType = body.blockType;
 
   const [updated] = await db
     .update(timeBlocks)
-    .set(updates)
+    .set(allowed)
     .where(and(eq(timeBlocks.id, id), eq(timeBlocks.userId, user.id)))
     .returning();
 
