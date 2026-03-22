@@ -247,6 +247,17 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       try {
         if (Object.keys(updates).length > 0) {
           await api.updateTask(taskId, updates);
+
+          // Sync title change to the linked time block
+          if (updates.title) {
+            const linkedBlock = blocks.find((b) => b.taskId === taskId);
+            if (linkedBlock) {
+              await api.updateBlock(linkedBlock.id, { title: updates.title } as any);
+              setBlocks((prev) =>
+                prev.map((b) => b.id === linkedBlock.id ? { ...b, title: updates.title! } : b)
+              );
+            }
+          }
         }
 
         // Handle start time changes (create/update/delete time block)
