@@ -39,7 +39,11 @@ export function buildTodaySchedule(
 
 // ── Quest Summary ───────────────────────────────────────────────────────────
 
-export function buildQuestSummary(tasks: Task[]): string {
+export function buildQuestSummary(
+  tasks: Task[],
+  blocks?: TimeBlock[],
+  timezone?: string
+): string {
   const unscheduled = tasks.filter((t) => t.status === "unscheduled");
   const scheduled = tasks.filter((t) => t.status === "scheduled");
   const done = tasks.filter((t) => t.status === "done");
@@ -57,7 +61,16 @@ export function buildQuestSummary(tasks: Task[]): string {
   }
 
   if (scheduled.length > 0) {
-    lines.push(`${scheduled.length} scheduled (already on the map)`);
+    lines.push(
+      `${scheduled.length} scheduled:`,
+      ...scheduled.map((t) => {
+        const block = blocks?.find((b) => b.taskId === t.id);
+        const timeStr = block && timezone
+          ? ` @ ${formatTimeCompact(block.start, timezone)}–${formatTimeCompact(block.end, timezone)} on ${new Date(block.start).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: timezone })}`
+          : "";
+        return `  - ${t.title} (${t.priority}, ${t.estimateMinutes}min${timeStr}${t.notes ? ` — ${t.notes}` : ""})`;
+      })
+    );
   }
 
   if (done.length > 0) {
@@ -103,20 +116,15 @@ export function buildWeekOverview(
     if (dayBlocks.length === 0) {
       lines.push(`${dayName}: free`);
     } else {
-      // Summarize by type
-      const typeCounts: Record<string, number> = {};
-      let totalMinutes = 0;
-      for (const b of dayBlocks) {
-        const mins =
-          (new Date(b.end).getTime() - new Date(b.start).getTime()) / 60000;
-        totalMinutes += mins;
-        typeCounts[b.type] = (typeCounts[b.type] || 0) + 1;
+      const sorted = [...dayBlocks].sort((a, b) => a.start.localeCompare(b.start));
+      const tz = timezone || "UTC";
+      lines.push(`${dayName}: ${dayBlocks.length} blocks`);
+      for (const b of sorted) {
+        const start = formatTimeCompact(b.start, tz);
+        const end = formatTimeCompact(b.end, tz);
+        const status = !b.committed ? " [proposed]" : "";
+        lines.push(`  - ${start}–${end}: ${b.title} (${b.type}${status})`);
       }
-      const summary = Object.entries(typeCounts)
-        .map(([type, count]) => `${count} ${type}`)
-        .join(", ");
-      const hours = Math.round(totalMinutes / 60 * 10) / 10;
-      lines.push(`${dayName}: ${dayBlocks.length} blocks (${hours}h — ${summary})`);
     }
   }
 
@@ -136,10 +144,10 @@ export function buildTieredContext(params: {
   questSummary: string;
   weekOverview: string;
 } {
-  const { blocks, tasks, weekRange, timezone, tokenBudget = 1500 } = params;
+  const { blocks, tasks, weekRange, timezone, tokenBudget = 3000 } = params;
 
   const todaySchedule = buildTodaySchedule(blocks, timezone);
-  const questSummary = buildQuestSummary(tasks);
+  const questSummary = buildQuestSummary(tasks, blocks, timezone);
   const weekOverview = buildWeekOverview(blocks, weekRange, timezone);
 
   // Estimate tokens
