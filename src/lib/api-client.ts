@@ -146,21 +146,91 @@ export function updateUserPreferences(data: {
 
 // ─── Chat with Ollama ────────────────────────────────────────────────────────
 
+export interface ChatResponse {
+  response: string;
+  actions?: any[];
+  quickActions?: string[];
+  diffPreview?: any;
+  schedulePreview?: any[];
+  actionSummary?: string;
+}
+
 export function chatWithAssistant(data: {
   message: string;
   sessionId?: string;
-}) {
-  return apiFetch<{
-    response: string;
-    actions?: any[];
-    quickActions?: string[];
-    diffPreview?: any;
-    schedulePreview?: any[];
-    actionSummary?: string;
-  }>("/api/chat", {
+}): Promise<ChatResponse> {
+  return apiFetch<ChatResponse>("/api/chat", {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+/**
+ * Send a chat message and handle both streaming (SSE) and JSON responses.
+ * Returns a ChatResponse. For streaming responses, calls onToken for each
+ * token as it arrives for progressive UI updates.
+ */
+export async function chatWithAssistantStreaming(
+  data: { message: string; sessionId?: string },
+  onToken: (token: string) => void
+): Promise<ChatResponse> {
+  const res = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(error.error || "API request failed");
+  }
+
+  const contentType = res.headers.get("Content-Type") || "";
+
+  // Streaming response from fast model
+  if (contentType.includes("text/event-stream") && res.body) {
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let result: ChatResponse = { response: "" };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const jsonStr = line.replace("data: ", "");
+
+        try {
+          const event = JSON.parse(jsonStr);
+
+          if (event.type === "token") {
+            onToken(event.content);
+          } else if (event.type === "done") {
+            result = {
+              response: event.fullMessage,
+              quickActions: event.quickActions ?? undefined,
+              actionSummary: event.actionSummary ?? undefined,
+              diffPreview: event.diffPreview ?? undefined,
+              schedulePreview: event.schedulePreview ?? undefined,
+            };
+          }
+        } catch {
+          // Skip malformed events
+        }
+      }
+    }
+
+    return result;
+  }
+
+  // Non-streaming JSON response from capable model
+  return res.json() as Promise<ChatResponse>;
 }
 
 // ─── Plan Operations ─────────────────────────────────────────────────────────

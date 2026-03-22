@@ -1,6 +1,7 @@
+import { MODEL_TIERS, type ModelTier } from "./model-config";
+
 const OLLAMA_BASE_URL =
   process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen3:latest";
 
 export interface OllamaMessage {
   role: "system" | "user" | "assistant";
@@ -102,12 +103,20 @@ const RESPONSE_SCHEMA = {
   required: ["message", "actions"],
 };
 
-// ── Chat completion with structured output ────────────────────────────────────
+// ── Streaming response type for SSE events ────────────────────────────────────
+
+export type StreamEvent =
+  | { type: "token"; content: string }
+  | { type: "done"; fullMessage: string };
+
+// ── Chat completion with structured output (capable tier) ─────────────────────
 
 export async function chatCompletion(
   messages: OllamaMessage[],
-  systemPrompt: string
+  systemPrompt: string,
+  tier: ModelTier = "capable"
 ): Promise<StructuredResponse> {
+  const config = MODEL_TIERS[tier];
   const fullMessages: OllamaMessage[] = [
     { role: "system", content: systemPrompt },
     ...messages,
@@ -118,13 +127,13 @@ export async function chatCompletion(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: OLLAMA_MODEL,
+        model: config.model,
         messages: fullMessages,
         stream: false,
         format: RESPONSE_SCHEMA,
         options: {
-          temperature: 0.7,
-          num_predict: 2048,
+          temperature: config.temperature,
+          num_predict: config.numPredict,
         },
       }),
     });
@@ -160,12 +169,116 @@ export async function chatCompletion(
         "Cannot connect to Ollama. Ensure Ollama is running locally."
       );
     }
-    // If JSON parse fails, wrap raw text as a message with no actions
     if (error instanceof SyntaxError) {
       throw new OllamaParseError("Failed to parse structured response from model.");
     }
     throw error;
   }
+}
+
+// ── Streaming chat completion (fast tier) ─────────────────────────────────────
+
+export function chatCompletionStream(
+  messages: OllamaMessage[],
+  systemPrompt: string
+): ReadableStream<Uint8Array> {
+  const config = MODEL_TIERS.fast;
+  const fullMessages: OllamaMessage[] = [
+    { role: "system", content: systemPrompt },
+    ...messages,
+  ];
+  const encoder = new TextEncoder();
+
+  return new ReadableStream({
+    async start(controller) {
+      try {
+        const res = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: config.model,
+            messages: fullMessages,
+            stream: true,
+            options: {
+              temperature: config.temperature,
+              num_predict: config.numPredict,
+            },
+          }),
+        });
+
+        if (!res.ok || !res.body) {
+          const text = res.body ? await res.text() : `HTTP ${res.status}`;
+          throw new Error(`Ollama streaming error: ${text}`);
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let fullMessage = "";
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // Ollama streams newline-delimited JSON objects
+          const lines = buffer.split("\n");
+          // Keep the last potentially incomplete line in the buffer
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+
+            let chunk: { message?: { content?: string }; done?: boolean };
+            try {
+              chunk = JSON.parse(line);
+            } catch {
+              continue;
+            }
+
+            const token = chunk.message?.content || "";
+            if (!token) continue;
+
+            // Stream each Ollama chunk as a single token event
+            // (think blocks are stripped post-hoc on fullMessage since
+            // /no_think suppresses them and tag boundaries can split across chunks)
+            fullMessage += token;
+            const event: StreamEvent = { type: "token", content: token };
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify(event)}\n\n`)
+            );
+          }
+        }
+
+        // Strip any think blocks that slipped through despite /no_think
+        fullMessage = fullMessage.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+
+        // Send done event with full message
+        const doneEvent: StreamEvent = {
+          type: "done",
+          fullMessage,
+        };
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify(doneEvent)}\n\n`)
+        );
+        controller.close();
+      } catch (error) {
+        // Send error as an SSE event so the client can handle it
+        const errorMessage =
+          error instanceof TypeError &&
+          (error.message.includes("fetch") || error.message.includes("connect"))
+            ? "connection_error"
+            : "stream_error";
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({ type: "error", error: errorMessage })}\n\n`
+          )
+        );
+        controller.close();
+      }
+    },
+  });
 }
 
 export class OllamaConnectionError extends Error {

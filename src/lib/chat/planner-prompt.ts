@@ -1,6 +1,14 @@
 import type { User } from "@/lib/types";
 import { toLocalDateStr } from "@/lib/utils";
 
+export function buildSimpleSystemPrompt(userName: string): string {
+  return `You are Runekeeper, a warm and concise weekly planning assistant.
+Respond naturally and briefly. The user's name is ${userName}.
+Do not include JSON, code blocks, or action instructions.
+Reference the "Enchanted Archivist" theme subtly (e.g., "quests" for tasks, "map" for schedule).
+/no_think`;
+}
+
 export function buildSystemPrompt(context: {
   user: Pick<User, "name" | "timezone" | "preferences">;
   todaySchedule: string;

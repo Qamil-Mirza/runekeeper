@@ -4,11 +4,13 @@ import { chatMessages, users, tasks, timeBlocks } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import {
   chatCompletion,
+  chatCompletionStream,
   OllamaConnectionError,
   OllamaParseError,
   type StructuredResponse,
 } from "@/lib/chat/ollama";
-import { buildSystemPrompt } from "@/lib/chat/planner-prompt";
+import { buildSystemPrompt, buildSimpleSystemPrompt } from "@/lib/chat/planner-prompt";
+import { classifyComplexity } from "@/lib/chat/classifier";
 import { handleAction, type ActionResult } from "@/lib/chat/action-handler";
 import { dbTaskToTask, dbBlockToTimeBlock } from "@/lib/types";
 import { jsonResponse, errorResponse } from "@/lib/api-helpers";
@@ -121,8 +123,140 @@ export async function POST(req: Request) {
   if (directAction) {
     structured = directAction;
   } else {
+    // Classify complexity to determine model tier
+    const tier = classifyComplexity(message, messages.length);
+
+    // Fast tier: stream response from small model
+    if (tier === "simple") {
+      const simplePrompt = buildSimpleSystemPrompt(user?.name || "User");
+
+      // Determine quick actions now (needed for the done event)
+      const quickActions = determineQuickActions(userTasks, userBlocks, []);
+
+      const stream = chatCompletionStream(messages, simplePrompt);
+
+      // Create a transform stream that intercepts the done event to:
+      // 1. Save the assistant message to DB
+      // 2. Append quick actions metadata to the done event
+      const encoder = new TextEncoder();
+      let transformBuffer = "";
+      const transformedStream = stream.pipeThrough(
+        new TransformStream<Uint8Array, Uint8Array>({
+          async transform(chunk, controller) {
+            transformBuffer += new TextDecoder().decode(chunk);
+            const parts = transformBuffer.split("\n\n");
+            // Keep the last potentially incomplete frame in the buffer
+            transformBuffer = parts.pop() || "";
+            const lines = parts.filter((l) => l.startsWith("data: "));
+
+            for (const line of lines) {
+              const jsonStr = line.replace("data: ", "");
+              try {
+                const event = JSON.parse(jsonStr);
+
+                if (event.type === "done") {
+                  // Save assistant message to DB
+                  await db.insert(chatMessages).values({
+                    userId,
+                    planSessionId: sessionId ?? null,
+                    role: "assistant",
+                    content: event.fullMessage,
+                    metadata: { quickActions },
+                  });
+
+                  // Extract memories from user message (non-blocking)
+                  try {
+                    const memories = extractMemories(message);
+                    if (memories.length > 0) {
+                      await saveMemories(userId, memories);
+                    }
+                  } catch (err) {
+                    console.error("Memory extraction failed:", err);
+                  }
+
+                  // Enrich done event with quick actions
+                  const enrichedDone = {
+                    ...event,
+                    quickActions,
+                    actionSummary: null,
+                    diffPreview: null,
+                    schedulePreview: null,
+                  };
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify(enrichedDone)}\n\n`)
+                  );
+                  continue;
+                }
+
+                if (event.type === "error") {
+                  // On stream error, fall back to capable model (non-streaming)
+                  console.warn("Fast model stream error, falling back to capable model");
+                  let fallback: StructuredResponse;
+                  try {
+                    fallback = await chatCompletion(messages, systemPrompt, "capable");
+                  } catch {
+                    fallback = generateFallbackResponse(message, userTasks, userBlocks);
+                  }
+
+                  // Save assistant message
+                  const fallbackQuickActions = determineQuickActions(userTasks, userBlocks, []);
+                  await db.insert(chatMessages).values({
+                    userId,
+                    planSessionId: sessionId ?? null,
+                    role: "assistant",
+                    content: fallback.message,
+                    metadata: { quickActions: fallbackQuickActions },
+                  });
+
+                  // Send the full message as a single token then done
+                  controller.enqueue(
+                    encoder.encode(
+                      `data: ${JSON.stringify({ type: "token", content: fallback.message })}\n\n`
+                    )
+                  );
+                  controller.enqueue(
+                    encoder.encode(
+                      `data: ${JSON.stringify({
+                        type: "done",
+                        fullMessage: fallback.message,
+                        quickActions: fallbackQuickActions,
+                        actionSummary: null,
+                        diffPreview: null,
+                        schedulePreview: null,
+                      })}\n\n`
+                    )
+                  );
+                  continue;
+                }
+              } catch {
+                // Not JSON, pass through as-is
+              }
+
+              // Pass through token events unchanged
+              controller.enqueue(encoder.encode(`${line}\n\n`));
+            }
+          },
+          flush(controller) {
+            // Process any remaining buffered data
+            if (transformBuffer.startsWith("data: ")) {
+              controller.enqueue(encoder.encode(`${transformBuffer}\n\n`));
+            }
+          },
+        })
+      );
+
+      return new Response(transformedStream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
+      });
+    }
+
+    // Capable tier: full structured response (non-streaming)
     try {
-      structured = await chatCompletion(messages, systemPrompt);
+      structured = await chatCompletion(messages, systemPrompt, "capable");
     } catch (error) {
       if (error instanceof OllamaConnectionError || error instanceof OllamaParseError) {
         structured = generateFallbackResponse(message, userTasks, userBlocks);

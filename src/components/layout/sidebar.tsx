@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
+import { signOut } from "next-auth/react";
 import type { ViewId } from "@/context/planner-context";
 import { usePlanner } from "@/context/planner-context";
 
@@ -69,9 +70,19 @@ export function Sidebar({ currentView, onNavigate, collapsed }: SidebarProps) {
         <div className="flex items-center gap-3">
           <Avatar initials={user.initials} size="sm" />
           {!collapsed && (
-            <span className="font-label text-label-md text-on-surface-variant">
-              {user.name.split(" ")[0]}
-            </span>
+            <>
+              <span className="font-label text-label-md text-on-surface-variant flex-1">
+                {user.name.split(" ")[0]}
+              </span>
+              <button
+                onClick={() => signOut({ callbackUrl: "/" })}
+                className="text-on-surface-variant hover:text-on-surface transition-colors p-1"
+                title="Sign out"
+                aria-label="Sign out"
+              >
+                <SignOutIcon className="w-4 h-4" />
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -129,6 +140,16 @@ function GearIcon({ className }: { className?: string }) {
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+    </svg>
+  );
+}
+
+function SignOutIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
     </svg>
   );
 }

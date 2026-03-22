@@ -154,33 +154,87 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       setMessages((prev) => [...prev, userMsg]);
       setIsTyping(true);
 
+      const assistantMsgId = `msg-${Date.now()}-r`;
+      let placeholderCreated = false;
+
       try {
-        const result = await api.chatWithAssistant({ message: content });
+        const result = await api.chatWithAssistantStreaming(
+          { message: content },
+          (token: string) => {
+            if (!placeholderCreated) {
+              // Create the assistant message on first token (avoids empty bubble)
+              placeholderCreated = true;
+              setIsTyping(false);
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: assistantMsgId,
+                  role: "assistant" as const,
+                  content: token,
+                  timestamp: new Date().toISOString(),
+                },
+              ]);
+            } else {
+              // Append subsequent tokens to the existing message
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMsgId
+                    ? { ...msg, content: msg.content + token }
+                    : msg
+                )
+              );
+            }
+          }
+        );
 
-        const assistantMsg: ChatMessage = {
-          id: `msg-${Date.now()}-r`,
-          role: "assistant",
-          content: result.response,
-          timestamp: new Date().toISOString(),
-          quickActions: result.quickActions,
-          diffPreview: result.diffPreview,
-          schedulePreview: result.schedulePreview,
-          actionSummary: result.actionSummary,
-        };
-        setMessages((prev) => [...prev, assistantMsg]);
+        if (placeholderCreated) {
+          // Streaming path: finalize the message with metadata
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMsgId
+                ? {
+                    ...msg,
+                    content: result.response || msg.content,
+                    quickActions: result.quickActions,
+                    diffPreview: result.diffPreview,
+                    schedulePreview: result.schedulePreview,
+                    actionSummary: result.actionSummary,
+                  }
+                : msg
+            )
+          );
+        } else {
+          // Non-streaming path (capable model): add the complete message
+          const assistantMsg: ChatMessage = {
+            id: assistantMsgId,
+            role: "assistant",
+            content: result.response,
+            timestamp: new Date().toISOString(),
+            quickActions: result.quickActions,
+            diffPreview: result.diffPreview,
+            schedulePreview: result.schedulePreview,
+            actionSummary: result.actionSummary,
+          };
+          setMessages((prev) => [...prev, assistantMsg]);
+        }
 
-        // Always refresh data after chat — the server may have created tasks or blocks
+        // Refresh data — the server may have created tasks or blocks
         await loadData();
       } catch (err) {
         console.error("Chat error:", err);
         const errorMsg: ChatMessage = {
-          id: `msg-${Date.now()}-err`,
+          id: assistantMsgId,
           role: "assistant",
           content:
             "I encountered an error processing your request. Please try again.",
           timestamp: new Date().toISOString(),
         };
-        setMessages((prev) => [...prev, errorMsg]);
+        // Replace placeholder if streaming started, otherwise add new message
+        setMessages((prev) =>
+          placeholderCreated
+            ? prev.map((msg) => (msg.id === assistantMsgId ? errorMsg : msg))
+            : [...prev, errorMsg]
+        );
       } finally {
         setIsTyping(false);
       }
