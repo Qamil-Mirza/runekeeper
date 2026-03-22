@@ -12,12 +12,18 @@ const DAY_NAMES =
 const QUESTION_STARTERS =
   /^(what|when|where|who|how|show|tell|can you|do i|is there|are there)\b/i;
 
+// Explicit greetings/acks that are safe to route to the fast model
+// even mid-conversation — they never require actions
+const GREETING_PATTERNS =
+  /^(h(i|ello|ey|owdy)|good\s+(morning|afternoon|evening)|thanks?(\s+you)?|thank\s+you|bye|goodbye|see\s+ya|ok(ay)?|cool|nice|awesome|great|perfect|got\s+it|no\s+worries|np|gm|gn)[\s!.?]*$/i;
+
 /**
  * Classifies the complexity of a user message to determine which model tier
  * should handle it. Conservative bias: defaults to "complex" when uncertain.
  *
  * Simple queries: greetings, acknowledgments, short questions
- * Complex queries: task creation, scheduling, multi-step requests
+ * Complex queries: task creation, scheduling, multi-step requests,
+ *                  AND mid-conversation follow-ups (confirmations, etc.)
  */
 export function classifyComplexity(
   message: string,
@@ -47,20 +53,23 @@ export function classifyComplexity(
     return "complex";
   }
 
-  // Short informational questions can use fast model
-  if (QUESTION_STARTERS.test(lower) && trimmed.length < 60) {
+  // Explicit greetings/acks are always safe for the fast model
+  if (GREETING_PATTERNS.test(lower)) {
     return "simple";
   }
 
-  // Short messages without action keywords are likely greetings/acks
-  if (trimmed.length < 30) {
-    return "simple";
-  }
-
-  // First couple messages in a conversation are often greetings
+  // Early in conversation: short messages are likely greetings
   if (conversationLength <= 2 && trimmed.length < 50) {
-    return "simple";
+    // Short questions early on can use fast model
+    if (QUESTION_STARTERS.test(lower) || trimmed.length < 30) {
+      return "simple";
+    }
   }
+
+  // Mid-conversation: only explicit greetings (matched above) go to fast model.
+  // Everything else — including short follow-ups like "let's lock it in",
+  // "yes do it", "sounds good" — needs the capable model because they may
+  // be confirmations that trigger actions.
 
   // Default: use capable model
   return "complex";
