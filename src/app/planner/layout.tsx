@@ -123,7 +123,7 @@ function PlannerShell() {
           title={viewTitles[currentView]}
           onOpenMenu={() => setSidebarOpen(true)}
         />
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden min-h-0">
           {currentView === "home" && <HomeDashboard />}
           {currentView === "chat" && <ChatContainer />}
           {currentView === "quest-log" && <InventoryPanel />}
