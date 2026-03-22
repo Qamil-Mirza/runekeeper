@@ -543,7 +543,7 @@ function WeekMiniView({
       <div className="overflow-x-auto archivist-scroll">
         <div className="flex">
           {/* Hour labels */}
-          <div className="w-8 shrink-0 pt-[40px]">
+          <div className="w-8 shrink-0 pt-[52px]">
             {hours.map((hour) => (
               <div
                 key={hour}
