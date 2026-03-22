@@ -168,13 +168,13 @@ export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: Q
             role="dialog"
             aria-modal="true"
             aria-label="Edit quest"
-            className="relative w-full sm:max-w-md bg-surface-container-lowest border-t-2 border-primary/20 sm:border-2 sm:border-primary/20"
+            className="relative w-full sm:max-w-md max-h-[100dvh] sm:max-h-[85vh] bg-surface-container-lowest border-t-2 border-primary/20 sm:border-2 sm:border-primary/20 flex flex-col"
             initial={{ y: 40, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 40, opacity: 0 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
           >
-            <div className="p-5 space-y-4 max-h-[85vh] overflow-y-auto">
+            <div className="p-5 space-y-4 overflow-y-auto flex-1">
               {/* Header */}
               <div className="flex items-center justify-between">
                 <h2 className="font-display text-headline-md text-on-surface uppercase tracking-wider">
@@ -281,23 +281,24 @@ export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: Q
                 </div>
               </div>
 
-              {/* Footer */}
-              <div className="flex items-center justify-between pt-2">
-                <Button
-                  variant="ghost"
-                  onClick={handleDelete}
-                  className="text-error"
-                >
-                  {confirmingDelete ? "Confirm Delete" : "Delete"}
-                </Button>
-                <Button
-                  variant="primary"
-                  onClick={handleSave}
-                  disabled={!title.trim()}
-                >
-                  Save
-                </Button>
-              </div>
+            </div>
+
+            {/* Footer — pinned outside scroll area */}
+            <div className="flex items-center justify-between p-5 pt-3 border-t border-outline-variant/20 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-5">
+              <Button
+                variant="ghost"
+                onClick={handleDelete}
+                className="text-error"
+              >
+                {confirmingDelete ? "Confirm Delete" : "Delete"}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleSave}
+                disabled={!title.trim()}
+              >
+                Save
+              </Button>
             </div>
           </motion.div>
         </motion.div>
