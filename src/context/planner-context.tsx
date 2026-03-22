@@ -221,7 +221,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     const newTask: Task = {
       id: tempId,
       title,
-      priority: "P1",
+      priority: "medium",
       estimateMinutes: 30,
       status: "unscheduled",
     };

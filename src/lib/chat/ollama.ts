@@ -20,7 +20,7 @@ export interface OllamaChatResponse {
 export interface TaskAction {
   title: string;
   notes?: string;
-  priority: "P0" | "P1" | "P2";
+  priority: "high" | "medium" | "low";
   estimateMinutes: number;
   dueDate?: string;
   startTime?: string;
@@ -76,7 +76,7 @@ const RESPONSE_SCHEMA = {
                 },
                 priority: {
                   type: "string" as const,
-                  enum: ["P0", "P1", "P2"],
+                  enum: ["high", "medium", "low"],
                 },
                 estimateMinutes: { type: "number" as const },
                 dueDate: {

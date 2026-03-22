@@ -15,9 +15,9 @@ interface TaskItemProps {
 }
 
 const priorityVariant = {
-  P0: "gold" as const,
-  P1: "default" as const,
-  P2: "dim" as const,
+  high: "gold" as const,
+  medium: "default" as const,
+  low: "dim" as const,
 };
 
 export function TaskItem({ task, onToggleDone, onEdit, even }: TaskItemProps) {

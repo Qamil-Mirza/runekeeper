@@ -17,20 +17,20 @@ interface QuestEditModalProps {
 
 const priorities: { value: Priority; label: string; style: string; activeStyle: string }[] = [
   {
-    value: "P0",
-    label: "P0",
+    value: "high",
+    label: "High",
     style: "text-tertiary border-b border-transparent",
     activeStyle: "bg-tertiary/15 text-tertiary border-b border-tertiary/30",
   },
   {
-    value: "P1",
-    label: "P1",
+    value: "medium",
+    label: "Medium",
     style: "text-on-surface-variant border-b border-transparent",
     activeStyle: "bg-surface-container-high text-on-surface-variant border-b border-on-surface-variant/30",
   },
   {
-    value: "P2",
-    label: "P2",
+    value: "low",
+    label: "Low",
     style: "text-outline border-b border-transparent",
     activeStyle: "bg-surface-container text-outline border-b border-outline/30",
   },
@@ -39,7 +39,7 @@ const priorities: { value: Priority; label: string; style: string; activeStyle: 
 export function QuestEditModal({ task, onClose, onSave, onDelete }: QuestEditModalProps) {
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
-  const [priority, setPriority] = useState<Priority>("P1");
+  const [priority, setPriority] = useState<Priority>("medium");
   const [dueDate, setDueDate] = useState("");
   const [estimateMinutes, setEstimateMinutes] = useState(30);
 

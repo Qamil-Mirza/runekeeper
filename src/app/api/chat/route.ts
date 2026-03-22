@@ -374,8 +374,8 @@ function generateFallbackResponse(
 
 function extractTasksFromMessage(
   message: string
-): { title: string; priority: "P0" | "P1" | "P2"; estimateMinutes: number; dueDate?: string; startTime?: string }[] {
-  const results: { title: string; priority: "P0" | "P1" | "P2"; estimateMinutes: number; dueDate?: string; startTime?: string }[] = [];
+): { title: string; priority: "high" | "medium" | "low"; estimateMinutes: number; dueDate?: string; startTime?: string }[] {
+  const results: { title: string; priority: "high" | "medium" | "low"; estimateMinutes: number; dueDate?: string; startTime?: string }[] = [];
 
   // Split on common delimiters
   const lines = message
@@ -427,11 +427,11 @@ function extractTasksFromMessage(
       if (/\b(movie|film)\b/i.test(line)) estimate = 120;
       if (/\b(dinner|lunch|breakfast|coffee|brunch)\b/i.test(line)) estimate = 60;
 
-      let priority: "P0" | "P1" | "P2" = "P1";
+      let priority: "high" | "medium" | "low" = "medium";
       if (/\b(urgent|critical|asap|important|deadline)\b/i.test(line))
-        priority = "P0";
+        priority = "high";
       if (/\b(later|eventually|low priority|if time|maybe)\b/i.test(line))
-        priority = "P2";
+        priority = "low";
 
       const dueDate = resolveRelativeDate(line);
       const startTime = resolveSpecificTime(line, dueDate);

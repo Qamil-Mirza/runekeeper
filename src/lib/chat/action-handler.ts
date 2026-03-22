@@ -63,7 +63,7 @@ async function handleCreateTasks(
         userId,
         title: def.title,
         notes: def.notes ?? null,
-        priority: def.priority ?? "P1",
+        priority: def.priority ?? "medium",
         estimateMinutes: def.estimateMinutes ?? 30,
         dueDate: def.dueDate ?? null,
         status: hasSpecificTime ? "scheduled" : "unscheduled",

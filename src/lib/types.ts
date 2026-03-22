@@ -1,4 +1,4 @@
-export type Priority = "P0" | "P1" | "P2";
+export type Priority = "high" | "medium" | "low";
 export type TaskStatus = "unscheduled" | "scheduled" | "done";
 export type BlockType = "focus" | "admin" | "personal" | "meeting" | "class";
 export type BlockSource = "runekeeper" | "google_calendar";

@@ -20,7 +20,7 @@ export function InventoryPanel() {
     for (const t of tasks) {
       groups[t.status].push(t);
     }
-    const priorityOrder: Record<Priority, number> = { P0: 0, P1: 1, P2: 2 };
+    const priorityOrder: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
     for (const key of Object.keys(groups) as TaskStatus[]) {
       groups[key].sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
     }
