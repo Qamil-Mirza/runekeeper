@@ -28,6 +28,11 @@
   --color-outline: #817b64;
   --color-outline-variant: #bab298;
 
+  /* ── Utility ── */
+  --color-white: #ffffff;
+  --color-scrim: #000000;
+  --color-error: #ba1a1a;
+
   /* ── Inverse ── */
   --color-inverse-surface: #100e08;
   --color-inverse-on-surface: #f5edda;
@@ -109,26 +114,28 @@
 }
 
 /* ── Base Styles ── */
-html {
-  font-family: var(--font-body);
-  color: var(--color-on-surface);
-  background-color: var(--color-surface);
-}
+@layer base {
+  html {
+    font-family: var(--font-body);
+    color: var(--color-on-surface);
+    background-color: var(--color-surface);
+  }
 
-body {
-  min-height: 100dvh;
-}
+  body {
+    min-height: 100dvh;
+  }
 
-/* ── Selection ── */
-::selection {
-  background-color: var(--color-tertiary-container);
-  color: var(--color-on-surface);
-}
+  /* ── Selection ── */
+  ::selection {
+    background-color: var(--color-tertiary-container);
+    color: var(--color-on-surface);
+  }
 
-/* ── Focus Ring ── */
-:focus-visible {
-  outline: 2px solid var(--color-outline-variant);
-  outline-offset: 2px;
+  /* ── Focus Ring ── */
+  :focus-visible {
+    outline: 2px solid var(--color-outline-variant);
+    outline-offset: 2px;
+  }
 }
 
 /* ── Keyframes ── */
