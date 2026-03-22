@@ -461,21 +461,15 @@ function generateFallbackResponse(
 ): StructuredResponse {
   const lower = message.toLowerCase();
 
-  // Plan/schedule request
+  // Plan/schedule request — ask about priorities first, don't auto-generate
   if (
     lower.includes("plan") &&
     (lower.includes("week") || lower.includes("day"))
   ) {
-    if (taskList.filter((t) => t.status === "unscheduled").length === 0) {
-      return {
-        message:
-          "You don't have any unscheduled tasks yet. Tell me about your priorities this week and I'll create tasks for you.",
-        actions: [],
-      };
-    }
     return {
-      message: `You have ${taskList.filter((t) => t.status === "unscheduled").length} unscheduled tasks. Let me generate a schedule for them.`,
-      actions: [{ type: "generate_schedule" }],
+      message:
+        "Let's plan your week! What are your priorities and commitments? Tell me what you need to get done and I'll help organize everything.",
+      actions: [],
     };
   }
 
