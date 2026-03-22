@@ -98,7 +98,7 @@ function NowMarker({ startHour }: { startHour: number }) {
 
 // ─── Event Card ──────────────────────────────────────────────────────────────
 
-function EventCard({ block, isDone }: { block: TimeBlock; isDone?: boolean }) {
+function EventCard({ block, isDone, linkedTask, onEdit }: { block: TimeBlock; isDone?: boolean; linkedTask?: Task; onEdit?: (task: Task) => void }) {
   const start = new Date(block.start);
   const end = new Date(block.end);
 
@@ -118,13 +118,15 @@ function EventCard({ block, isDone }: { block: TimeBlock; isDone?: boolean }) {
   return (
     <motion.div
       variants={fadeIn}
+      onClick={() => linkedTask && onEdit?.(linkedTask)}
       className={cn(
         "absolute left-10 right-4 overflow-hidden",
         isExternal
           ? "bg-surface-container/50 border-l-2 border-l-[#4285F4]/60 pointer-events-none"
           : accent.bg,
         isDone && "opacity-50",
-        !block.committed && !isExternal && "opacity-70 border-dashed border border-outline-variant/40"
+        !block.committed && !isExternal && "opacity-70 border-dashed border border-outline-variant/40",
+        linkedTask && onEdit && "cursor-pointer"
       )}
       style={{
         top: `${top}px`,
@@ -365,7 +367,7 @@ export function CalendarView() {
                 {dayBlocks.map((block) => {
                   const linkedTask = block.taskId ? tasks.find((t) => t.id === block.taskId) : undefined;
                   return (
-                    <EventCard key={block.id} block={block} isDone={linkedTask?.status === "done"} />
+                    <EventCard key={block.id} block={block} isDone={linkedTask?.status === "done"} linkedTask={linkedTask} onEdit={setEditingTask} />
                   );
                 })}
               </motion.div>

@@ -17,12 +17,19 @@ export async function PATCH(
   const { id } = await params;
   const body = await req.json();
 
+  // Allowlist editable fields to prevent overwriting userId, id, etc.
+  const allowed: Record<string, unknown> = { updatedAt: new Date() };
+  if (body.title !== undefined) allowed.title = body.title;
+  if (body.notes !== undefined) allowed.notes = body.notes;
+  if (body.priority !== undefined) allowed.priority = body.priority;
+  if (body.estimateMinutes !== undefined) allowed.estimateMinutes = body.estimateMinutes;
+  if (body.dueDate !== undefined) allowed.dueDate = body.dueDate;
+  if (body.status !== undefined) allowed.status = body.status;
+  if (body.recurrenceRule !== undefined) allowed.recurrenceRule = body.recurrenceRule;
+
   const [updated] = await db
     .update(tasks)
-    .set({
-      ...body,
-      updatedAt: new Date(),
-    })
+    .set(allowed)
     .where(and(eq(tasks.id, id), eq(tasks.userId, user.id)))
     .returning();
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,8 @@ export function QuestEditModal({ task, onClose, onSave, onDelete }: QuestEditMod
   const [priority, setPriority] = useState<Priority>("medium");
   const [dueDate, setDueDate] = useState("");
   const [estimateMinutes, setEstimateMinutes] = useState(30);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (task) {
@@ -50,11 +52,22 @@ export function QuestEditModal({ task, onClose, onSave, onDelete }: QuestEditMod
       setPriority(task.priority);
       setDueDate(task.dueDate ?? "");
       setEstimateMinutes(task.estimateMinutes);
+      setConfirmingDelete(false);
+    }
+  }, [task]);
+
+  // Lock body scroll when open
+  useEffect(() => {
+    if (task) {
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = "";
+      };
     }
   }, [task]);
 
   const handleSave = useCallback(() => {
-    if (!task) return;
+    if (!task || !title.trim()) return;
     const updates: Partial<Task> = {};
     if (title !== task.title) updates.title = title;
     if ((notes || undefined) !== task.notes) updates.notes = notes || undefined;
@@ -70,13 +83,33 @@ export function QuestEditModal({ task, onClose, onSave, onDelete }: QuestEditMod
 
   const handleDelete = useCallback(() => {
     if (!task) return;
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      return;
+    }
     onDelete(task.id);
     onClose();
-  }, [task, onDelete, onClose]);
+  }, [task, confirmingDelete, onDelete, onClose]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === "Escape") onClose();
+      // Trap focus within the modal
+      if (e.key === "Tab" && panelRef.current) {
+        const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+          'input, textarea, button, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     },
     [onClose]
   );
@@ -103,6 +136,10 @@ export function QuestEditModal({ task, onClose, onSave, onDelete }: QuestEditMod
 
           {/* Panel */}
           <motion.div
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Edit quest"
             className="relative w-full sm:max-w-md bg-surface-container-lowest border-t-2 border-primary/20 sm:border-2 sm:border-primary/20"
             initial={{ y: 40, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -112,7 +149,7 @@ export function QuestEditModal({ task, onClose, onSave, onDelete }: QuestEditMod
             <div className="p-5 space-y-4">
               {/* Header */}
               <div className="flex items-center justify-between">
-                <h2 className="font-display text-title-md text-on-surface uppercase tracking-wider">
+                <h2 className="font-display text-headline-md text-on-surface uppercase tracking-wider">
                   Edit Quest
                 </h2>
                 <button
@@ -212,10 +249,18 @@ export function QuestEditModal({ task, onClose, onSave, onDelete }: QuestEditMod
 
               {/* Footer */}
               <div className="flex items-center justify-between pt-2">
-                <Button variant="ghost" onClick={handleDelete} className="text-error">
-                  Delete
+                <Button
+                  variant="ghost"
+                  onClick={handleDelete}
+                  className="text-error"
+                >
+                  {confirmingDelete ? "Confirm Delete" : "Delete"}
                 </Button>
-                <Button variant="primary" onClick={handleSave}>
+                <Button
+                  variant="primary"
+                  onClick={handleSave}
+                  disabled={!title.trim()}
+                >
                   Save
                 </Button>
               </div>
