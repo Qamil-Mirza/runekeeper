@@ -157,7 +157,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       setIsTyping(true);
 
       try {
-        const result = await api.chatWithAssistant({ message: content });
+        const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const result = await api.chatWithAssistant({ message: content, timezone: browserTimezone });
 
         const assistantMsg: ChatMessage = {
           id: `msg-${Date.now()}-r`,

@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   if (!session?.user?.id) return errorResponse("Unauthorized", 401);
 
   const body = await req.json();
-  const { message, sessionId } = body;
+  const { message, sessionId, timezone: clientTimezone } = body;
 
   if (!message) return errorResponse("message is required");
 
@@ -82,7 +82,17 @@ export async function POST(req: Request) {
 
   // Load cross-session memory digest
   const memoryDigest = await getMemoryDigest(userId);
-  const userTimezone = user?.timezone || "America/New_York";
+  // Prefer browser-provided timezone, then DB, then fallback
+  const userTimezone = clientTimezone || user?.timezone || "America/New_York";
+
+  // Auto-update user timezone in DB if it differs from the browser
+  if (clientTimezone && user && user.timezone !== clientTimezone) {
+    await db
+      .update(users)
+      .set({ timezone: clientTimezone })
+      .where(eq(users.id, userId))
+      .catch(() => null); // best-effort, don't block chat
+  }
 
   // Build tiered context for the LLM
   const tieredContext = buildTieredContext({

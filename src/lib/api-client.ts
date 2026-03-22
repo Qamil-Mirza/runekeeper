@@ -149,6 +149,7 @@ export function updateUserPreferences(data: {
 export function chatWithAssistant(data: {
   message: string;
   sessionId?: string;
+  timezone?: string;
 }) {
   return apiFetch<{
     response: string;
