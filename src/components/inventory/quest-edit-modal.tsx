@@ -146,7 +146,7 @@ export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: Q
     <AnimatePresence>
       {task && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+          className="fixed inset-0 z-50 flex flex-col sm:flex-row sm:items-center justify-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -168,7 +168,7 @@ export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: Q
             role="dialog"
             aria-modal="true"
             aria-label="Edit quest"
-            className="fixed inset-0 sm:static sm:inset-auto sm:relative w-full sm:max-w-md sm:max-h-[85vh] bg-surface-container-lowest sm:border-2 sm:border-primary/20 flex flex-col"
+            className="relative w-full sm:max-w-md sm:max-h-[85vh] bg-surface-container-lowest sm:border-2 sm:border-primary/20 flex flex-col flex-1 sm:flex-initial min-h-0"
             initial={{ y: "100%", opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0 }}
