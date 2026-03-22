@@ -8,8 +8,12 @@ import { AddTaskInput } from "./add-task-input";
 import { QuestEditModal } from "./quest-edit-modal";
 
 export function InventoryPanel() {
-  const { tasks, toggleTaskDone, addTask, updateTask, deleteTask } = usePlanner();
+  const { tasks, blocks, toggleTaskDone, addTask, updateTask, deleteTask } = usePlanner();
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+
+  const editingBlock = editingTask
+    ? blocks.find((b) => b.taskId === editingTask.id) ?? null
+    : null;
 
   const grouped = useMemo(() => {
     const groups: Record<TaskStatus, Task[]> = {
@@ -43,6 +47,7 @@ export function InventoryPanel() {
 
       <QuestEditModal
         task={editingTask}
+        timeBlock={editingBlock}
         onClose={() => setEditingTask(null)}
         onSave={updateTask}
         onDelete={deleteTask}

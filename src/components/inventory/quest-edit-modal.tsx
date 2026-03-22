@@ -6,12 +6,13 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import type { Task, Priority } from "@/lib/types";
+import type { Task, TimeBlock, Priority } from "@/lib/types";
 
 interface QuestEditModalProps {
   task: Task | null;
+  timeBlock?: TimeBlock | null;
   onClose: () => void;
-  onSave: (taskId: string, updates: Partial<Task>) => void;
+  onSave: (taskId: string, updates: Partial<Task>, startTime?: string) => void;
   onDelete: (taskId: string) => void;
 }
 
@@ -36,12 +37,13 @@ const priorities: { value: Priority; label: string; style: string; activeStyle: 
   },
 ];
 
-export function QuestEditModal({ task, onClose, onSave, onDelete }: QuestEditModalProps) {
+export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: QuestEditModalProps) {
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [priority, setPriority] = useState<Priority>("medium");
   const [dueDate, setDueDate] = useState("");
   const [estimateMinutes, setEstimateMinutes] = useState(30);
+  const [startTime, setStartTime] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -53,8 +55,18 @@ export function QuestEditModal({ task, onClose, onSave, onDelete }: QuestEditMod
       setDueDate(task.dueDate ?? "");
       setEstimateMinutes(task.estimateMinutes);
       setConfirmingDelete(false);
+
+      // Extract time from linked block
+      if (timeBlock) {
+        const d = new Date(timeBlock.start);
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mm = String(d.getMinutes()).padStart(2, "0");
+        setStartTime(`${hh}:${mm}`);
+      } else {
+        setStartTime("");
+      }
     }
-  }, [task]);
+  }, [task, timeBlock]);
 
   // Lock body scroll when open
   useEffect(() => {
@@ -75,11 +87,27 @@ export function QuestEditModal({ task, onClose, onSave, onDelete }: QuestEditMod
     if ((dueDate || undefined) !== task.dueDate) updates.dueDate = dueDate || undefined;
     if (estimateMinutes !== task.estimateMinutes) updates.estimateMinutes = estimateMinutes;
 
-    if (Object.keys(updates).length > 0) {
-      onSave(task.id, updates);
+    // Determine if start time changed
+    const existingTime = timeBlock
+      ? `${String(new Date(timeBlock.start).getHours()).padStart(2, "0")}:${String(new Date(timeBlock.start).getMinutes()).padStart(2, "0")}`
+      : "";
+    const startTimeChanged = startTime !== existingTime;
+
+    // Build ISO start time if set
+    let startTimeISO: string | undefined;
+    if (startTimeChanged && startTime) {
+      const dateStr = dueDate || new Date().toISOString().split("T")[0];
+      startTimeISO = `${dateStr}T${startTime}:00`;
+    } else if (startTimeChanged && !startTime && timeBlock) {
+      // Clearing start time — pass empty string to signal removal
+      startTimeISO = "";
+    }
+
+    if (Object.keys(updates).length > 0 || startTimeISO !== undefined) {
+      onSave(task.id, updates, startTimeISO);
     }
     onClose();
-  }, [task, title, notes, priority, dueDate, estimateMinutes, onSave, onClose]);
+  }, [task, title, notes, priority, dueDate, estimateMinutes, startTime, timeBlock, onSave, onClose]);
 
   const handleDelete = useCallback(() => {
     if (!task) return;
@@ -205,7 +233,7 @@ export function QuestEditModal({ task, onClose, onSave, onDelete }: QuestEditMod
                 </div>
               </div>
 
-              {/* Due Date & Estimate row */}
+              {/* Due Date, Start Time & Estimate row */}
               <div className="flex gap-4">
                 <div className="flex-1">
                   <Input
@@ -214,6 +242,15 @@ export function QuestEditModal({ task, onClose, onSave, onDelete }: QuestEditMod
                     type="date"
                     value={dueDate}
                     onChange={(e) => setDueDate(e.target.value)}
+                  />
+                </div>
+                <div className="flex-1">
+                  <Input
+                    id="quest-start-time"
+                    label="Start Time"
+                    type="time"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
                   />
                 </div>
                 <div className="w-28">

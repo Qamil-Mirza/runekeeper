@@ -219,6 +219,10 @@ export function CalendarView() {
   const [mode, setMode] = useState<CalendarMode>("day");
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
+  const editingBlock = editingTask
+    ? blocks.find((b) => b.taskId === editingTask.id) ?? null
+    : null;
+
   const selectedDateStr = toLocalDateStr(selectedDate);
   const todayStr = toLocalDateStr(new Date());
   const isToday = selectedDateStr === todayStr;
@@ -441,6 +445,7 @@ export function CalendarView() {
 
       <QuestEditModal
         task={editingTask}
+        timeBlock={editingBlock}
         onClose={() => setEditingTask(null)}
         onSave={updateTask}
         onDelete={deleteTask}

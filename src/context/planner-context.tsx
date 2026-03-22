@@ -70,7 +70,7 @@ interface PlannerActions {
   sendMessage: (content: string) => void;
   toggleTaskDone: (taskId: string) => void;
   addTask: (title: string) => void;
-  updateTask: (taskId: string, updates: Partial<Task>) => void;
+  updateTask: (taskId: string, updates: Partial<Task>, startTime?: string) => void;
   deleteTask: (taskId: string) => void;
   setCurrentView: (view: ViewId) => void;
   toggleDrawer: () => void;
@@ -239,18 +239,57 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const updateTask = useCallback(
-    async (taskId: string, updates: Partial<Task>) => {
+    async (taskId: string, updates: Partial<Task>, startTime?: string) => {
       setTasks((prev) =>
         prev.map((t) => (t.id === taskId ? { ...t, ...updates } : t))
       );
       try {
-        await api.updateTask(taskId, updates);
+        if (Object.keys(updates).length > 0) {
+          await api.updateTask(taskId, updates);
+        }
+
+        // Handle start time changes (create/update/delete time block)
+        if (startTime !== undefined) {
+          const existingBlock = blocks.find((b) => b.taskId === taskId);
+
+          if (startTime === "" && existingBlock) {
+            // Clear start time — delete the block and unschedule
+            await api.deleteBlock(existingBlock.id);
+            await api.updateTask(taskId, { status: "unscheduled" } as any);
+          } else if (startTime) {
+            const task = tasks.find((t) => t.id === taskId);
+            const duration = updates.estimateMinutes ?? task?.estimateMinutes ?? 30;
+            const startDate = new Date(startTime);
+            const endDate = new Date(startDate.getTime() + duration * 60_000);
+
+            if (existingBlock) {
+              // Update existing block
+              await api.updateBlock(existingBlock.id, {
+                startTime: startDate.toISOString(),
+                endTime: endDate.toISOString(),
+                title: updates.title ?? task?.title ?? existingBlock.title,
+              } as any);
+            } else {
+              // Create new block
+              await api.createBlock({
+                taskId,
+                title: updates.title ?? task?.title ?? "",
+                startTime: startDate.toISOString(),
+                endTime: endDate.toISOString(),
+                blockType: "focus",
+              });
+              await api.updateTask(taskId, { status: "scheduled" } as any);
+            }
+          }
+          // Refresh to get updated blocks
+          await loadData();
+        }
       } catch (err) {
         console.error("Failed to update task:", err);
         loadData();
       }
     },
-    [loadData]
+    [loadData, blocks, tasks]
   );
 
   const deleteTask = useCallback(
