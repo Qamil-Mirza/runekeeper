@@ -168,13 +168,13 @@ export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: Q
             role="dialog"
             aria-modal="true"
             aria-label="Edit quest"
-            className="relative w-full sm:max-w-md max-h-[100dvh] sm:max-h-[85vh] bg-surface-container-lowest border-t-2 border-primary/20 sm:border-2 sm:border-primary/20 flex flex-col"
-            initial={{ y: 40, opacity: 0 }}
+            className="relative w-full sm:max-w-md h-[100dvh] sm:h-auto sm:max-h-[85vh] bg-surface-container-lowest border-t-2 border-primary/20 sm:border-2 sm:border-primary/20 flex flex-col"
+            initial={{ y: "100%", opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 40, opacity: 0 }}
+            exit={{ y: "100%", opacity: 0 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
           >
-            <div className="p-5 space-y-4 overflow-y-auto flex-1">
+            <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
               {/* Header */}
               <div className="flex items-center justify-between">
                 <h2 className="font-display text-headline-md text-on-surface uppercase tracking-wider">
