@@ -146,7 +146,7 @@ export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: Q
     <AnimatePresence>
       {task && (
         <motion.div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+          className="fixed inset-0 z-50 flex flex-col sm:items-center sm:justify-center"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -168,13 +168,13 @@ export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: Q
             role="dialog"
             aria-modal="true"
             aria-label="Edit quest"
-            className="relative w-full sm:max-w-md bg-surface-container-lowest border-t-2 border-primary/20 sm:border-2 sm:border-primary/20"
-            initial={{ y: 40, opacity: 0 }}
+            className="relative w-full sm:max-w-md sm:max-h-[85vh] bg-surface-container-lowest sm:border-2 sm:border-primary/20 flex flex-col flex-1 sm:flex-initial min-h-0"
+            initial={{ y: "100%", opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 40, opacity: 0 }}
+            exit={{ y: "100%", opacity: 0 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
           >
-            <div className="p-5 space-y-4">
+            <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
               {/* Header */}
               <div className="flex items-center justify-between">
                 <h2 className="font-display text-headline-md text-on-surface uppercase tracking-wider">
@@ -234,59 +234,55 @@ export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: Q
                 </div>
               </div>
 
-              {/* Due Date, Start Time & Estimate row */}
-              <div className="flex gap-4">
-                <div className="flex-1">
-                  <Input
-                    id="quest-due-date"
-                    label="Due Date"
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
+              {/* Due Date & Start Time row */}
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  id="quest-due-date"
+                  label="Due Date"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                />
+                <Input
+                  id="quest-start-time"
+                  label="Start Time"
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                />
+              </div>
+
+              {/* Estimate */}
+              <div className="flex flex-col gap-micro">
+                <label
+                  htmlFor="quest-estimate"
+                  className="font-label text-label-sm font-medium tracking-wide uppercase text-on-surface-variant"
+                >
+                  Estimate
+                </label>
+                <div className="relative w-32">
+                  <input
+                    id="quest-estimate"
+                    type="number"
+                    min={5}
+                    step={5}
+                    value={estimateMinutes}
+                    onChange={(e) => setEstimateMinutes(Number(e.target.value) || 5)}
+                    className={cn(
+                      "w-full bg-surface-container-high border-0 border-b-2 border-primary/30 rounded-none",
+                      "px-3 py-2.5 pr-10 font-body text-body-lg text-on-surface",
+                      "focus:border-tertiary focus:outline-none",
+                      "transition-colors duration-200"
+                    )}
                   />
-                </div>
-                <div className="flex-1">
-                  <Input
-                    id="quest-start-time"
-                    label="Start Time"
-                    type="time"
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                  />
-                </div>
-                <div className="w-28">
-                  <div className="flex flex-col gap-micro">
-                    <label
-                      htmlFor="quest-estimate"
-                      className="font-label text-label-sm font-medium tracking-wide uppercase text-on-surface-variant"
-                    >
-                      Estimate
-                    </label>
-                    <div className="relative">
-                      <input
-                        id="quest-estimate"
-                        type="number"
-                        min={5}
-                        step={5}
-                        value={estimateMinutes}
-                        onChange={(e) => setEstimateMinutes(Number(e.target.value) || 5)}
-                        className={cn(
-                          "w-full bg-surface-container-high border-0 border-b-2 border-primary/30 rounded-none",
-                          "px-3 py-2.5 pr-10 font-body text-body-lg text-on-surface",
-                          "focus:border-tertiary focus:outline-none",
-                          "transition-colors duration-200"
-                        )}
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 font-label text-label-sm text-outline-variant">
-                        min
-                      </span>
-                    </div>
-                  </div>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 font-label text-label-sm text-outline-variant">
+                    min
+                  </span>
                 </div>
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-between pt-2">
+              <div className="flex items-center justify-between p-5 pt-3 border-t border-outline-variant/20 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-5">
                 <Button
                   variant="ghost"
                   onClick={handleDelete}

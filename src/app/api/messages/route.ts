@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { chatMessages } from "@/db/schema";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, and } from "drizzle-orm";
 import {
   getAuthenticatedUser,
   jsonResponse,
@@ -18,7 +18,7 @@ export async function GET(req: Request) {
     ? await db
         .select()
         .from(chatMessages)
-        .where(eq(chatMessages.planSessionId, sessionId))
+        .where(and(eq(chatMessages.planSessionId, sessionId), eq(chatMessages.userId, user.id)))
         .orderBy(asc(chatMessages.createdAt))
     : await db
         .select()
@@ -36,6 +36,9 @@ export async function POST(req: Request) {
   const body = await req.json();
   if (!body.content || !body.role) {
     return errorResponse("content and role are required");
+  }
+  if (!["user", "assistant"].includes(body.role)) {
+    return errorResponse("role must be 'user' or 'assistant'", 400);
   }
 
   const [message] = await db

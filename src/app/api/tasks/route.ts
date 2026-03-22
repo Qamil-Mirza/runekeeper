@@ -25,7 +25,9 @@ export async function POST(req: Request) {
   if (!user) return errorResponse("Unauthorized", 401);
 
   const body = await req.json();
-  if (!body.title) return errorResponse("Title is required");
+  if (!body.title || typeof body.title !== "string" || body.title.length > 500) {
+    return errorResponse("Title is required and must be under 500 characters");
+  }
 
   const [task] = await db
     .insert(tasks)

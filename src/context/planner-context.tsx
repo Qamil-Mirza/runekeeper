@@ -360,15 +360,20 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
 
   const deleteTask = useCallback(
     async (taskId: string) => {
+      // Remove the task and any linked time blocks from state
+      const linkedBlocks = blocks.filter((b) => b.taskId === taskId);
       setTasks((prev) => prev.filter((t) => t.id !== taskId));
+      setBlocks((prev) => prev.filter((b) => b.taskId !== taskId));
       try {
+        // Delete linked blocks first, then the task
+        await Promise.all(linkedBlocks.map((b) => api.deleteBlock(b.id)));
         await api.deleteTask(taskId);
       } catch (err) {
         console.error("Failed to delete task:", err);
         loadData();
       }
     },
-    [loadData]
+    [loadData, blocks]
   );
 
   const toggleDrawer = useCallback(() => setDrawerOpen((o) => !o), []);

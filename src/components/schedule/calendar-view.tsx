@@ -227,13 +227,28 @@ export function CalendarView() {
   const todayStr = toLocalDateStr(new Date());
   const isToday = selectedDateStr === todayStr;
 
-  // Navigate day
+  // Navigate by the appropriate unit based on current mode
   const navigateDay = (dir: -1 | 1) => {
-    setSelectedDate((prev) => {
-      const d = new Date(prev);
-      d.setDate(d.getDate() + dir);
-      return d;
-    });
+    if (mode === "month") {
+      setSelectedDate((prev) => {
+        const d = new Date(prev);
+        d.setMonth(d.getMonth() + dir);
+        return d;
+      });
+    } else if (mode === "week") {
+      navigateWeek(dir);
+      setSelectedDate((prev) => {
+        const d = new Date(prev);
+        d.setDate(d.getDate() + dir * 7);
+        return d;
+      });
+    } else {
+      setSelectedDate((prev) => {
+        const d = new Date(prev);
+        d.setDate(d.getDate() + dir);
+        return d;
+      });
+    }
   };
 
   // Blocks for selected day (exclude blocks entirely outside visible hours)
@@ -284,7 +299,7 @@ export function CalendarView() {
             <button
               onClick={() => navigateDay(-1)}
               className="p-1.5 text-on-surface-variant hover:text-on-surface transition-colors"
-              aria-label="Previous day"
+              aria-label={`Previous ${mode}`}
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <polyline points="15 18 9 12 15 6" />
@@ -301,7 +316,7 @@ export function CalendarView() {
             <button
               onClick={() => navigateDay(1)}
               className="p-1.5 text-on-surface-variant hover:text-on-surface transition-colors"
-              aria-label="Next day"
+              aria-label={`Next ${mode}`}
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <polyline points="9 18 15 12 9 6" />
@@ -476,6 +491,8 @@ function WeekMiniView({
   onEdit: (task: Task) => void;
 }) {
   const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const MINI_START_HOUR = 0;
+  const MINI_END_HOUR = 24;
   const MINI_HOUR_HEIGHT = 32;
 
   const dayDates = useMemo(() => {
@@ -505,7 +522,7 @@ function WeekMiniView({
   }, [blocks, dayDates]);
 
   const hours = useMemo(
-    () => Array.from({ length: 13 }, (_, i) => 8 + i),
+    () => Array.from({ length: MINI_END_HOUR - MINI_START_HOUR }, (_, i) => MINI_START_HOUR + i),
     []
   );
 
@@ -515,24 +532,18 @@ function WeekMiniView({
 
   return (
     <div>
-      {/* Week header */}
-      <div className="flex items-center justify-between px-4 pb-3">
-        <button onClick={() => navigateWeek(-1)} className="p-1.5 text-on-surface-variant hover:text-on-surface" aria-label="Previous week">
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="15 18 9 12 15 6" /></svg>
-        </button>
+      {/* Week date range label */}
+      <div className="flex items-center justify-center px-4 pb-3">
         <span className="font-label text-label-md font-medium text-on-surface tracking-wide">
           {fmtDate(start)} — {fmtDate(end)}
         </span>
-        <button onClick={() => navigateWeek(1)} className="p-1.5 text-on-surface-variant hover:text-on-surface" aria-label="Next week">
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6" /></svg>
-        </button>
       </div>
 
       {/* Grid */}
       <div className="overflow-x-auto archivist-scroll">
-        <div className="flex min-w-[560px]">
+        <div className="flex">
           {/* Hour labels */}
-          <div className="w-8 shrink-0 pt-[40px]">
+          <div className="w-8 shrink-0 pt-[52px]">
             {hours.map((hour) => (
               <div
                 key={hour}
@@ -576,7 +587,7 @@ function WeekMiniView({
                     const e = new Date(block.end);
                     const sMin = s.getHours() * 60 + s.getMinutes();
                     const eMin = e.getHours() * 60 + e.getMinutes();
-                    const top = ((sMin - 8 * 60) / 60) * MINI_HOUR_HEIGHT;
+                    const top = ((sMin - MINI_START_HOUR * 60) / 60) * MINI_HOUR_HEIGHT;
                     const h = ((eMin - sMin) / 60) * MINI_HOUR_HEIGHT;
                     const isExt = block.source === "google_calendar";
                     const accent = blockAccent[block.type] || blockAccent.focus;
@@ -619,11 +630,9 @@ function MonthMiniView({
   selectedDate: Date;
   onSelectDate: (d: Date) => void;
 }) {
-  const [viewMonth, setViewMonth] = useState(() => new Date(selectedDate));
-
-  const year = viewMonth.getFullYear();
-  const month = viewMonth.getMonth();
-  const monthName = viewMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const year = selectedDate.getFullYear();
+  const month = selectedDate.getMonth();
+  const monthName = selectedDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDayOfWeek = (new Date(year, month, 1).getDay() + 6) % 7; // Monday = 0
@@ -641,25 +650,11 @@ function MonthMiniView({
     return counts;
   }, [blocks]);
 
-  const navigateMonth = (dir: -1 | 1) => {
-    setViewMonth((prev) => {
-      const d = new Date(prev);
-      d.setMonth(d.getMonth() + dir);
-      return d;
-    });
-  };
-
   return (
     <div>
       {/* Month header */}
-      <div className="flex items-center justify-between mb-4">
-        <button onClick={() => navigateMonth(-1)} className="p-1.5 text-on-surface-variant hover:text-on-surface" aria-label="Previous month">
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="15 18 9 12 15 6" /></svg>
-        </button>
+      <div className="flex items-center justify-center mb-4">
         <span className="font-display text-headline-md text-on-surface">{monthName}</span>
-        <button onClick={() => navigateMonth(1)} className="p-1.5 text-on-surface-variant hover:text-on-surface" aria-label="Next month">
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="9 18 15 12 9 6" /></svg>
-        </button>
       </div>
 
       {/* Day-of-week headers */}

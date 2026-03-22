@@ -15,6 +15,15 @@ import { toLocalDateStr } from "@/lib/utils";
 import { extractMemories, getMemoryDigest, saveMemories } from "@/lib/chat/memory";
 import { buildTieredContext } from "@/lib/chat/context-builder";
 
+function isValidTimezone(tz: string): boolean {
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function getWeekRange() {
   const now = new Date();
   const day = now.getDay();
@@ -37,6 +46,9 @@ export async function POST(req: Request) {
   const { message, sessionId, timezone: clientTimezone } = body;
 
   if (!message) return errorResponse("message is required");
+  if (typeof message !== "string" || message.length > 10000) {
+    return errorResponse("Message must be a string under 10,000 characters", 400);
+  }
 
   const userId = session.user.id;
   const weekRange = getWeekRange();
@@ -81,14 +93,18 @@ export async function POST(req: Request) {
 
   // Load cross-session memory digest
   const memoryDigest = await getMemoryDigest(userId);
-  // Prefer browser-provided timezone, then DB, then fallback
-  const userTimezone = clientTimezone || user?.timezone || "America/New_York";
+  // Validate and prefer browser-provided timezone, then DB, then fallback
+  const validClientTz =
+    clientTimezone && typeof clientTimezone === "string" && isValidTimezone(clientTimezone)
+      ? clientTimezone
+      : null;
+  const userTimezone = validClientTz || user?.timezone || "America/New_York";
 
   // Auto-update user timezone in DB if it differs from the browser
-  if (clientTimezone && user && user.timezone !== clientTimezone) {
+  if (validClientTz && user && user.timezone !== validClientTz) {
     await db
       .update(users)
-      .set({ timezone: clientTimezone })
+      .set({ timezone: validClientTz })
       .where(eq(users.id, userId))
       .catch(() => null); // best-effort, don't block chat
   }
