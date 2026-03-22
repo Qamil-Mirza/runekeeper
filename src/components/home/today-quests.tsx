@@ -1,16 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { staggerChildren } from "@/lib/animations";
 import { usePlanner } from "@/context/planner-context";
 import { QuestCard } from "./quest-card";
-import { QuestEditModal } from "@/components/inventory/quest-edit-modal";
-import type { Task } from "@/lib/types";
 
 export function TodayQuests() {
-  const { tasks, toggleTaskDone, updateTask, deleteTask } = usePlanner();
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const { tasks, toggleTaskDone } = usePlanner();
 
   // Top 3 most important quests by due date (soonest first, no-date last)
   const topQuests = useMemo(() => {
@@ -53,7 +50,6 @@ export function TodayQuests() {
               key={task.id}
               task={task}
               onToggleDone={toggleTaskDone}
-              onEdit={setEditingTask}
               even={i % 2 === 0}
             />
           ))
@@ -67,13 +63,6 @@ export function TodayQuests() {
           </p>
         )}
       </motion.div>
-
-      <QuestEditModal
-        task={editingTask}
-        onClose={() => setEditingTask(null)}
-        onSave={updateTask}
-        onDelete={deleteTask}
-      />
     </section>
   );
 }

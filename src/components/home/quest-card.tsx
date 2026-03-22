@@ -10,11 +10,10 @@ import { QuestProgressDots } from "./quest-progress-dots";
 interface QuestCardProps {
   task: Task;
   onToggleDone: (id: string) => void;
-  onEdit?: (task: Task) => void;
   even?: boolean;
 }
 
-export function QuestCard({ task, onToggleDone, onEdit, even }: QuestCardProps) {
+export function QuestCard({ task, onToggleDone, even }: QuestCardProps) {
   const isDone = task.status === "done";
   const [completing, setCompleting] = useState(false);
 
@@ -39,10 +38,7 @@ export function QuestCard({ task, onToggleDone, onEdit, even }: QuestCardProps) 
         even ? "bg-surface-container-low" : "bg-surface"
       )}
     >
-      <div
-        className={cn("flex-1 min-w-0", onEdit && "cursor-pointer")}
-        onClick={() => onEdit?.(task)}
-      >
+      <div className="flex-1 min-w-0">
         <span
           className={cn(
             "font-body text-body-lg leading-tight block transition-all duration-300",

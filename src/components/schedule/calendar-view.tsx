@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn, toLocalDateStr, isoToLocalDate } from "@/lib/utils";
 import { staggerChildren, slideUp, fadeIn } from "@/lib/animations";
 import { usePlanner } from "@/context/planner-context";
+import { QuestEditModal } from "@/components/inventory/quest-edit-modal";
 import type { TimeBlock, BlockType, Task } from "@/lib/types";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -176,14 +177,16 @@ function EventCard({ block, isDone }: { block: TimeBlock; isDone?: boolean }) {
 
 // ─── Unmapped Quest Row ──────────────────────────────────────────────────────
 
-function UnmappedQuestRow({ task, even }: { task: Task; even: boolean }) {
+function UnmappedQuestRow({ task, even, onEdit }: { task: Task; even: boolean; onEdit?: (task: Task) => void }) {
   return (
     <motion.div
       variants={slideUp}
       className={cn(
         "flex items-center gap-3 px-5 py-3",
-        even ? "bg-surface-container-low" : "bg-surface"
+        even ? "bg-surface-container-low" : "bg-surface",
+        onEdit && "cursor-pointer"
       )}
+      onClick={() => onEdit?.(task)}
     >
       {/* Dotted grid icon */}
       <div className="w-7 h-7 grid grid-cols-3 grid-rows-3 gap-[3px] shrink-0 p-0.5">
@@ -209,9 +212,10 @@ function UnmappedQuestRow({ task, even }: { task: Task; even: boolean }) {
 // ─── Main Calendar View ──────────────────────────────────────────────────────
 
 export function CalendarView() {
-  const { blocks, tasks, navigateWeek, weekRange } = usePlanner();
+  const { blocks, tasks, navigateWeek, weekRange, updateTask, deleteTask } = usePlanner();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [mode, setMode] = useState<CalendarMode>("day");
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const selectedDateStr = toLocalDateStr(selectedDate);
   const todayStr = toLocalDateStr(new Date());
@@ -384,7 +388,7 @@ export function CalendarView() {
                   animate="visible"
                 >
                   {unmappedQuests.map((task, i) => (
-                    <UnmappedQuestRow key={task.id} task={task} even={i % 2 === 0} />
+                    <UnmappedQuestRow key={task.id} task={task} even={i % 2 === 0} onEdit={setEditingTask} />
                   ))}
                 </motion.div>
               </section>
@@ -432,6 +436,13 @@ export function CalendarView() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <QuestEditModal
+        task={editingTask}
+        onClose={() => setEditingTask(null)}
+        onSave={updateTask}
+        onDelete={deleteTask}
+      />
     </div>
   );
 }
