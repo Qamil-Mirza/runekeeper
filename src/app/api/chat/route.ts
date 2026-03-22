@@ -13,6 +13,8 @@ import { handleAction, type ActionResult } from "@/lib/chat/action-handler";
 import { dbTaskToTask, dbBlockToTimeBlock } from "@/lib/types";
 import { jsonResponse, errorResponse } from "@/lib/api-helpers";
 import { toLocalDateStr } from "@/lib/utils";
+import { extractMemories, getMemoryDigest, saveMemories } from "@/lib/chat/memory";
+import { buildTieredContext } from "@/lib/chat/context-builder";
 
 function getWeekRange() {
   const now = new Date();
@@ -78,11 +80,23 @@ export async function POST(req: Request) {
       content: m.content,
     }));
 
+  // Load cross-session memory digest
+  const memoryDigest = await getMemoryDigest(userId);
+  const userTimezone = user?.timezone || "America/New_York";
+
+  // Build tiered context for the LLM
+  const tieredContext = buildTieredContext({
+    blocks: userBlocks,
+    tasks: userTasks,
+    weekRange,
+    timezone: userTimezone,
+  });
+
   // Build system prompt
   const systemPrompt = buildSystemPrompt({
     user: {
       name: user?.name || "User",
-      timezone: user?.timezone || "America/New_York",
+      timezone: userTimezone,
       preferences: (user?.preferences as any) ?? {
         workingHoursStart: 9,
         workingHoursEnd: 18,
@@ -91,10 +105,12 @@ export async function POST(req: Request) {
         meetingBuffer: 10,
       },
     },
-    tasks: userTasks,
-    blocks: userBlocks,
+    todaySchedule: tieredContext.todaySchedule,
+    questSummary: tieredContext.questSummary,
+    weekOverview: tieredContext.weekOverview,
     weekStart: weekRange.start,
     weekEnd: weekRange.end,
+    memoryDigest: memoryDigest || undefined,
   });
 
   let structured: StructuredResponse;
@@ -122,6 +138,8 @@ export async function POST(req: Request) {
 
   // Execute actions from the structured response
   const actionResults: ActionResult[] = [];
+  // Track block IDs created by create_tasks so generate_schedule won't delete them
+  const pinnedBlockIds = new Set<string>();
 
   for (const action of structured.actions) {
     try {
@@ -129,9 +147,18 @@ export async function POST(req: Request) {
         action,
         userId,
         weekRange.start,
-        weekRange.end
+        weekRange.end,
+        pinnedBlockIds
       );
       actionResults.push(result);
+
+      // Pin blocks from create_tasks (user-specified times) so subsequent
+      // generate_schedule treats them as fixed
+      if (action.type === "create_tasks" && result.proposedBlocks) {
+        for (const block of result.proposedBlocks) {
+          pinnedBlockIds.add(block.id);
+        }
+      }
     } catch (err) {
       console.error("Action execution failed:", err);
     }
@@ -149,6 +176,9 @@ export async function POST(req: Request) {
   const schedulePreview = actionResults.find((r) => r.proposedBlocks)
     ?.proposedBlocks;
 
+  // Build action summary from actual results
+  const actionSummary = buildActionSummary(actionResults);
+
   // Save assistant message
   await db.insert(chatMessages).values({
     userId,
@@ -159,9 +189,20 @@ export async function POST(req: Request) {
       quickActions,
       diffPreview,
       schedulePreview,
+      actionSummary,
       actions: actionResults,
     },
   });
+
+  // Extract and save memories from user message (non-blocking)
+  try {
+    const memories = extractMemories(message);
+    if (memories.length > 0) {
+      await saveMemories(userId, memories);
+    }
+  } catch (err) {
+    console.error("Memory extraction failed:", err);
+  }
 
   return jsonResponse({
     response: structured.message,
@@ -169,6 +210,7 @@ export async function POST(req: Request) {
     quickActions,
     diffPreview,
     schedulePreview,
+    actionSummary,
   });
 }
 
@@ -501,4 +543,51 @@ function resolveSpecificTime(
   const h = String(hours).padStart(2, "0");
   const m = String(minutes).padStart(2, "0");
   return `${date}T${h}:${m}:00`;
+}
+
+// ── Action summary builder ──────────────────────────────────────────────────
+
+function buildActionSummary(results: ActionResult[]): string | null {
+  if (results.length === 0) return null;
+
+  const parts: string[] = [];
+
+  // Tasks created
+  const allCreated = results.flatMap((r) => r.tasksCreated ?? []);
+  if (allCreated.length > 0) {
+    const names = allCreated.map((t) => t.title);
+    if (names.length === 1) {
+      parts.push(`Added quest: ${names[0]}`);
+    } else {
+      parts.push(`Added ${names.length} quests: ${names.join(", ")}`);
+    }
+  }
+
+  // Blocks proposed
+  const allProposed = results.flatMap((r) => r.proposedBlocks ?? []);
+  if (allProposed.length > 0) {
+    parts.push(`${allProposed.length} time block${allProposed.length > 1 ? "s" : ""} proposed`);
+  }
+
+  // Unschedulable
+  const allUnschedulable = results.flatMap((r) => r.unschedulable ?? []);
+  if (allUnschedulable.length > 0) {
+    const names = allUnschedulable.map((u) => u.task.title);
+    parts.push(`Could not schedule: ${names.join(", ")}`);
+  }
+
+  // Committed
+  const wasCommitted = results.some((r) => r.committed);
+  if (wasCommitted) {
+    parts.push("Plan committed to calendar");
+  }
+
+  // Diff summary
+  const diff = results.find((r) => r.diff)?.diff;
+  if (diff?.summary && diff.summary !== "No changes") {
+    parts.push(diff.summary);
+  }
+
+  if (parts.length === 0) return null;
+  return parts.join(" · ");
 }

@@ -107,6 +107,7 @@ export const timeBlocks = pgTable("time_blocks", {
   endTime: timestamp("end_time", { withTimezone: true }).notNull(),
   blockType: text("block_type").notNull().default("focus"),
   committed: boolean("committed").default(false).notNull(),
+  source: text("source").notNull().default("runekeeper"),
   googleEventId: text("google_event_id"),
   googleCalendarId: text("google_calendar_id"),
   googleEtag: text("google_etag"),
@@ -129,6 +130,19 @@ export const planSessions = pgTable("plan_sessions", {
   chatState: jsonb("chat_state"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ─── Chat Memories ──────────────────────────────────────────────────────────
+
+export const chatMemories = pgTable("chat_memories", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  category: text("category").notNull(), // "preference" | "fact" | "context"
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at"),
 });
 
 // ─── Chat Messages ───────────────────────────────────────────────────────────

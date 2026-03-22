@@ -104,6 +104,9 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     if (status !== "authenticated") return;
     setIsLoading(true);
     try {
+      // Sync Google Calendar first (best-effort), then fetch all data
+      await api.syncCalendar().catch(() => null);
+
       const [userPrefs, tasksData, blocksData] = await Promise.all([
         api.fetchUserPreferences(),
         api.fetchTasks(),
@@ -162,6 +165,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
           quickActions: result.quickActions,
           diffPreview: result.diffPreview,
           schedulePreview: result.schedulePreview,
+          actionSummary: result.actionSummary,
         };
         setMessages((prev) => [...prev, assistantMsg]);
 

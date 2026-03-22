@@ -97,17 +97,20 @@ function NowMarker({ startHour }: { startHour: number }) {
 
 // ─── Event Card ──────────────────────────────────────────────────────────────
 
-function EventCard({ block }: { block: TimeBlock }) {
+function EventCard({ block, isDone }: { block: TimeBlock; isDone?: boolean }) {
   const start = new Date(block.start);
   const end = new Date(block.end);
-  const durationMinutes =
-    (end.getHours() * 60 + end.getMinutes()) -
-    (start.getHours() * 60 + start.getMinutes());
-  const height = (durationMinutes / 60) * HOUR_HEIGHT;
-  const top =
-    ((start.getHours() * 60 + start.getMinutes() - START_HOUR * 60) / 60) *
-    HOUR_HEIGHT;
 
+  // Clamp to visible range
+  const startMin = Math.max(start.getHours() * 60 + start.getMinutes(), START_HOUR * 60);
+  const endMin = Math.min(end.getHours() * 60 + end.getMinutes(), END_HOUR * 60);
+  const durationMinutes = endMin - startMin;
+  if (durationMinutes <= 0) return null;
+
+  const height = (durationMinutes / 60) * HOUR_HEIGHT;
+  const top = ((startMin - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+
+  const isExternal = (block as any).source === "google_calendar";
   const accent = blockAccent[block.type] || blockAccent.focus;
   const isLarge = height >= 80;
 
@@ -116,8 +119,11 @@ function EventCard({ block }: { block: TimeBlock }) {
       variants={fadeIn}
       className={cn(
         "absolute left-10 right-4 overflow-hidden",
-        accent.bg,
-        !block.committed && "opacity-70 border-dashed border border-outline-variant/40"
+        isExternal
+          ? "bg-surface-container/50 border-l-2 border-l-[#4285F4]/60 pointer-events-none"
+          : accent.bg,
+        isDone && "opacity-50",
+        !block.committed && !isExternal && "opacity-70 border-dashed border border-outline-variant/40"
       )}
       style={{
         top: `${top}px`,
@@ -128,20 +134,31 @@ function EventCard({ block }: { block: TimeBlock }) {
       <div className="px-3.5 py-2.5 h-full flex flex-col">
         {/* Title row */}
         <div className="flex items-start justify-between gap-2">
-          <h4 className="font-display text-body-lg font-semibold text-on-surface leading-snug">
+          <h4 className={cn(
+            "font-display text-body-lg font-semibold leading-snug",
+            isExternal ? "text-on-surface/70" : "text-on-surface",
+            isDone && "line-through text-on-surface/50"
+          )}>
             {block.title}
           </h4>
-          <span className="text-base shrink-0 mt-0.5" aria-hidden="true">
-            {blockEmoji[block.type]}
-          </span>
+          {/* Done checkmark or Google badge */}
+          {isDone ? (
+            <span className="shrink-0 mt-0.5 w-5 h-5 rounded-full bg-tertiary/15 flex items-center justify-center">
+              <svg className="w-3 h-3 text-tertiary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </span>
+          ) : isExternal ? (
+            <span className="shrink-0 mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#4285F4]/15 text-[10px] font-bold text-[#4285F4]">G</span>
+          ) : null}
         </div>
 
         {/* Subtitle / location */}
         {isLarge && (
           <div className="mt-1 flex items-center gap-1.5">
-            <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", accent.dot)} />
+            <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", isExternal ? "bg-[#4285F4]/40" : accent.dot)} />
             <span className="font-label text-label-sm text-on-surface-variant">
-              {blockSubtitle(block.type)}
+              {isExternal ? "Google Calendar" : blockSubtitle(block.type)}
             </span>
           </div>
         )}
@@ -209,11 +226,18 @@ export function CalendarView() {
     });
   };
 
-  // Blocks for selected day
+  // Blocks for selected day (exclude blocks entirely outside visible hours)
   const dayBlocks = useMemo(
     () =>
       blocks
-        .filter((b) => isoToLocalDate(b.start) === selectedDateStr)
+        .filter((b) => {
+          if (isoToLocalDate(b.start) !== selectedDateStr) return false;
+          const startHour = new Date(b.start).getHours();
+          const endHour = new Date(b.end).getHours() + (new Date(b.end).getMinutes() > 0 ? 1 : 0);
+          // Skip if entirely outside the visible range
+          if (endHour <= START_HOUR || startHour >= END_HOUR) return false;
+          return true;
+        })
         .sort((a, b) => a.start.localeCompare(b.start)),
     [blocks, selectedDateStr]
   );
@@ -334,9 +358,12 @@ export function CalendarView() {
                 initial="hidden"
                 animate="visible"
               >
-                {dayBlocks.map((block) => (
-                  <EventCard key={block.id} block={block} />
-                ))}
+                {dayBlocks.map((block) => {
+                  const linkedTask = block.taskId ? tasks.find((t) => t.id === block.taskId) : undefined;
+                  return (
+                    <EventCard key={block.id} block={block} isDone={linkedTask?.status === "done"} />
+                  );
+                })}
               </motion.div>
             </div>
 
@@ -527,14 +554,15 @@ function WeekMiniView({
                     const eMin = e.getHours() * 60 + e.getMinutes();
                     const top = ((sMin - 8 * 60) / 60) * MINI_HOUR_HEIGHT;
                     const h = ((eMin - sMin) / 60) * MINI_HOUR_HEIGHT;
+                    const isExt = block.source === "google_calendar";
                     const accent = blockAccent[block.type] || blockAccent.focus;
                     return (
                       <div
                         key={block.id}
-                        className={cn("absolute left-0.5 right-0.5 px-1 py-0.5 overflow-hidden border-l-2", accent.bg)}
-                        style={{ top: `${top}px`, height: `${Math.max(h, 14)}px`, borderLeftColor: "var(--color-tertiary)" }}
+                        className={cn("absolute left-0.5 right-0.5 px-1 py-0.5 overflow-hidden border-l-2", isExt ? "bg-surface-container/40" : accent.bg)}
+                        style={{ top: `${top}px`, height: `${Math.max(h, 14)}px`, borderLeftColor: isExt ? "#4285F4" : "var(--color-tertiary)" }}
                       >
-                        <span className="font-label text-[9px] font-medium leading-tight block truncate text-on-surface">
+                        <span className={cn("font-label text-[9px] font-medium leading-tight block truncate", isExt ? "text-on-surface/60" : "text-on-surface")}>
                           {block.title}
                         </span>
                       </div>

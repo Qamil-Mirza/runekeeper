@@ -18,13 +18,14 @@ export async function handleAction(
   action: any,
   userId: string,
   weekStart: string,
-  weekEnd: string
+  weekEnd: string,
+  pinnedBlockIds?: Set<string>
 ): Promise<ActionResult> {
   switch (action.type) {
     case "create_tasks":
       return handleCreateTasks(action.tasks, userId);
     case "generate_schedule":
-      return handleGenerateSchedule(userId, weekStart, weekEnd);
+      return handleGenerateSchedule(userId, weekStart, weekEnd, pinnedBlockIds);
     case "confirm_plan":
       return handleConfirmPlan(userId);
     case "adjust_block":
@@ -41,7 +42,19 @@ async function handleCreateTasks(
   const created: Task[] = [];
   const proposedBlocks: TimeBlock[] = [];
 
+  // Load existing tasks to prevent duplicates (LLM may re-create a task it already made)
+  const existingTasks = await db
+    .select()
+    .from(tasks)
+    .where(eq(tasks.userId, userId));
+
   for (const def of taskDefs) {
+    // Skip if a task with the same title already exists (case-insensitive)
+    const duplicate = existingTasks.find(
+      (t) => t.title.toLowerCase() === (def.title || "").toLowerCase()
+    );
+    if (duplicate) continue;
+
     const hasSpecificTime = !!def.startTime;
 
     const [row] = await db
@@ -73,7 +86,7 @@ async function handleCreateTasks(
           title: task.title,
           startTime,
           endTime,
-          blockType: "task",
+          blockType: "focus",
           committed: false,
         })
         .returning();
@@ -91,7 +104,8 @@ async function handleCreateTasks(
 async function handleGenerateSchedule(
   userId: string,
   weekStart: string,
-  weekEnd: string
+  weekEnd: string,
+  pinnedBlockIds?: Set<string>
 ): Promise<ActionResult> {
   // Load user preferences
   const { users } = await import("@/db/schema");
@@ -118,22 +132,62 @@ async function handleGenerateSchedule(
     await db.select().from(timeBlocks).where(eq(timeBlocks.userId, userId))
   ).map(dbBlockToTimeBlock);
 
-  // Delete existing uncommitted blocks
-  await db
-    .delete(timeBlocks)
-    .where(
-      and(eq(timeBlocks.userId, userId), eq(timeBlocks.committed, false))
-    );
+  // Find uncommitted Runekeeper blocks to delete (but preserve pinned blocks
+  // created by create_tasks in the same action batch)
+  const uncommittedBlocks = existingBlocks.filter(
+    (b) =>
+      !b.committed &&
+      b.source !== "google_calendar" &&
+      !(pinnedBlockIds && pinnedBlockIds.has(b.id))
+  );
+
+  // Only reset tasks that DON'T already have a committed block —
+  // tasks with committed blocks should stay "scheduled", not be re-proposed
+  for (const block of uncommittedBlocks) {
+    if (block.taskId) {
+      const hasCommittedBlock = existingBlocks.some(
+        (b) => b.taskId === block.taskId && b.committed
+      );
+      if (!hasCommittedBlock) {
+        await db
+          .update(tasks)
+          .set({ status: "unscheduled", updatedAt: new Date() })
+          .where(eq(tasks.id, block.taskId));
+      }
+    }
+  }
+
+  // Delete existing uncommitted Runekeeper blocks (preserve Google Calendar imports + pinned)
+  for (const block of uncommittedBlocks) {
+    await db.delete(timeBlocks).where(eq(timeBlocks.id, block.id));
+  }
+
+  // Reload tasks after status reset so the scheduler sees them as unscheduled
+  const refreshedTasks = (
+    await db.select().from(tasks).where(eq(tasks.userId, userId))
+  ).map(dbTaskToTask);
+
+  // Pinned blocks (from create_tasks with specific times) act as busy windows too
+  const pinnedBlocks = existingBlocks.filter(
+    (b) => pinnedBlockIds && pinnedBlockIds.has(b.id)
+  );
+  const busyWindows = [
+    ...existingBlocks.filter((b) => b.committed),
+    ...pinnedBlocks,
+  ];
 
   // Run scheduler
   const result = schedule({
-    tasks: userTasks,
-    busyWindows: existingBlocks.filter((b) => b.committed),
+    tasks: refreshedTasks,
+    busyWindows,
     preferences,
     weekRange: { start: weekStart, end: weekEnd },
   });
 
-  // Persist proposed blocks
+  // Combine pinned blocks + scheduler output for the full proposal
+  const allProposed = [...pinnedBlocks, ...result.proposedBlocks];
+
+  // Persist proposed blocks (only scheduler-generated ones; pinned already exist)
   for (const block of result.proposedBlocks) {
     await db.insert(timeBlocks).values({
       userId,
@@ -156,25 +210,31 @@ async function handleGenerateSchedule(
     }
   }
 
+  // Diff: compare only genuinely new proposed blocks against committed state
   const diff = generateDiff(
     existingBlocks.filter((b) => b.committed),
-    [...existingBlocks.filter((b) => b.committed), ...result.proposedBlocks]
+    allProposed
   );
 
   return {
-    proposedBlocks: result.proposedBlocks,
+    proposedBlocks: allProposed,
     unschedulable: result.unschedulable,
     diff,
   };
 }
 
 async function handleConfirmPlan(userId: string): Promise<ActionResult> {
-  // Mark all uncommitted blocks as committed
+  // Mark all uncommitted Runekeeper-sourced blocks as committed
+  // Google Calendar blocks are already committed on import, but guard anyway
   await db
     .update(timeBlocks)
     .set({ committed: true, updatedAt: new Date() })
     .where(
-      and(eq(timeBlocks.userId, userId), eq(timeBlocks.committed, false))
+      and(
+        eq(timeBlocks.userId, userId),
+        eq(timeBlocks.committed, false),
+        eq(timeBlocks.source, "runekeeper")
+      )
     );
 
   return { committed: true };
