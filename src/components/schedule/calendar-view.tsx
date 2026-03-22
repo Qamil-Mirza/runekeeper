@@ -10,8 +10,8 @@ import type { TimeBlock, BlockType, Task } from "@/lib/types";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const START_HOUR = 7;
-const END_HOUR = 22;
+const START_HOUR = 0;
+const END_HOUR = 24;
 const HOUR_HEIGHT = 72; // taller rows for the day view
 type CalendarMode = "day" | "week" | "month";
 
