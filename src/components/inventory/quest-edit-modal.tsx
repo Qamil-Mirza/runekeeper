@@ -281,24 +281,23 @@ export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: Q
                 </div>
               </div>
 
-            </div>
-
-            {/* Footer — pinned outside scroll area */}
-            <div className="flex items-center justify-between p-5 pt-3 border-t border-outline-variant/20 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-5">
-              <Button
-                variant="ghost"
-                onClick={handleDelete}
-                className="text-error"
-              >
-                {confirmingDelete ? "Confirm Delete" : "Delete"}
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleSave}
-                disabled={!title.trim()}
-              >
-                Save
-              </Button>
+              {/* Footer */}
+              <div className="flex items-center justify-between p-5 pt-3 border-t border-outline-variant/20 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-5">
+                <Button
+                  variant="ghost"
+                  onClick={handleDelete}
+                  className="text-error"
+                >
+                  {confirmingDelete ? "Confirm Delete" : "Delete"}
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={handleSave}
+                  disabled={!title.trim()}
+                >
+                  Save
+                </Button>
+              </div>
             </div>
           </motion.div>
         </motion.div>
