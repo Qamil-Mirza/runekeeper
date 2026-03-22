@@ -168,7 +168,7 @@ export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: Q
             role="dialog"
             aria-modal="true"
             aria-label="Edit quest"
-            className="relative w-full sm:max-w-md h-[100dvh] sm:h-auto sm:max-h-[85vh] bg-surface-container-lowest border-t-2 border-primary/20 sm:border-2 sm:border-primary/20 flex flex-col"
+            className="fixed inset-0 sm:static sm:inset-auto sm:relative w-full sm:max-w-md sm:max-h-[85vh] bg-surface-container-lowest sm:border-2 sm:border-primary/20 flex flex-col"
             initial={{ y: "100%", opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "100%", opacity: 0 }}
