@@ -70,6 +70,8 @@ interface PlannerActions {
   sendMessage: (content: string) => void;
   toggleTaskDone: (taskId: string) => void;
   addTask: (title: string) => void;
+  updateTask: (taskId: string, updates: Partial<Task>) => void;
+  deleteTask: (taskId: string) => void;
   setCurrentView: (view: ViewId) => void;
   toggleDrawer: () => void;
   commitProposedBlocks: () => void;
@@ -236,6 +238,34 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const updateTask = useCallback(
+    async (taskId: string, updates: Partial<Task>) => {
+      setTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, ...updates } : t))
+      );
+      try {
+        await api.updateTask(taskId, updates);
+      } catch (err) {
+        console.error("Failed to update task:", err);
+        loadData();
+      }
+    },
+    [loadData]
+  );
+
+  const deleteTask = useCallback(
+    async (taskId: string) => {
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+      try {
+        await api.deleteTask(taskId);
+      } catch (err) {
+        console.error("Failed to delete task:", err);
+        loadData();
+      }
+    },
+    [loadData]
+  );
+
   const toggleDrawer = useCallback(() => setDrawerOpen((o) => !o), []);
 
   const commitProposedBlocks = useCallback(async () => {
@@ -278,6 +308,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       sendMessage,
       toggleTaskDone,
       addTask,
+      updateTask,
+      deleteTask,
       setCurrentView,
       toggleDrawer,
       commitProposedBlocks,
@@ -297,6 +329,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       sendMessage,
       toggleTaskDone,
       addTask,
+      updateTask,
+      deleteTask,
       toggleDrawer,
       commitProposedBlocks,
       navigateWeek,

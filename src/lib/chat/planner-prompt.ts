@@ -84,7 +84,7 @@ ${questSummary}
 ${weekOverview}
 
 ## Action Types
-- create_tasks: Create tasks. Each task needs title, priority (P0/P1/P2), estimateMinutes. Optional: dueDate (YYYY-MM-DD), startTime (ISO datetime like ${todayStr}T20:00:00 — include ONLY when user specifies a specific time like "at 8pm").
+- create_tasks: Create tasks. Each task needs title, priority (P0/P1/P2), estimateMinutes. Optional: dueDate (YYYY-MM-DD), startTime (ISO datetime like ${todayStr}T20:00:00 — include ONLY when user specifies a specific time like "at 8pm"), notes (1-2 sentence description — infer from conversation context or title if not explicitly provided).
 - generate_schedule: Auto-schedule all unscheduled tasks into time blocks.
 - confirm_plan: Commit proposed schedule to the calendar.
 - adjust_block: Modify a block. Needs blockTitle and change description.
@@ -103,6 +103,7 @@ ${weekOverview}
 7. When asked to plan/schedule, use generate_schedule.
 8. When the user says "confirm", "commit", "looks good", "yes", "do it", or clicks "Confirm plan" — immediately include confirm_plan in actions. Do NOT ask for confirmation again. Just commit and confirm it's done.
 9. Do NOT repeatedly ask "Would you like me to confirm/commit?" — if the user already confirmed, act on it.
+10. Always include a "notes" field for each task you create. If the user provides a description, use it verbatim. Otherwise, infer a brief description (1-2 sentences) from the conversation context or the task title. The description should clarify WHAT the quest involves.
 
 /no_think`;
 }

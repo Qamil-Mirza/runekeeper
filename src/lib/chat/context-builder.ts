@@ -51,7 +51,7 @@ export function buildQuestSummary(tasks: Task[]): string {
       `${unscheduled.length} unscheduled:`,
       ...unscheduled.map(
         (t) =>
-          `  - ${t.title} (${t.priority}, ${t.estimateMinutes}min${t.dueDate ? `, due ${t.dueDate}` : ""})`
+          `  - ${t.title} (${t.priority}, ${t.estimateMinutes}min${t.dueDate ? `, due ${t.dueDate}` : ""}${t.notes ? ` — ${t.notes}` : ""})`
       )
     );
   }

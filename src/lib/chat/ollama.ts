@@ -19,6 +19,7 @@ export interface OllamaChatResponse {
 
 export interface TaskAction {
   title: string;
+  notes?: string;
   priority: "P0" | "P1" | "P2";
   estimateMinutes: number;
   dueDate?: string;
@@ -68,6 +69,11 @@ const RESPONSE_SCHEMA = {
               type: "object" as const,
               properties: {
                 title: { type: "string" as const },
+                notes: {
+                  type: "string" as const,
+                  description:
+                    "A brief description of the quest (1-2 sentences). Infer from conversation context or title if not explicitly stated.",
+                },
                 priority: {
                   type: "string" as const,
                   enum: ["P0", "P1", "P2"],
