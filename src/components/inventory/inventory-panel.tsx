@@ -1,13 +1,19 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { usePlanner } from "@/context/planner-context";
 import type { Task, TaskStatus, Priority } from "@/lib/types";
 import { TaskGroup } from "./task-group";
 import { AddTaskInput } from "./add-task-input";
+import { QuestEditModal } from "./quest-edit-modal";
 
 export function InventoryPanel() {
-  const { tasks, toggleTaskDone, addTask } = usePlanner();
+  const { tasks, blocks, toggleTaskDone, addTask, updateTask, deleteTask } = usePlanner();
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+
+  const editingBlock = editingTask
+    ? blocks.find((b) => b.taskId === editingTask.id) ?? null
+    : null;
 
   const grouped = useMemo(() => {
     const groups: Record<TaskStatus, Task[]> = {
@@ -18,7 +24,7 @@ export function InventoryPanel() {
     for (const t of tasks) {
       groups[t.status].push(t);
     }
-    const priorityOrder: Record<Priority, number> = { P0: 0, P1: 1, P2: 2 };
+    const priorityOrder: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
     for (const key of Object.keys(groups) as TaskStatus[]) {
       groups[key].sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
     }
@@ -34,10 +40,18 @@ export function InventoryPanel() {
       </div>
       <AddTaskInput onAdd={addTask} />
       <div className="flex-1 overflow-y-auto archivist-scroll">
-        <TaskGroup title="Active Quests" tasks={grouped.scheduled} onToggleDone={toggleTaskDone} />
-        <TaskGroup title="Unscheduled" tasks={grouped.unscheduled} onToggleDone={toggleTaskDone} />
-        <TaskGroup title="Completed" tasks={grouped.done} onToggleDone={toggleTaskDone} defaultOpen={false} />
+        <TaskGroup title="Active Quests" tasks={grouped.scheduled} onToggleDone={toggleTaskDone} onEdit={setEditingTask} />
+        <TaskGroup title="Unscheduled" tasks={grouped.unscheduled} onToggleDone={toggleTaskDone} onEdit={setEditingTask} />
+        <TaskGroup title="Completed" tasks={grouped.done} onToggleDone={toggleTaskDone} onEdit={setEditingTask} defaultOpen={false} />
       </div>
+
+      <QuestEditModal
+        task={editingTask}
+        timeBlock={editingBlock}
+        onClose={() => setEditingTask(null)}
+        onSave={updateTask}
+        onDelete={deleteTask}
+      />
     </div>
   );
 }

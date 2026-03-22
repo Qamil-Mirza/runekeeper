@@ -158,6 +158,7 @@ export interface ChatResponse {
 export function chatWithAssistant(data: {
   message: string;
   sessionId?: string;
+  timezone?: string;
 }): Promise<ChatResponse> {
   return apiFetch<ChatResponse>("/api/chat", {
     method: "POST",
@@ -171,7 +172,7 @@ export function chatWithAssistant(data: {
  * token as it arrives for progressive UI updates.
  */
 export async function chatWithAssistantStreaming(
-  data: { message: string; sessionId?: string },
+  data: { message: string; sessionId?: string; timezone?: string },
   onToken: (token: string) => void
 ): Promise<ChatResponse> {
   const res = await fetch("/api/chat", {

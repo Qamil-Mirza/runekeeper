@@ -20,7 +20,8 @@ export interface OllamaChatResponse {
 
 export interface TaskAction {
   title: string;
-  priority: "P0" | "P1" | "P2";
+  notes?: string;
+  priority: "high" | "medium" | "low";
   estimateMinutes: number;
   dueDate?: string;
   startTime?: string;
@@ -69,9 +70,15 @@ const RESPONSE_SCHEMA = {
               type: "object" as const,
               properties: {
                 title: { type: "string" as const },
+                notes: {
+                  type: "string" as const,
+                  description:
+                    "A brief description of the quest (1-2 sentences, max 500 characters). Infer from conversation context or title if not explicitly stated.",
+                  maxLength: 500,
+                },
                 priority: {
                   type: "string" as const,
-                  enum: ["P0", "P1", "P2"],
+                  enum: ["high", "medium", "low"],
                 },
                 estimateMinutes: { type: "number" as const },
                 dueDate: {
@@ -84,7 +91,7 @@ const RESPONSE_SCHEMA = {
                     "ISO datetime (e.g. 2026-03-21T20:00:00). Include ONLY when the user specifies a specific time.",
                 },
               },
-              required: ["title", "priority", "estimateMinutes"],
+              required: ["title", "notes", "priority", "estimateMinutes"],
             },
           },
           blockTitle: {

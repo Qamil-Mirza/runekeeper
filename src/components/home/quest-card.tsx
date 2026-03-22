@@ -52,6 +52,14 @@ export function QuestCard({ task, onToggleDone, even }: QuestCardProps) {
         >
           {task.title}
         </span>
+        {task.notes && (
+          <p className={cn(
+            "font-body text-body-md text-on-surface-variant mt-0.5 truncate transition-opacity duration-300",
+            showDone && "opacity-50"
+          )}>
+            {task.notes}
+          </p>
+        )}
         <div className="mt-1.5">
           <QuestProgressDots total={progressTotal} completed={progressCompleted} />
         </div>

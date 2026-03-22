@@ -10,16 +10,17 @@ import { Badge } from "@/components/ui/badge";
 interface TaskItemProps {
   task: Task;
   onToggleDone: (id: string) => void;
+  onEdit?: (task: Task) => void;
   even?: boolean;
 }
 
 const priorityVariant = {
-  P0: "gold" as const,
-  P1: "default" as const,
-  P2: "dim" as const,
+  high: "gold" as const,
+  medium: "default" as const,
+  low: "dim" as const,
 };
 
-export function TaskItem({ task, onToggleDone, even }: TaskItemProps) {
+export function TaskItem({ task, onToggleDone, onEdit, even }: TaskItemProps) {
   const isDone = task.status === "done";
   const [completing, setCompleting] = useState(false);
 
@@ -93,7 +94,10 @@ export function TaskItem({ task, onToggleDone, even }: TaskItemProps) {
       </button>
 
       {/* Content */}
-      <div className="flex-1 min-w-0">
+      <div
+        className={cn("flex-1 min-w-0", onEdit && "cursor-pointer")}
+        onClick={() => onEdit?.(task)}
+      >
         <div className="flex items-center gap-2">
           <span
             className={cn(

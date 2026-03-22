@@ -54,7 +54,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
       <button
         onClick={handleSend}
         disabled={disabled || !value.trim()}
-        className="bg-tertiary text-on-tertiary px-5 py-3 font-label text-label-md font-medium tracking-wide uppercase disabled:opacity-40 disabled:pointer-events-none hover:opacity-90 transition-opacity duration-200 shrink-0"
+        className="bg-tertiary text-white px-5 py-3 font-label text-label-md font-medium tracking-wide uppercase disabled:opacity-40 disabled:pointer-events-none hover:opacity-90 transition-opacity duration-200 shrink-0"
         aria-label="Send message"
       >
         Send

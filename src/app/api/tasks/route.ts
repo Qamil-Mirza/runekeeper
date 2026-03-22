@@ -33,7 +33,7 @@ export async function POST(req: Request) {
       userId: user.id,
       title: body.title,
       notes: body.notes ?? null,
-      priority: body.priority ?? "P1",
+      priority: body.priority ?? "medium",
       estimateMinutes: body.estimateMinutes ?? 30,
       dueDate: body.dueDate ?? null,
       recurrenceRule: body.recurrenceRule ?? null,

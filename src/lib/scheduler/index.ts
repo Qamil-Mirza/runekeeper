@@ -13,11 +13,11 @@ export function schedule(input: SchedulerInput): SchedulerOutput {
   // Build free time map
   const freeSlots = buildFreeTimeMap(weekRange, busyWindows, preferences);
 
-  // Sort tasks by priority (P0 first), then by due date (earliest first)
+  // Sort tasks by priority (high first), then by due date (earliest first)
   const sortedTasks = [...tasks]
     .filter((t) => t.status === "unscheduled")
     .sort((a, b) => {
-      const priorityOrder = { P0: 0, P1: 1, P2: 2 };
+      const priorityOrder = { high: 0, medium: 1, low: 2 };
       const pDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
       if (pDiff !== 0) return pDiff;
 

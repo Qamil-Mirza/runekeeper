@@ -10,10 +10,11 @@ interface TaskGroupProps {
   title: string;
   tasks: Task[];
   onToggleDone: (id: string) => void;
+  onEdit?: (task: Task) => void;
   defaultOpen?: boolean;
 }
 
-export function TaskGroup({ title, tasks, onToggleDone, defaultOpen = true }: TaskGroupProps) {
+export function TaskGroup({ title, tasks, onToggleDone, onEdit, defaultOpen = true }: TaskGroupProps) {
   const [open, setOpen] = useState(defaultOpen);
 
   if (tasks.length === 0) return null;
@@ -57,6 +58,7 @@ export function TaskGroup({ title, tasks, onToggleDone, defaultOpen = true }: Ta
                 key={task.id}
                 task={task}
                 onToggleDone={onToggleDone}
+                onEdit={onEdit}
                 even={i % 2 === 0}
               />
             ))}

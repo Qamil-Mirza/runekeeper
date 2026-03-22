@@ -17,7 +17,7 @@ export function useTasks() {
       groups[t.status].push(t);
     }
     // Sort by priority within each group
-    const priorityOrder: Record<Priority, number> = { P0: 0, P1: 1, P2: 2 };
+    const priorityOrder: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
     for (const key of Object.keys(groups) as TaskStatus[]) {
       groups[key].sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
     }
@@ -38,7 +38,7 @@ export function useTasks() {
     const newTask: Task = {
       id: `task-${Date.now()}`,
       title,
-      priority: "P1",
+      priority: "medium",
       estimateMinutes: 30,
       status: "unscheduled",
     };
