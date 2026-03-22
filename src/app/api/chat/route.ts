@@ -138,6 +138,8 @@ export async function POST(req: Request) {
 
   // Execute actions from the structured response
   const actionResults: ActionResult[] = [];
+  // Track block IDs created by create_tasks so generate_schedule won't delete them
+  const pinnedBlockIds = new Set<string>();
 
   for (const action of structured.actions) {
     try {
@@ -145,9 +147,18 @@ export async function POST(req: Request) {
         action,
         userId,
         weekRange.start,
-        weekRange.end
+        weekRange.end,
+        pinnedBlockIds
       );
       actionResults.push(result);
+
+      // Pin blocks from create_tasks (user-specified times) so subsequent
+      // generate_schedule treats them as fixed
+      if (action.type === "create_tasks" && result.proposedBlocks) {
+        for (const block of result.proposedBlocks) {
+          pinnedBlockIds.add(block.id);
+        }
+      }
     } catch (err) {
       console.error("Action execution failed:", err);
     }
