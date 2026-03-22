@@ -83,7 +83,7 @@ export const tasks = pgTable("tasks", {
     .references(() => users.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   notes: text("notes"),
-  priority: text("priority").notNull().default("P1"),
+  priority: text("priority").notNull().default("medium"),
   estimateMinutes: integer("estimate_minutes").notNull().default(30),
   dueDate: text("due_date"),
   recurrenceRule: text("recurrence_rule"),

@@ -70,6 +70,8 @@ interface PlannerActions {
   sendMessage: (content: string) => void;
   toggleTaskDone: (taskId: string) => void;
   addTask: (title: string) => void;
+  updateTask: (taskId: string, updates: Partial<Task>, startTime?: string) => void;
+  deleteTask: (taskId: string) => void;
   setCurrentView: (view: ViewId) => void;
   toggleDrawer: () => void;
   commitProposedBlocks: () => void;
@@ -155,7 +157,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       setIsTyping(true);
 
       try {
-        const result = await api.chatWithAssistant({ message: content });
+        const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const result = await api.chatWithAssistant({ message: content, timezone: browserTimezone });
 
         const assistantMsg: ChatMessage = {
           id: `msg-${Date.now()}-r`,
@@ -219,7 +222,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     const newTask: Task = {
       id: tempId,
       title,
-      priority: "P1",
+      priority: "medium",
       estimateMinutes: 30,
       status: "unscheduled",
     };
@@ -235,6 +238,84 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       setTasks((prev) => prev.filter((t) => t.id !== tempId));
     }
   }, []);
+
+  const updateTask = useCallback(
+    async (taskId: string, updates: Partial<Task>, startTime?: string) => {
+      setTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, ...updates } : t))
+      );
+      try {
+        if (Object.keys(updates).length > 0) {
+          await api.updateTask(taskId, updates);
+
+          // Sync title change to the linked time block
+          if (updates.title) {
+            const linkedBlock = blocks.find((b) => b.taskId === taskId);
+            if (linkedBlock) {
+              await api.updateBlock(linkedBlock.id, { title: updates.title } as any);
+              setBlocks((prev) =>
+                prev.map((b) => b.id === linkedBlock.id ? { ...b, title: updates.title! } : b)
+              );
+            }
+          }
+        }
+
+        // Handle start time changes (create/update/delete time block)
+        if (startTime !== undefined) {
+          const existingBlock = blocks.find((b) => b.taskId === taskId);
+
+          if (startTime === "" && existingBlock) {
+            // Clear start time — delete the block and unschedule
+            await api.deleteBlock(existingBlock.id);
+            await api.updateTask(taskId, { status: "unscheduled" } as any);
+          } else if (startTime) {
+            const task = tasks.find((t) => t.id === taskId);
+            const duration = updates.estimateMinutes ?? task?.estimateMinutes ?? 30;
+            const startDate = new Date(startTime);
+            const endDate = new Date(startDate.getTime() + duration * 60_000);
+
+            if (existingBlock) {
+              // Update existing block
+              await api.updateBlock(existingBlock.id, {
+                startTime: startDate.toISOString(),
+                endTime: endDate.toISOString(),
+                title: updates.title ?? task?.title ?? existingBlock.title,
+              } as any);
+            } else {
+              // Create new block
+              await api.createBlock({
+                taskId,
+                title: updates.title ?? task?.title ?? "",
+                startTime: startDate.toISOString(),
+                endTime: endDate.toISOString(),
+                blockType: "focus",
+              });
+              await api.updateTask(taskId, { status: "scheduled" } as any);
+            }
+          }
+          // Refresh to get updated blocks
+          await loadData();
+        }
+      } catch (err) {
+        console.error("Failed to update task:", err);
+        loadData();
+      }
+    },
+    [loadData, blocks, tasks]
+  );
+
+  const deleteTask = useCallback(
+    async (taskId: string) => {
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+      try {
+        await api.deleteTask(taskId);
+      } catch (err) {
+        console.error("Failed to delete task:", err);
+        loadData();
+      }
+    },
+    [loadData]
+  );
 
   const toggleDrawer = useCallback(() => setDrawerOpen((o) => !o), []);
 
@@ -278,6 +359,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       sendMessage,
       toggleTaskDone,
       addTask,
+      updateTask,
+      deleteTask,
       setCurrentView,
       toggleDrawer,
       commitProposedBlocks,
@@ -297,6 +380,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       sendMessage,
       toggleTaskDone,
       addTask,
+      updateTask,
+      deleteTask,
       toggleDrawer,
       commitProposedBlocks,
       navigateWeek,

@@ -26,7 +26,7 @@ export function PlanCTA({ onNavigateToChat }: PlanCTAProps) {
           the week.
         </p>
         <div className="mt-5">
-          <Button variant="primary" onClick={onNavigateToChat}>
+          <Button variant="primary" onClick={onNavigateToChat} className="text-white">
             Plan Your Week
             <svg className="w-4 h-4 ml-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M20 2L4 22" />

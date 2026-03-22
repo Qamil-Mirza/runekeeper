@@ -162,7 +162,7 @@ export function PreferencesForm({ user, onSaved }: PreferencesFormProps) {
       <button
         onClick={handleSave}
         disabled={saving}
-        className="bg-tertiary text-on-tertiary px-6 py-2 font-label text-label-lg font-medium uppercase tracking-wide hover:opacity-90 transition-opacity disabled:opacity-50"
+        className="bg-tertiary text-white px-6 py-2 font-label text-label-lg font-medium uppercase tracking-wide hover:opacity-90 transition-opacity disabled:opacity-50"
       >
         {saving ? "Saving..." : saved ? "Saved" : "Save Preferences"}
       </button>

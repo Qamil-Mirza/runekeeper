@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   if (!session?.user?.id) return errorResponse("Unauthorized", 401);
 
   const body = await req.json();
-  const { message, sessionId } = body;
+  const { message, sessionId, timezone: clientTimezone } = body;
 
   if (!message) return errorResponse("message is required");
 
@@ -82,7 +82,17 @@ export async function POST(req: Request) {
 
   // Load cross-session memory digest
   const memoryDigest = await getMemoryDigest(userId);
-  const userTimezone = user?.timezone || "America/New_York";
+  // Prefer browser-provided timezone, then DB, then fallback
+  const userTimezone = clientTimezone || user?.timezone || "America/New_York";
+
+  // Auto-update user timezone in DB if it differs from the browser
+  if (clientTimezone && user && user.timezone !== clientTimezone) {
+    await db
+      .update(users)
+      .set({ timezone: clientTimezone })
+      .where(eq(users.id, userId))
+      .catch(() => null); // best-effort, don't block chat
+  }
 
   // Build tiered context for the LLM
   const tieredContext = buildTieredContext({
@@ -148,7 +158,8 @@ export async function POST(req: Request) {
         userId,
         weekRange.start,
         weekRange.end,
-        pinnedBlockIds
+        pinnedBlockIds,
+        userTimezone
       );
       actionResults.push(result);
 
@@ -374,8 +385,8 @@ function generateFallbackResponse(
 
 function extractTasksFromMessage(
   message: string
-): { title: string; priority: "P0" | "P1" | "P2"; estimateMinutes: number; dueDate?: string; startTime?: string }[] {
-  const results: { title: string; priority: "P0" | "P1" | "P2"; estimateMinutes: number; dueDate?: string; startTime?: string }[] = [];
+): { title: string; priority: "high" | "medium" | "low"; estimateMinutes: number; dueDate?: string; startTime?: string }[] {
+  const results: { title: string; priority: "high" | "medium" | "low"; estimateMinutes: number; dueDate?: string; startTime?: string }[] = [];
 
   // Split on common delimiters
   const lines = message
@@ -427,11 +438,11 @@ function extractTasksFromMessage(
       if (/\b(movie|film)\b/i.test(line)) estimate = 120;
       if (/\b(dinner|lunch|breakfast|coffee|brunch)\b/i.test(line)) estimate = 60;
 
-      let priority: "P0" | "P1" | "P2" = "P1";
+      let priority: "high" | "medium" | "low" = "medium";
       if (/\b(urgent|critical|asap|important|deadline)\b/i.test(line))
-        priority = "P0";
+        priority = "high";
       if (/\b(later|eventually|low priority|if time|maybe)\b/i.test(line))
-        priority = "P2";
+        priority = "low";
 
       const dueDate = resolveRelativeDate(line);
       const startTime = resolveSpecificTime(line, dueDate);

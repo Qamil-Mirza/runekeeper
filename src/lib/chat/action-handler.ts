@@ -5,6 +5,60 @@ import { schedule } from "@/lib/scheduler";
 import { generateDiff } from "@/lib/scheduler/diff";
 import { dbTaskToTask, dbBlockToTimeBlock, type Task, type TimeBlock } from "@/lib/types";
 
+/**
+ * Parse a naive ISO datetime string (e.g. "2026-03-22T09:00:00") as local time
+ * in the given IANA timezone. Without this, new Date() treats it as UTC.
+ */
+function parseNaiveDateTime(isoString: string, timezone?: string): Date {
+  // If already has timezone info (Z or +/-offset), parse directly
+  if (/[Zz]$/.test(isoString) || /[+-]\d{2}:\d{2}$/.test(isoString)) {
+    return new Date(isoString);
+  }
+
+  if (!timezone) {
+    // No timezone available — fall back to treating as UTC (legacy behavior)
+    return new Date(isoString);
+  }
+
+  // Use Intl to find the UTC offset for this timezone at the given date/time.
+  // Parse the naive string parts, construct a date in the target timezone.
+  const [datePart, timePart] = isoString.split("T");
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [hour, minute, second] = (timePart || "00:00:00").split(":").map(Number);
+
+  // Create a rough UTC date to find the timezone offset
+  const roughUtc = new Date(Date.UTC(year, month - 1, day, hour, minute, second || 0));
+
+  // Get the offset by formatting in the target timezone and comparing
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(roughUtc);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value || 0);
+
+  const tzYear = get("year");
+  const tzMonth = get("month");
+  const tzDay = get("day");
+  const tzHour = get("hour") === 24 ? 0 : get("hour");
+  const tzMinute = get("minute");
+  const tzSecond = get("second");
+
+  // The offset (in ms) is: what UTC time produces these local values?
+  const localAsUtc = Date.UTC(tzYear, tzMonth - 1, tzDay, tzHour, tzMinute, tzSecond);
+  const offsetMs = localAsUtc - roughUtc.getTime();
+
+  // The desired UTC time = naive local time - offset
+  return new Date(Date.UTC(year, month - 1, day, hour, minute, second || 0) - offsetMs);
+}
+
 export interface ActionResult {
   tasksCreated?: Task[];
   proposedBlocks?: TimeBlock[];
@@ -19,11 +73,12 @@ export async function handleAction(
   userId: string,
   weekStart: string,
   weekEnd: string,
-  pinnedBlockIds?: Set<string>
+  pinnedBlockIds?: Set<string>,
+  timezone?: string
 ): Promise<ActionResult> {
   switch (action.type) {
     case "create_tasks":
-      return handleCreateTasks(action.tasks, userId);
+      return handleCreateTasks(action.tasks, userId, timezone);
     case "generate_schedule":
       return handleGenerateSchedule(userId, weekStart, weekEnd, pinnedBlockIds);
     case "confirm_plan":
@@ -37,7 +92,8 @@ export async function handleAction(
 
 async function handleCreateTasks(
   taskDefs: any[],
-  userId: string
+  userId: string,
+  timezone?: string
 ): Promise<ActionResult> {
   const created: Task[] = [];
   const proposedBlocks: TimeBlock[] = [];
@@ -62,8 +118,8 @@ async function handleCreateTasks(
       .values({
         userId,
         title: def.title,
-        notes: def.notes ?? null,
-        priority: def.priority ?? "P1",
+        notes: def.notes ? def.notes.slice(0, 500) : null,
+        priority: def.priority ?? "medium",
         estimateMinutes: def.estimateMinutes ?? 30,
         dueDate: def.dueDate ?? null,
         status: hasSpecificTime ? "scheduled" : "unscheduled",
@@ -75,7 +131,10 @@ async function handleCreateTasks(
 
     // If a specific start time was provided, create a time block at that time
     if (hasSpecificTime) {
-      const startTime = new Date(def.startTime);
+      // The LLM sends naive ISO strings like "2026-03-22T09:00:00" (no timezone).
+      // new Date() would parse this as UTC, but it's meant as the user's local time.
+      // Append the timezone offset so the Date is constructed correctly.
+      const startTime = parseNaiveDateTime(def.startTime, timezone);
       const endTime = new Date(startTime.getTime() + (def.estimateMinutes ?? 30) * 60_000);
 
       const [blockRow] = await db
