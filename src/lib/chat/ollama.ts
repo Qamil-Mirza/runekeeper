@@ -89,7 +89,7 @@ const RESPONSE_SCHEMA = {
                     "ISO datetime (e.g. 2026-03-21T20:00:00). Include ONLY when the user specifies a specific time.",
                 },
               },
-              required: ["title", "priority", "estimateMinutes"],
+              required: ["title", "notes", "priority", "estimateMinutes"],
             },
           },
           blockTitle: {

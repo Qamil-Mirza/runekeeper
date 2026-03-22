@@ -148,7 +148,8 @@ export async function POST(req: Request) {
         userId,
         weekRange.start,
         weekRange.end,
-        pinnedBlockIds
+        pinnedBlockIds,
+        userTimezone
       );
       actionResults.push(result);
 
