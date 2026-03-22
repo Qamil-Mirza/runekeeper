@@ -491,6 +491,8 @@ function WeekMiniView({
   onEdit: (task: Task) => void;
 }) {
   const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const MINI_START_HOUR = 0;
+  const MINI_END_HOUR = 24;
   const MINI_HOUR_HEIGHT = 32;
 
   const dayDates = useMemo(() => {
@@ -520,7 +522,7 @@ function WeekMiniView({
   }, [blocks, dayDates]);
 
   const hours = useMemo(
-    () => Array.from({ length: 13 }, (_, i) => 8 + i),
+    () => Array.from({ length: MINI_END_HOUR - MINI_START_HOUR }, (_, i) => MINI_START_HOUR + i),
     []
   );
 
@@ -585,7 +587,7 @@ function WeekMiniView({
                     const e = new Date(block.end);
                     const sMin = s.getHours() * 60 + s.getMinutes();
                     const eMin = e.getHours() * 60 + e.getMinutes();
-                    const top = ((sMin - 8 * 60) / 60) * MINI_HOUR_HEIGHT;
+                    const top = ((sMin - MINI_START_HOUR * 60) / 60) * MINI_HOUR_HEIGHT;
                     const h = ((eMin - sMin) / 60) * MINI_HOUR_HEIGHT;
                     const isExt = block.source === "google_calendar";
                     const accent = blockAccent[block.type] || blockAccent.focus;
