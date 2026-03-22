@@ -3,10 +3,7 @@ import { db } from "@/db";
 import { chatMessages, users, tasks, timeBlocks } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import {
-  chatCompletion,
   chatCompletionStream,
-  OllamaConnectionError,
-  OllamaParseError,
   type StructuredResponse,
 } from "@/lib/chat/ollama";
 import { buildSystemPrompt, buildSimpleSystemPrompt } from "@/lib/chat/planner-prompt";
@@ -136,153 +133,177 @@ export async function POST(req: Request) {
     // Classify complexity to determine model tier
     const tier = classifyComplexity(message, messages.length);
 
-    // Fast tier: stream response from small model
-    if (tier === "simple") {
-      const simplePrompt = buildSimpleSystemPrompt(user?.name || "User");
+    // Both tiers stream via SSE — fast uses plain text, capable extracts
+    // the "message" field from structured JSON incrementally
+    const effectivePrompt =
+      tier === "simple"
+        ? buildSimpleSystemPrompt(user?.name || "User")
+        : systemPrompt;
+    const modelTier = tier === "simple" ? "fast" : "capable";
 
-      // Determine quick actions now (needed for the done event)
-      const quickActions = determineQuickActions(userTasks, userBlocks, []);
+    const stream = chatCompletionStream(messages, effectivePrompt, modelTier as any);
 
-      const stream = chatCompletionStream(messages, simplePrompt);
+    const encoder = new TextEncoder();
+    let transformBuffer = "";
+    const transformedStream = stream.pipeThrough(
+      new TransformStream<Uint8Array, Uint8Array>({
+        async transform(chunk, controller) {
+          transformBuffer += new TextDecoder().decode(chunk);
+          const parts = transformBuffer.split("\n\n");
+          transformBuffer = parts.pop() || "";
+          const lines = parts.filter((l) => l.startsWith("data: "));
 
-      // Create a transform stream that intercepts the done event to:
-      // 1. Save the assistant message to DB
-      // 2. Append quick actions metadata to the done event
-      const encoder = new TextEncoder();
-      let transformBuffer = "";
-      const transformedStream = stream.pipeThrough(
-        new TransformStream<Uint8Array, Uint8Array>({
-          async transform(chunk, controller) {
-            transformBuffer += new TextDecoder().decode(chunk);
-            const parts = transformBuffer.split("\n\n");
-            // Keep the last potentially incomplete frame in the buffer
-            transformBuffer = parts.pop() || "";
-            const lines = parts.filter((l) => l.startsWith("data: "));
+          for (const line of lines) {
+            const jsonStr = line.replace("data: ", "");
+            let event: any;
+            try {
+              event = JSON.parse(jsonStr);
+            } catch {
+              controller.enqueue(encoder.encode(`${line}\n\n`));
+              continue;
+            }
 
-            for (const line of lines) {
-              const jsonStr = line.replace("data: ", "");
-              try {
-                const event = JSON.parse(jsonStr);
+            if (event.type === "done") {
+              // Execute actions if the capable model returned them
+              const parsed: StructuredResponse = event.parsed ?? {
+                message: event.fullMessage,
+                actions: [],
+              };
 
-                if (event.type === "done") {
-                  // Save assistant message to DB
-                  await db.insert(chatMessages).values({
+              const actionResults: ActionResult[] = [];
+              const pinnedBlockIds = new Set<string>();
+
+              for (const action of parsed.actions) {
+                try {
+                  const result = await handleAction(
+                    action,
                     userId,
-                    planSessionId: sessionId ?? null,
-                    role: "assistant",
-                    content: event.fullMessage,
-                    metadata: { quickActions },
-                  });
+                    weekRange.start,
+                    weekRange.end,
+                    pinnedBlockIds,
+                    userTimezone
+                  );
+                  actionResults.push(result);
 
-                  // Extract memories from user message (non-blocking)
-                  try {
-                    const memories = extractMemories(message);
-                    if (memories.length > 0) {
-                      await saveMemories(userId, memories);
+                  if (action.type === "create_tasks" && result.proposedBlocks) {
+                    for (const block of result.proposedBlocks) {
+                      pinnedBlockIds.add(block.id);
                     }
-                  } catch (err) {
-                    console.error("Memory extraction failed:", err);
                   }
+                } catch (err) {
+                  console.error("Action execution failed:", err);
+                }
+              }
 
-                  // Enrich done event with quick actions
-                  const enrichedDone = {
-                    ...event,
+              const quickActions = determineQuickActions(
+                userTasks,
+                userBlocks,
+                actionResults
+              );
+              const diffPreview = actionResults.find((r) => r.diff)?.diff ?? null;
+              const schedulePreview =
+                actionResults.find((r) => r.proposedBlocks)?.proposedBlocks ?? null;
+              const actionSummary = buildActionSummary(actionResults);
+
+              // Save assistant message to DB
+              await db.insert(chatMessages).values({
+                userId,
+                planSessionId: sessionId ?? null,
+                role: "assistant",
+                content: event.fullMessage,
+                metadata: {
+                  quickActions,
+                  diffPreview,
+                  schedulePreview,
+                  actionSummary,
+                  actions: actionResults,
+                },
+              });
+
+              // Extract memories (non-blocking)
+              try {
+                const memories = extractMemories(message);
+                if (memories.length > 0) {
+                  await saveMemories(userId, memories);
+                }
+              } catch (err) {
+                console.error("Memory extraction failed:", err);
+              }
+
+              // Send enriched done event
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: "done",
+                    fullMessage: event.fullMessage,
                     quickActions,
+                    actionSummary,
+                    diffPreview,
+                    schedulePreview,
+                    actions: actionResults,
+                  })}\n\n`
+                )
+              );
+              continue;
+            }
+
+            if (event.type === "error") {
+              // Stream error — use fallback response
+              console.warn(`${modelTier} model stream error, using fallback`);
+              const fallback = generateFallbackResponse(message, userTasks, userBlocks);
+              const fallbackQuickActions = determineQuickActions(userTasks, userBlocks, []);
+
+              await db.insert(chatMessages).values({
+                userId,
+                planSessionId: sessionId ?? null,
+                role: "assistant",
+                content: fallback.message,
+                metadata: { quickActions: fallbackQuickActions },
+              });
+
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({ type: "token", content: fallback.message })}\n\n`
+                )
+              );
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: "done",
+                    fullMessage: fallback.message,
+                    quickActions: fallbackQuickActions,
                     actionSummary: null,
                     diffPreview: null,
                     schedulePreview: null,
-                  };
-                  controller.enqueue(
-                    encoder.encode(`data: ${JSON.stringify(enrichedDone)}\n\n`)
-                  );
-                  continue;
-                }
-
-                if (event.type === "error") {
-                  // On stream error, fall back to capable model (non-streaming)
-                  console.warn("Fast model stream error, falling back to capable model");
-                  let fallback: StructuredResponse;
-                  try {
-                    fallback = await chatCompletion(messages, systemPrompt, "capable");
-                  } catch {
-                    fallback = generateFallbackResponse(message, userTasks, userBlocks);
-                  }
-
-                  // Save assistant message
-                  const fallbackQuickActions = determineQuickActions(userTasks, userBlocks, []);
-                  await db.insert(chatMessages).values({
-                    userId,
-                    planSessionId: sessionId ?? null,
-                    role: "assistant",
-                    content: fallback.message,
-                    metadata: { quickActions: fallbackQuickActions },
-                  });
-
-                  // Send the full message as a single token then done
-                  controller.enqueue(
-                    encoder.encode(
-                      `data: ${JSON.stringify({ type: "token", content: fallback.message })}\n\n`
-                    )
-                  );
-                  controller.enqueue(
-                    encoder.encode(
-                      `data: ${JSON.stringify({
-                        type: "done",
-                        fullMessage: fallback.message,
-                        quickActions: fallbackQuickActions,
-                        actionSummary: null,
-                        diffPreview: null,
-                        schedulePreview: null,
-                      })}\n\n`
-                    )
-                  );
-                  continue;
-                }
-              } catch {
-                // Not JSON, pass through as-is
-              }
-
-              // Pass through token events unchanged
-              controller.enqueue(encoder.encode(`${line}\n\n`));
+                  })}\n\n`
+                )
+              );
+              continue;
             }
-          },
-          flush(controller) {
-            // Process any remaining buffered data
-            if (transformBuffer.startsWith("data: ")) {
-              controller.enqueue(encoder.encode(`${transformBuffer}\n\n`));
-            }
-          },
-        })
-      );
 
-      return new Response(transformedStream, {
-        headers: {
-          "Content-Type": "text/event-stream",
-          "Cache-Control": "no-cache",
-          Connection: "keep-alive",
+            // Pass through token events unchanged
+            controller.enqueue(encoder.encode(`${line}\n\n`));
+          }
         },
-      });
-    }
+        flush(controller) {
+          if (transformBuffer.startsWith("data: ")) {
+            controller.enqueue(encoder.encode(`${transformBuffer}\n\n`));
+          }
+        },
+      })
+    );
 
-    // Capable tier: full structured response (non-streaming)
-    try {
-      structured = await chatCompletion(messages, systemPrompt, "capable");
-    } catch (error) {
-      if (error instanceof OllamaConnectionError || error instanceof OllamaParseError) {
-        structured = generateFallbackResponse(message, userTasks, userBlocks);
-      } else {
-        console.error("Ollama error:", error);
-        structured = {
-          message: "I'm having trouble processing that right now. Could you try again?",
-          actions: [],
-        };
-      }
-    }
+    return new Response(transformedStream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
   }
 
-  // Execute actions from the structured response
+  // Direct action path — no LLM needed, return JSON immediately
   const actionResults: ActionResult[] = [];
-  // Track block IDs created by create_tasks so generate_schedule won't delete them
   const pinnedBlockIds = new Set<string>();
 
   for (const action of structured.actions) {
@@ -297,8 +318,6 @@ export async function POST(req: Request) {
       );
       actionResults.push(result);
 
-      // Pin blocks from create_tasks (user-specified times) so subsequent
-      // generate_schedule treats them as fixed
       if (action.type === "create_tasks" && result.proposedBlocks) {
         for (const block of result.proposedBlocks) {
           pinnedBlockIds.add(block.id);
@@ -309,22 +328,11 @@ export async function POST(req: Request) {
     }
   }
 
-  // Determine quick actions based on context
-  const quickActions = determineQuickActions(
-    userTasks,
-    userBlocks,
-    actionResults
-  );
-
-  // Build diff preview if schedule was generated
+  const quickActions = determineQuickActions(userTasks, userBlocks, actionResults);
   const diffPreview = actionResults.find((r) => r.diff)?.diff;
-  const schedulePreview = actionResults.find((r) => r.proposedBlocks)
-    ?.proposedBlocks;
-
-  // Build action summary from actual results
+  const schedulePreview = actionResults.find((r) => r.proposedBlocks)?.proposedBlocks;
   const actionSummary = buildActionSummary(actionResults);
 
-  // Save assistant message
   await db.insert(chatMessages).values({
     userId,
     planSessionId: sessionId ?? null,
@@ -339,7 +347,6 @@ export async function POST(req: Request) {
     },
   });
 
-  // Extract and save memories from user message (non-blocking)
   try {
     const memories = extractMemories(message);
     if (memories.length > 0) {
