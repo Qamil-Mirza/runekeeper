@@ -398,11 +398,10 @@ function matchDirectAction(
     };
   }
 
-  // Generate schedule
+  // Generate schedule (only exact commands — conversational phrases like
+  // "plan my week" should go through the LLM so it can ask about needs first)
   if (
     lower === "generate schedule" ||
-    lower === "schedule" ||
-    lower === "plan my week" ||
     lower === "generate"
   ) {
     const unscheduled = taskList.filter((t: any) => t.status === "unscheduled");
