@@ -118,7 +118,7 @@ async function handleCreateTasks(
       .values({
         userId,
         title: def.title,
-        notes: def.notes ?? null,
+        notes: def.notes ? def.notes.slice(0, 500) : null,
         priority: def.priority ?? "medium",
         estimateMinutes: def.estimateMinutes ?? 30,
         dueDate: def.dueDate ?? null,

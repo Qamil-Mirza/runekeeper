@@ -72,7 +72,8 @@ const RESPONSE_SCHEMA = {
                 notes: {
                   type: "string" as const,
                   description:
-                    "A brief description of the quest (1-2 sentences). Infer from conversation context or title if not explicitly stated.",
+                    "A brief description of the quest (1-2 sentences, max 500 characters). Infer from conversation context or title if not explicitly stated.",
+                  maxLength: 500,
                 },
                 priority: {
                   type: "string" as const,

@@ -206,9 +206,10 @@ export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: Q
                 id="quest-description"
                 label="Description"
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={(e) => setNotes(e.target.value.slice(0, 500))}
                 placeholder="Add a description..."
                 rows={2}
+                maxLength={500}
               />
 
               {/* Priority */}

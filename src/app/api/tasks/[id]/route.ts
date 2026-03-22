@@ -20,7 +20,7 @@ export async function PATCH(
   // Allowlist editable fields to prevent overwriting userId, id, etc.
   const allowed: Record<string, unknown> = { updatedAt: new Date() };
   if (body.title !== undefined) allowed.title = body.title;
-  if (body.notes !== undefined) allowed.notes = body.notes;
+  if (body.notes !== undefined) allowed.notes = typeof body.notes === "string" ? body.notes.slice(0, 500) : body.notes;
   if (body.priority !== undefined) allowed.priority = body.priority;
   if (body.estimateMinutes !== undefined) allowed.estimateMinutes = body.estimateMinutes;
   if (body.dueDate !== undefined) allowed.dueDate = body.dueDate;
