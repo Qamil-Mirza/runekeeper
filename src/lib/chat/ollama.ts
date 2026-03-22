@@ -1,6 +1,7 @@
+import { MODEL_TIERS, type ModelTier } from "./model-config";
+
 const OLLAMA_BASE_URL =
   process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen3:latest";
 
 export interface OllamaMessage {
   role: "system" | "user" | "assistant";
@@ -109,71 +110,238 @@ const RESPONSE_SCHEMA = {
   required: ["message", "actions"],
 };
 
-// ── Chat completion with structured output ────────────────────────────────────
+// ── Streaming response types for SSE events ───────────────────────────────────
 
-export async function chatCompletion(
+export type StreamEvent =
+  | { type: "token"; content: string }
+  | { type: "done"; fullMessage: string; parsed?: StructuredResponse }
+  | { type: "error"; error: string };
+
+// ── Streaming chat completion (both tiers) ────────────────────────────────────
+
+export function chatCompletionStream(
   messages: OllamaMessage[],
-  systemPrompt: string
-): Promise<StructuredResponse> {
+  systemPrompt: string,
+  tier: ModelTier = "fast"
+): ReadableStream<Uint8Array> {
+  const config = MODEL_TIERS[tier];
+  const useStructuredOutput = tier === "capable";
   const fullMessages: OllamaMessage[] = [
     { role: "system", content: systemPrompt },
     ...messages,
   ];
+  const encoder = new TextEncoder();
 
-  try {
-    const res = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: OLLAMA_MODEL,
-        messages: fullMessages,
-        stream: false,
-        format: RESPONSE_SCHEMA,
-        options: {
-          temperature: 0.7,
-          num_predict: 2048,
-        },
-      }),
-    });
+  return new ReadableStream({
+    async start(controller) {
+      try {
+        const res = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: config.model,
+            messages: fullMessages,
+            stream: true,
+            ...(useStructuredOutput ? { format: RESPONSE_SCHEMA } : {}),
+            options: {
+              temperature: config.temperature,
+              num_predict: config.numPredict,
+            },
+          }),
+        });
 
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Ollama API error ${res.status}: ${text}`);
-    }
+        if (!res.ok || !res.body) {
+          const text = res.body ? await res.text() : `HTTP ${res.status}`;
+          throw new Error(`Ollama streaming error: ${text}`);
+        }
 
-    const data: OllamaChatResponse = await res.json();
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let fullRaw = "";
+        let buffer = "";
 
-    // Strip Qwen think blocks if present
-    let content = data.message.content;
-    content = content.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+        // For capable tier: track JSON message field extraction
+        let messageStartIndex = -1;
+        let messageContent = "";
+        let messageComplete = false;
 
-    const parsed: StructuredResponse = JSON.parse(content);
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-    // Validate basic structure
-    if (typeof parsed.message !== "string") {
-      parsed.message = "I've processed your request.";
-    }
-    if (!Array.isArray(parsed.actions)) {
-      parsed.actions = [];
-    }
+          buffer += decoder.decode(value, { stream: true });
 
-    return parsed;
-  } catch (error) {
-    if (
-      error instanceof TypeError &&
-      (error.message.includes("fetch") || error.message.includes("connect"))
-    ) {
-      throw new OllamaConnectionError(
-        "Cannot connect to Ollama. Ensure Ollama is running locally."
-      );
-    }
-    // If JSON parse fails, wrap raw text as a message with no actions
-    if (error instanceof SyntaxError) {
-      throw new OllamaParseError("Failed to parse structured response from model.");
-    }
-    throw error;
-  }
+          // Ollama streams newline-delimited JSON objects
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+
+            let chunk: { message?: { content?: string }; done?: boolean };
+            try {
+              chunk = JSON.parse(line);
+            } catch {
+              continue;
+            }
+
+            const token = chunk.message?.content || "";
+            if (!token) continue;
+
+            fullRaw += token;
+
+            if (useStructuredOutput) {
+              // Capable tier: extract "message" field value from JSON stream
+              // The structured output produces JSON like: {"message":"...","actions":[...]}
+              // We incrementally find and stream just the message value.
+              if (messageStartIndex === -1) {
+                // Look for the start of the message value string
+                const match = fullRaw.match(/"message"\s*:\s*"/);
+                if (match) {
+                  messageStartIndex = match.index! + match[0].length;
+                  // Stream any message content we already have past the opening quote
+                  const available = fullRaw.slice(messageStartIndex);
+                  const extracted = extractUntilUnescapedQuote(available);
+                  if (extracted.content) {
+                    messageContent += extracted.content;
+                    emitToken(controller, encoder, extracted.content);
+                  }
+                  if (extracted.complete) {
+                    messageComplete = true;
+                  }
+                }
+              } else if (!messageComplete) {
+                // We're inside the message string, stream new tokens
+                // But we need to check the full accumulated content from messageStartIndex
+                const available = fullRaw.slice(messageStartIndex + messageContent.length);
+                const extracted = extractUntilUnescapedQuote(available);
+                if (extracted.content) {
+                  messageContent += extracted.content;
+                  emitToken(controller, encoder, extracted.content);
+                }
+                if (extracted.complete) {
+                  messageComplete = true;
+                }
+              }
+              // After message is complete, silently buffer the rest (actions)
+            } else {
+              // Fast tier: stream all tokens directly
+              emitToken(controller, encoder, token);
+            }
+          }
+        }
+
+        // Build done event
+        if (useStructuredOutput) {
+          // Parse the full JSON response
+          const cleaned = fullRaw.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+          let parsed: StructuredResponse;
+          try {
+            parsed = JSON.parse(cleaned);
+            if (typeof parsed.message !== "string") {
+              parsed.message = messageContent || "I've processed your request.";
+            }
+            if (!Array.isArray(parsed.actions)) {
+              parsed.actions = [];
+            }
+          } catch {
+            // JSON parse failed — use whatever message content we extracted
+            parsed = {
+              message: messageContent || "I've processed your request.",
+              actions: [],
+            };
+          }
+
+          // Unescape the message content for the final done event
+          const finalMessage = unescapeJsonString(parsed.message);
+
+          const doneEvent: StreamEvent = {
+            type: "done",
+            fullMessage: finalMessage,
+            parsed: { ...parsed, message: finalMessage },
+          };
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(doneEvent)}\n\n`)
+          );
+        } else {
+          // Fast tier: strip think blocks, send done
+          const fullMessage = fullRaw.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+          const doneEvent: StreamEvent = {
+            type: "done",
+            fullMessage,
+          };
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(doneEvent)}\n\n`)
+          );
+        }
+
+        controller.close();
+      } catch (error) {
+        const errorMessage =
+          error instanceof TypeError &&
+          (error.message.includes("fetch") || error.message.includes("connect"))
+            ? "connection_error"
+            : "stream_error";
+        controller.enqueue(
+          encoder.encode(
+            `data: ${JSON.stringify({ type: "error", error: errorMessage })}\n\n`
+          )
+        );
+        controller.close();
+      }
+    },
+  });
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function emitToken(
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  encoder: TextEncoder,
+  content: string
+) {
+  const event: StreamEvent = { type: "token", content };
+  controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+}
+
+/**
+ * Extract content from a JSON string value until we hit an unescaped quote.
+ * Returns the extracted content and whether the closing quote was found.
+ */
+function extractUntilUnescapedQuote(s: string): { content: string; complete: boolean } {
+  let result = "";
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === "\\" && i + 1 < s.length) {
+      // Escaped character — include the unescaped version
+      const next = s[i + 1];
+      if (next === '"') result += '"';
+      else if (next === "n") result += "\n";
+      else if (next === "t") result += "\t";
+      else if (next === "\\") result += "\\";
+      else result += next;
+      i++; // skip the escaped char
+    } else if (s[i] === '"') {
+      // Unescaped quote — end of string value
+      return { content: result, complete: true };
+    } else {
+      result += s[i];
+    }
+  }
+  return { content: result, complete: false };
+}
+
+/**
+ * Unescape a JSON string value (handles \\n, \\t, \\", \\\\)
+ */
+function unescapeJsonString(s: string): string {
+  return s
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, "\\");
+}
+
+// ── Error classes ─────────────────────────────────────────────────────────────
 
 export class OllamaConnectionError extends Error {
   constructor(message: string) {

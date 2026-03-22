@@ -3,12 +3,11 @@ import { db } from "@/db";
 import { chatMessages, users, tasks, timeBlocks } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import {
-  chatCompletion,
-  OllamaConnectionError,
-  OllamaParseError,
+  chatCompletionStream,
   type StructuredResponse,
 } from "@/lib/chat/ollama";
-import { buildSystemPrompt } from "@/lib/chat/planner-prompt";
+import { buildSystemPrompt, buildSimpleSystemPrompt } from "@/lib/chat/planner-prompt";
+import { classifyComplexity } from "@/lib/chat/classifier";
 import { handleAction, type ActionResult } from "@/lib/chat/action-handler";
 import { dbTaskToTask, dbBlockToTimeBlock } from "@/lib/types";
 import { jsonResponse, errorResponse } from "@/lib/api-helpers";
@@ -131,24 +130,180 @@ export async function POST(req: Request) {
   if (directAction) {
     structured = directAction;
   } else {
-    try {
-      structured = await chatCompletion(messages, systemPrompt);
-    } catch (error) {
-      if (error instanceof OllamaConnectionError || error instanceof OllamaParseError) {
-        structured = generateFallbackResponse(message, userTasks, userBlocks);
-      } else {
-        console.error("Ollama error:", error);
-        structured = {
-          message: "I'm having trouble processing that right now. Could you try again?",
-          actions: [],
-        };
-      }
-    }
+    // Classify complexity to determine model tier
+    const tier = classifyComplexity(message, messages.length);
+
+    // Both tiers stream via SSE — fast uses plain text, capable extracts
+    // the "message" field from structured JSON incrementally
+    const effectivePrompt =
+      tier === "simple"
+        ? buildSimpleSystemPrompt(user?.name || "User")
+        : systemPrompt;
+    const modelTier = tier === "simple" ? "fast" : "capable";
+
+    const stream = chatCompletionStream(messages, effectivePrompt, modelTier as any);
+
+    const encoder = new TextEncoder();
+    let transformBuffer = "";
+    const transformedStream = stream.pipeThrough(
+      new TransformStream<Uint8Array, Uint8Array>({
+        async transform(chunk, controller) {
+          transformBuffer += new TextDecoder().decode(chunk);
+          const parts = transformBuffer.split("\n\n");
+          transformBuffer = parts.pop() || "";
+          const lines = parts.filter((l) => l.startsWith("data: "));
+
+          for (const line of lines) {
+            const jsonStr = line.replace("data: ", "");
+            let event: any;
+            try {
+              event = JSON.parse(jsonStr);
+            } catch {
+              controller.enqueue(encoder.encode(`${line}\n\n`));
+              continue;
+            }
+
+            if (event.type === "done") {
+              // Execute actions if the capable model returned them
+              const parsed: StructuredResponse = event.parsed ?? {
+                message: event.fullMessage,
+                actions: [],
+              };
+
+              const actionResults: ActionResult[] = [];
+              const pinnedBlockIds = new Set<string>();
+
+              for (const action of parsed.actions) {
+                try {
+                  const result = await handleAction(
+                    action,
+                    userId,
+                    weekRange.start,
+                    weekRange.end,
+                    pinnedBlockIds,
+                    userTimezone
+                  );
+                  actionResults.push(result);
+
+                  if (action.type === "create_tasks" && result.proposedBlocks) {
+                    for (const block of result.proposedBlocks) {
+                      pinnedBlockIds.add(block.id);
+                    }
+                  }
+                } catch (err) {
+                  console.error("Action execution failed:", err);
+                }
+              }
+
+              const quickActions = determineQuickActions(
+                userTasks,
+                userBlocks,
+                actionResults
+              );
+              const diffPreview = actionResults.find((r) => r.diff)?.diff ?? null;
+              const schedulePreview =
+                actionResults.find((r) => r.proposedBlocks)?.proposedBlocks ?? null;
+              const actionSummary = buildActionSummary(actionResults);
+
+              // Save assistant message to DB
+              await db.insert(chatMessages).values({
+                userId,
+                planSessionId: sessionId ?? null,
+                role: "assistant",
+                content: event.fullMessage,
+                metadata: {
+                  quickActions,
+                  diffPreview,
+                  schedulePreview,
+                  actionSummary,
+                  actions: actionResults,
+                },
+              });
+
+              // Extract memories (non-blocking)
+              try {
+                const memories = extractMemories(message);
+                if (memories.length > 0) {
+                  await saveMemories(userId, memories);
+                }
+              } catch (err) {
+                console.error("Memory extraction failed:", err);
+              }
+
+              // Send enriched done event
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: "done",
+                    fullMessage: event.fullMessage,
+                    quickActions,
+                    actionSummary,
+                    diffPreview,
+                    schedulePreview,
+                    actions: actionResults,
+                  })}\n\n`
+                )
+              );
+              continue;
+            }
+
+            if (event.type === "error") {
+              // Stream error — use fallback response
+              console.warn(`${modelTier} model stream error, using fallback`);
+              const fallback = generateFallbackResponse(message, userTasks, userBlocks);
+              const fallbackQuickActions = determineQuickActions(userTasks, userBlocks, []);
+
+              await db.insert(chatMessages).values({
+                userId,
+                planSessionId: sessionId ?? null,
+                role: "assistant",
+                content: fallback.message,
+                metadata: { quickActions: fallbackQuickActions },
+              });
+
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({ type: "token", content: fallback.message })}\n\n`
+                )
+              );
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    type: "done",
+                    fullMessage: fallback.message,
+                    quickActions: fallbackQuickActions,
+                    actionSummary: null,
+                    diffPreview: null,
+                    schedulePreview: null,
+                  })}\n\n`
+                )
+              );
+              continue;
+            }
+
+            // Pass through token events unchanged
+            controller.enqueue(encoder.encode(`${line}\n\n`));
+          }
+        },
+        flush(controller) {
+          if (transformBuffer.startsWith("data: ")) {
+            controller.enqueue(encoder.encode(`${transformBuffer}\n\n`));
+          }
+        },
+      })
+    );
+
+    return new Response(transformedStream, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
   }
 
-  // Execute actions from the structured response
+  // Direct action path — no LLM needed, return JSON immediately
   const actionResults: ActionResult[] = [];
-  // Track block IDs created by create_tasks so generate_schedule won't delete them
   const pinnedBlockIds = new Set<string>();
 
   for (const action of structured.actions) {
@@ -163,8 +318,6 @@ export async function POST(req: Request) {
       );
       actionResults.push(result);
 
-      // Pin blocks from create_tasks (user-specified times) so subsequent
-      // generate_schedule treats them as fixed
       if (action.type === "create_tasks" && result.proposedBlocks) {
         for (const block of result.proposedBlocks) {
           pinnedBlockIds.add(block.id);
@@ -175,22 +328,11 @@ export async function POST(req: Request) {
     }
   }
 
-  // Determine quick actions based on context
-  const quickActions = determineQuickActions(
-    userTasks,
-    userBlocks,
-    actionResults
-  );
-
-  // Build diff preview if schedule was generated
+  const quickActions = determineQuickActions(userTasks, userBlocks, actionResults);
   const diffPreview = actionResults.find((r) => r.diff)?.diff;
-  const schedulePreview = actionResults.find((r) => r.proposedBlocks)
-    ?.proposedBlocks;
-
-  // Build action summary from actual results
+  const schedulePreview = actionResults.find((r) => r.proposedBlocks)?.proposedBlocks;
   const actionSummary = buildActionSummary(actionResults);
 
-  // Save assistant message
   await db.insert(chatMessages).values({
     userId,
     planSessionId: sessionId ?? null,
@@ -205,7 +347,6 @@ export async function POST(req: Request) {
     },
   });
 
-  // Extract and save memories from user message (non-blocking)
   try {
     const memories = extractMemories(message);
     if (memories.length > 0) {
@@ -257,11 +398,10 @@ function matchDirectAction(
     };
   }
 
-  // Generate schedule
+  // Generate schedule (only exact commands — conversational phrases like
+  // "plan my week" should go through the LLM so it can ask about needs first)
   if (
     lower === "generate schedule" ||
-    lower === "schedule" ||
-    lower === "plan my week" ||
     lower === "generate"
   ) {
     const unscheduled = taskList.filter((t: any) => t.status === "unscheduled");
@@ -321,21 +461,15 @@ function generateFallbackResponse(
 ): StructuredResponse {
   const lower = message.toLowerCase();
 
-  // Plan/schedule request
+  // Plan/schedule request — ask about priorities first, don't auto-generate
   if (
     lower.includes("plan") &&
     (lower.includes("week") || lower.includes("day"))
   ) {
-    if (taskList.filter((t) => t.status === "unscheduled").length === 0) {
-      return {
-        message:
-          "You don't have any unscheduled tasks yet. Tell me about your priorities this week and I'll create tasks for you.",
-        actions: [],
-      };
-    }
     return {
-      message: `You have ${taskList.filter((t) => t.status === "unscheduled").length} unscheduled tasks. Let me generate a schedule for them.`,
-      actions: [{ type: "generate_schedule" }],
+      message:
+        "Let's plan your week! What are your priorities and commitments? Tell me what you need to get done and I'll help organize everything.",
+      actions: [],
     };
   }
 

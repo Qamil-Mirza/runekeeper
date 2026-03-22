@@ -1,15 +1,11 @@
 "use client";
 
-import { Avatar } from "@/components/ui/avatar";
-import { usePlanner } from "@/context/planner-context";
-
 interface AppHeaderProps {
   title: string;
   onOpenMenu?: () => void;
 }
 
 export function AppHeader({ title, onOpenMenu }: AppHeaderProps) {
-  const { user } = usePlanner();
 
   return (
     <header className="flex items-center justify-between px-5 py-4 bg-surface/80 backdrop-blur-sm sticky top-0 z-20">
@@ -34,12 +30,8 @@ export function AppHeader({ title, onOpenMenu }: AppHeaderProps) {
         {title}
       </h2>
 
-      {/* Avatar */}
-      <Avatar
-        initials={user.initials}
-        size="sm"
-        className="bg-tertiary/20 text-tertiary"
-      />
+      {/* Spacer to keep header layout balanced */}
+      <div className="w-8 md:hidden" />
     </header>
   );
 }

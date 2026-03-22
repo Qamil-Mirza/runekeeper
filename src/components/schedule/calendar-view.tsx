@@ -414,10 +414,12 @@ export function CalendarView() {
           >
             <WeekMiniView
               blocks={blocks}
+              tasks={tasks}
               weekRange={weekRange}
               navigateWeek={navigateWeek}
               selectedDate={selectedDate}
               onSelectDate={setSelectedDate}
+              onEdit={setEditingTask}
             />
           </motion.div>
         )}
@@ -458,16 +460,20 @@ export function CalendarView() {
 
 function WeekMiniView({
   blocks,
+  tasks,
   weekRange,
   navigateWeek,
   selectedDate,
   onSelectDate,
+  onEdit,
 }: {
   blocks: TimeBlock[];
+  tasks: Task[];
   weekRange: { start: string; end: string };
   navigateWeek: (dir: -1 | 1) => void;
   selectedDate: Date;
   onSelectDate: (d: Date) => void;
+  onEdit: (task: Task) => void;
 }) {
   const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   const MINI_HOUR_HEIGHT = 32;
@@ -574,10 +580,16 @@ function WeekMiniView({
                     const h = ((eMin - sMin) / 60) * MINI_HOUR_HEIGHT;
                     const isExt = block.source === "google_calendar";
                     const accent = blockAccent[block.type] || blockAccent.focus;
+                    const linkedTask = block.taskId ? tasks.find((t) => t.id === block.taskId) : undefined;
                     return (
                       <div
                         key={block.id}
-                        className={cn("absolute left-0.5 right-0.5 px-1 py-0.5 overflow-hidden border-l-2", isExt ? "bg-surface-container/40" : accent.bg)}
+                        onClick={() => linkedTask && onEdit(linkedTask)}
+                        className={cn(
+                          "absolute left-0.5 right-0.5 px-1 py-0.5 overflow-hidden border-l-2",
+                          isExt ? "bg-surface-container/40" : accent.bg,
+                          linkedTask && "cursor-pointer hover:brightness-95 transition-all"
+                        )}
                         style={{ top: `${top}px`, height: `${Math.max(h, 14)}px`, borderLeftColor: isExt ? "#4285F4" : "var(--color-tertiary)" }}
                       >
                         <span className={cn("font-label text-[9px] font-medium leading-tight block truncate", isExt ? "text-on-surface/60" : "text-on-surface")}>
