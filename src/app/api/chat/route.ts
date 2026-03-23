@@ -10,18 +10,12 @@ import { buildSystemPrompt } from "@/lib/chat/planner-prompt";
 import { handleAction, type ActionResult } from "@/lib/chat/action-handler";
 import { dbTaskToTask, dbBlockToTimeBlock } from "@/lib/types";
 import { jsonResponse, errorResponse } from "@/lib/api-helpers";
-import { toLocalDateStr } from "@/lib/utils";
+import { toLocalDateStr, isValidTimezone } from "@/lib/utils";
 import { extractMemories, getMemoryDigest, saveMemories } from "@/lib/chat/memory";
 import { buildTieredContext } from "@/lib/chat/context-builder";
+import { rateLimit } from "@/lib/rate-limit";
 
-function isValidTimezone(tz: string): boolean {
-  try {
-    Intl.DateTimeFormat(undefined, { timeZone: tz });
-    return true;
-  } catch {
-    return false;
-  }
-}
+const chatLimiter = rateLimit({ key: "chat", limit: 20, windowMs: 60_000 });
 
 function getWeekRange() {
   const now = new Date();
@@ -50,6 +44,11 @@ export async function POST(req: Request) {
   }
 
   const userId = session.user.id;
+
+  const { success: withinLimit } = chatLimiter.check(userId);
+  if (!withinLimit) {
+    return errorResponse("Rate limit exceeded. Try again shortly.", 429);
+  }
   const weekRange = getWeekRange();
 
   // Save user message

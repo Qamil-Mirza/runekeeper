@@ -14,3 +14,13 @@ export function toLocalDateStr(date: Date): string {
 export function isoToLocalDate(iso: string): string {
   return toLocalDateStr(new Date(iso));
 }
+
+/** Check whether a timezone string is recognized by the Intl API */
+export function isValidTimezone(tz: string): boolean {
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}

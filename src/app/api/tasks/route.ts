@@ -6,6 +6,9 @@ import {
   jsonResponse,
   errorResponse,
 } from "@/lib/api-helpers";
+import { rateLimit } from "@/lib/rate-limit";
+
+const tasksLimiter = rateLimit({ key: "tasks", limit: 30, windowMs: 60_000 });
 
 export async function GET() {
   const user = await getAuthenticatedUser();
@@ -23,6 +26,11 @@ export async function GET() {
 export async function POST(req: Request) {
   const user = await getAuthenticatedUser();
   if (!user) return errorResponse("Unauthorized", 401);
+
+  const { success: withinLimit } = tasksLimiter.check(user.id);
+  if (!withinLimit) {
+    return errorResponse("Rate limit exceeded. Try again shortly.", 429);
+  }
 
   const body = await req.json();
   if (!body.title || typeof body.title !== "string" || body.title.length > 500) {
