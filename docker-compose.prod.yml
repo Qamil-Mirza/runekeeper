@@ -34,6 +34,7 @@ services:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
       OLLAMA_MODEL: ${OLLAMA_MODEL}
       OLLAMA_MODEL_FAST: ${OLLAMA_MODEL_FAST}
+      OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-8192}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

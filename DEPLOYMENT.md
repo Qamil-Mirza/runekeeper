@@ -12,7 +12,7 @@
 - Docker and Docker Compose installed on the server
 - Tailscale installed and authenticated (`curl -fsSL https://tailscale.com/install.sh | sh`)
 - Node.js 18+ on the host (for running database migrations)
-- Ollama installed with models pulled (`qwen3.5` and `qwen3:1.7b`)
+- Ollama installed with models pulled (`qwen3:4b` and `qwen3:1.7b`)
 
 ## Setup
 
@@ -52,8 +52,9 @@ TOKEN_ENCRYPTION_KEY=<generate with: node -e "console.log(require('crypto').rand
 
 # Ollama
 OLLAMA_BASE_URL=http://host.docker.internal:11434
-OLLAMA_MODEL=qwen3.5
+OLLAMA_MODEL=qwen3:4b
 OLLAMA_MODEL_FAST=qwen3:1.7b
+OLLAMA_NUM_CTX=8192
 ```
 
 ### 4. Deploy

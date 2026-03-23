@@ -7,6 +7,14 @@ COMPOSE_FILE="docker-compose.prod.yml"
 echo "==> Pulling latest code..."
 git pull origin deploy
 
+echo "==> Checking Ollama models..."
+for model in "${OLLAMA_MODEL:-qwen3:4b}" "${OLLAMA_MODEL_FAST:-qwen3:1.7b}"; do
+  if ! ollama list | grep -q "$(echo "$model" | cut -d: -f1)"; then
+    echo "    Pulling $model..."
+    ollama pull "$model"
+  fi
+done
+
 echo "==> Building and starting services..."
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build
 

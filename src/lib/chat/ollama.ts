@@ -146,6 +146,7 @@ export function chatCompletionStream(
             options: {
               temperature: config.temperature,
               num_predict: config.numPredict,
+              ...config.options,
             },
           }),
         });

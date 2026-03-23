@@ -17,7 +17,13 @@ export default auth((req) => {
   if (isAuthApi) return;
 
   // Protect planner and non-auth API routes
-  if ((isPlanner || isApi) && !isAuth) {
+  if (!isAuth) {
+    if (isApi) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     return Response.redirect(new URL("/", req.nextUrl.origin));
   }
 });
