@@ -11,7 +11,9 @@ echo "==> Building and starting services..."
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build
 
 echo "==> Waiting for database to be ready..."
-sleep 3
+until docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec db pg_isready -U runekeeper 2>/dev/null; do
+  sleep 1
+done
 
 echo "==> Running database migrations..."
 set -a
