@@ -5,9 +5,8 @@ import { eq, desc } from "drizzle-orm";
 import {
   chatCompletionStream,
   type StructuredResponse,
-} from "@/lib/chat/ollama";
-import { buildSystemPrompt, buildSimpleSystemPrompt } from "@/lib/chat/planner-prompt";
-import { classifyComplexity } from "@/lib/chat/classifier";
+} from "@/lib/chat/gemini";
+import { buildSystemPrompt } from "@/lib/chat/planner-prompt";
 import { handleAction, type ActionResult } from "@/lib/chat/action-handler";
 import { dbTaskToTask, dbBlockToTimeBlock } from "@/lib/types";
 import { jsonResponse, errorResponse } from "@/lib/api-helpers";
@@ -146,18 +145,7 @@ export async function POST(req: Request) {
   if (directAction) {
     structured = directAction;
   } else {
-    // Classify complexity to determine model tier
-    const tier = classifyComplexity(message, messages.length);
-
-    // Both tiers stream via SSE — fast uses plain text, capable extracts
-    // the "message" field from structured JSON incrementally
-    const effectivePrompt =
-      tier === "simple"
-        ? buildSimpleSystemPrompt(user?.name || "User")
-        : systemPrompt;
-    const modelTier = tier === "simple" ? "fast" : "capable";
-
-    const stream = chatCompletionStream(messages, effectivePrompt, modelTier as any);
+    const stream = chatCompletionStream(messages, systemPrompt);
 
     const encoder = new TextEncoder();
     let transformBuffer = "";
@@ -265,7 +253,7 @@ export async function POST(req: Request) {
 
             if (event.type === "error") {
               // Stream error — use fallback response
-              console.warn(`${modelTier} model stream error, using fallback`);
+              console.warn("Gemini stream error, using fallback");
               const fallback = generateFallbackResponse(message, userTasks, userBlocks);
               const fallbackQuickActions = determineQuickActions(userTasks, userBlocks, []);
 
@@ -468,7 +456,7 @@ function determineQuickActions(
   return ["Plan my week", "Show inventory", "Show map"];
 }
 
-// ── Fallback when Ollama is unavailable ───────────────────────────────────────
+// ── Fallback when Gemini is unavailable ───────────────────────────────────────
 
 function generateFallbackResponse(
   message: string,

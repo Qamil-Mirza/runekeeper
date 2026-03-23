@@ -4,7 +4,7 @@
 
 - **Next.js app** — runs in Docker with standalone output
 - **PostgreSQL** — runs in Docker with persistent volume
-- **Ollama** — runs on the host, accessed via `host.docker.internal`
+- **Google Gemini Flash** — cloud LLM API for chat intelligence
 - **Tailscale Funnel** — provides public HTTPS access without a domain or port forwarding
 
 ## Prerequisites
@@ -12,7 +12,7 @@
 - Docker and Docker Compose installed on the server
 - Tailscale installed and authenticated (`curl -fsSL https://tailscale.com/install.sh | sh`)
 - Node.js 18+ on the host (for running database migrations)
-- Ollama installed with models pulled (`qwen3:4b` and `qwen3:1.7b`)
+- Google Gemini API key (from [Google AI Studio](https://aistudio.google.com/apikey))
 
 ## Setup
 
@@ -50,11 +50,8 @@ AUTH_GOOGLE_ID=<your google client id>
 AUTH_GOOGLE_SECRET=<your google client secret>
 TOKEN_ENCRYPTION_KEY=<generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))">
 
-# Ollama
-OLLAMA_BASE_URL=http://host.docker.internal:11434
-OLLAMA_MODEL=qwen3:4b
-OLLAMA_MODEL_FAST=qwen3:1.7b
-OLLAMA_NUM_CTX=8192
+# Gemini
+GEMINI_API_KEY=<your gemini api key>
 ```
 
 ### 4. Deploy
