@@ -18,7 +18,7 @@ Runekeeper builds a realistic week schedule, checks for conflicts against your G
 | Language | TypeScript |
 | Auth | NextAuth v5 + Google OAuth |
 | Database | PostgreSQL (Neon) + Drizzle ORM |
-| Chat Intelligence | Ollama (local LLM — Qwen 3) |
+| Chat Intelligence | Google Gemini 2.5 Flash |
 | Styling | Tailwind CSS v4 |
 | Animations | Framer Motion |
 | Calendar | Google Calendar API |
@@ -31,7 +31,7 @@ Runekeeper builds a realistic week schedule, checks for conflicts against your G
 
 - Node.js 18+
 - PostgreSQL database (local or [Neon](https://neon.tech))
-- [Ollama](https://ollama.com) running locally with `qwen3` pulled
+- Google Gemini API key (from [Google AI Studio](https://aistudio.google.com/apikey))
 - Google Cloud project with Calendar and Tasks APIs enabled
 
 ### 1. Clone and install
@@ -63,9 +63,8 @@ NEXTAUTH_URL=http://localhost:3000
 AUTH_GOOGLE_ID=your-client-id
 AUTH_GOOGLE_SECRET=your-client-secret
 
-# Ollama
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen3:latest
+# Gemini
+GEMINI_API_KEY=your-gemini-api-key
 ```
 
 ### 3. Set up Google OAuth
@@ -91,13 +90,7 @@ npm run db:generate
 npm run db:migrate
 ```
 
-### 5. Pull the Ollama model
-
-```sh
-ollama pull qwen3.5
-```
-
-### 6. Run the dev server
+### 5. Run the dev server
 
 ```sh
 npm run dev

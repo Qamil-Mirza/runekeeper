@@ -30,17 +30,24 @@ export function generateDiff(
     }
   }
 
-  // Find removals (current committed blocks not in proposed)
+  // Find removals (committed blocks being replaced by a different proposed block)
+  // Only show a removal if the proposed set explicitly replaces that task
   for (const current of currentBlocks) {
     if (!current.committed) continue;
 
-    const stillExists = proposedBlocks.some(
+    const replacedByProposed = proposedBlocks.some(
       (p) => p.taskId === current.taskId
     );
 
-    if (!stillExists && current.taskId) {
-      changes.push({ type: "remove", block: current });
+    // Only mark as removed if the proposed set contains a different version
+    // of this block (i.e., the task was rescheduled). Don't mark committed
+    // blocks as removed just because they aren't in the new proposal —
+    // they're still committed and untouched.
+    if (replacedByProposed) {
+      // Already handled as "modify" above
+      continue;
     }
+    // Otherwise, this committed block is untouched — do NOT show as removed
   }
 
   const summary = buildSummary(changes);
