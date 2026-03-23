@@ -6,6 +6,9 @@ import {
   jsonResponse,
   errorResponse,
 } from "@/lib/api-helpers";
+import { rateLimit } from "@/lib/rate-limit";
+
+const blocksLimiter = rateLimit({ key: "blocks", limit: 30, windowMs: 60_000 });
 
 export async function GET(req: Request) {
   const user = await getAuthenticatedUser();
@@ -36,9 +39,25 @@ export async function POST(req: Request) {
   const user = await getAuthenticatedUser();
   if (!user) return errorResponse("Unauthorized", 401);
 
+  const { success: withinLimit } = blocksLimiter.check(user.id);
+  if (!withinLimit) {
+    return errorResponse("Rate limit exceeded. Try again shortly.", 429);
+  }
+
   const body = await req.json();
   if (!body.title || !body.startTime || !body.endTime) {
     return errorResponse("title, startTime, and endTime are required");
+  }
+
+  const startTime = new Date(body.startTime);
+  const endTime = new Date(body.endTime);
+
+  if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) {
+    return errorResponse("startTime and endTime must be valid date strings", 400);
+  }
+
+  if (endTime <= startTime) {
+    return errorResponse("endTime must be after startTime", 400);
   }
 
   const [block] = await db
@@ -47,8 +66,8 @@ export async function POST(req: Request) {
       userId: user.id,
       taskId: body.taskId ?? null,
       title: body.title,
-      startTime: new Date(body.startTime),
-      endTime: new Date(body.endTime),
+      startTime,
+      endTime,
       blockType: body.blockType ?? "focus",
       committed: body.committed ?? false,
     })
