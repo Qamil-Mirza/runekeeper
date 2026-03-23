@@ -18,7 +18,7 @@ export const MODEL_TIERS: Record<ModelTier, ModelConfig> = {
     temperature: 0.7,
     numPredict: 2048,
     options: {
-      num_ctx: parseInt(process.env.OLLAMA_NUM_CTX || "4096", 10),
+      num_ctx: parseInt(process.env.OLLAMA_NUM_CTX || "8192", 10),
     },
   },
 };

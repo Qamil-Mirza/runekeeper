@@ -54,7 +54,7 @@ TOKEN_ENCRYPTION_KEY=<generate with: node -e "console.log(require('crypto').rand
 OLLAMA_BASE_URL=http://host.docker.internal:11434
 OLLAMA_MODEL=qwen3:4b
 OLLAMA_MODEL_FAST=qwen3:1.7b
-OLLAMA_NUM_CTX=4096
+OLLAMA_NUM_CTX=8192
 ```
 
 ### 4. Deploy
