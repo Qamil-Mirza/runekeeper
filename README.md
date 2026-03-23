@@ -23,7 +23,7 @@ Runekeeper builds a realistic week schedule, checks for conflicts against your G
 | Animations | Framer Motion |
 | Calendar | Google Calendar API |
 | Tasks | Google Tasks API |
-| Deployment | Vercel |
+| Deployment | Docker + Tailscale Funnel |
 
 ## Getting started
 
@@ -103,21 +103,30 @@ Open [http://localhost:3000](http://localhost:3000).
 ```
 src/
   app/
-    api/              # API routes (auth, tasks, blocks, messages, sessions, preferences)
-    planner/          # Main planner layout and page
-    page.tsx          # Landing page
+    api/                # API routes (auth, chat, plan, calendar, tasks, blocks, sessions, preferences)
+    planner/            # Main planner layout and page
+    page.tsx            # Landing page
   components/
-    ui/               # Design system primitives (button, input, card, badge, etc.)
-    layout/           # App shell (sidebar, header, schedule drawer)
-    chat/             # Chat interface (messages, input, diff preview, quick actions)
-    schedule/         # Week grid, day columns, time blocks
-    inventory/        # Task list (items, groups, add input)
-    auth/             # Google sign-in button
-  context/            # Shared planner state (React Context)
-  db/                 # Drizzle schema and connection
-  hooks/              # Custom hooks (chat, schedule, tasks)
-  lib/                # Types, utilities, auth config, crypto, mock data
-specs/                # PRD, design system doc, feature roadmap
+    ui/                 # Design system primitives (button, input, card, badge, etc.)
+    layout/             # App shell (sidebar, header, schedule drawer)
+    chat/               # Chat interface (messages, input, diff preview, quick actions)
+    schedule/           # Week grid, day columns, time blocks
+    inventory/          # Task list (items, groups, add input)
+    home/               # Dashboard, welcome screen, quest cards
+    settings/           # User preferences form
+    auth/               # Google sign-in button
+  context/              # Shared planner state (React Context)
+  db/                   # Drizzle schema and connection
+  hooks/                # Custom hooks (chat, schedule, tasks)
+  lib/
+    chat/               # Gemini integration, prompts, action handling, context, memory
+    scheduler/          # Scheduling algorithm, free-time calculation, conflict detection
+    google/             # Calendar and Tasks API clients, incremental sync
+    auth.ts             # NextAuth config with token encryption
+    types.ts            # Shared TypeScript interfaces
+    rate-limit.ts       # In-memory rate limiting
+    crypto.ts           # AES-256 token encryption
+specs/                  # PRD, design system doc, feature roadmap
 ```
 
 ## Design system
@@ -141,6 +150,14 @@ See `specs/design.md` for the full specification.
 | `npm run db:generate` | Generate migration files |
 | `npm run db:migrate` | Run migrations |
 | `npm run db:studio` | Open Drizzle Studio (DB browser) |
+
+## Deployment
+
+The app runs in Docker with PostgreSQL and uses Tailscale Funnel for public HTTPS access. See [DEPLOYMENT.md](DEPLOYMENT.md) for the full production setup guide.
+
+```sh
+./deploy.sh
+```
 
 ## License
 
