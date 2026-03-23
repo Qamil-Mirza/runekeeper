@@ -1,0 +1,48 @@
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+
+ARG DATABASE_URL
+ARG AUTH_SECRET
+ARG NEXTAUTH_URL
+ARG AUTH_GOOGLE_ID
+ARG AUTH_GOOGLE_SECRET
+ARG TOKEN_ENCRYPTION_KEY
+ARG OLLAMA_BASE_URL
+ARG OLLAMA_MODEL
+ARG OLLAMA_MODEL_FAST
+
+ENV DATABASE_URL=$DATABASE_URL
+ENV AUTH_SECRET=$AUTH_SECRET
+ENV NEXTAUTH_URL=$NEXTAUTH_URL
+ENV AUTH_GOOGLE_ID=$AUTH_GOOGLE_ID
+ENV AUTH_GOOGLE_SECRET=$AUTH_GOOGLE_SECRET
+ENV TOKEN_ENCRYPTION_KEY=$TOKEN_ENCRYPTION_KEY
+ENV OLLAMA_BASE_URL=$OLLAMA_BASE_URL
+ENV OLLAMA_MODEL=$OLLAMA_MODEL
+ENV OLLAMA_MODEL_FAST=$OLLAMA_MODEL_FAST
+
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+
+USER nextjs
+EXPOSE 3000
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
+
+CMD ["node", "server.js"]
