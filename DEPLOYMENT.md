@@ -39,11 +39,12 @@ In the [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
 Create `.env.production` in the project root (never commit this file):
 
 ```bash
-# Database
-POSTGRES_PASSWORD=<generate with: openssl rand -base64 24>
+# Database (use hex to avoid URL-unsafe characters like / and +)
+POSTGRES_PASSWORD=<generate with: openssl rand -hex 24>
 
 # Auth
 AUTH_SECRET=<generate with: openssl rand -base64 32>
+AUTH_TRUST_HOST=true
 NEXTAUTH_URL=https://<your-machine>.<tailnet>.ts.net
 AUTH_GOOGLE_ID=<your google client id>
 AUTH_GOOGLE_SECRET=<your google client secret>
@@ -117,4 +118,5 @@ DATABASE_URL="postgresql://runekeeper:<password>@localhost:5432/runekeeper" npx 
 
 - Containers use `restart: unless-stopped` — they survive reboots as long as Docker is enabled (`sudo systemctl enable docker`)
 - Tailscale Funnel persists across reboots when started with `--bg`
-- The database password contains special characters — URL-encode `/` as `%2F` and `+` as `%2B` if using it in a connection string directly
+- `AUTH_TRUST_HOST=true` is required for NextAuth v5 when running behind Tailscale Funnel (reverse proxy)
+- Use `openssl rand -hex` (not `-base64`) for `POSTGRES_PASSWORD` to avoid URL-unsafe characters that break the `DATABASE_URL` connection string
