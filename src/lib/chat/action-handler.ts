@@ -8,6 +8,30 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("action-handler");
 
+const VALID_PRIORITIES = ["high", "medium", "low"];
+
+function sanitizeTaskDef(def: any): {
+  title: string;
+  notes: string | null;
+  priority: string;
+  estimateMinutes: number;
+  dueDate: string | null;
+  startTime: string | null;
+} | null {
+  if (!def || typeof def.title !== "string" || def.title.trim().length === 0) return null;
+  return {
+    title: def.title.trim().slice(0, 500),
+    notes: typeof def.notes === "string" ? def.notes.slice(0, 500) : null,
+    priority: VALID_PRIORITIES.includes(def.priority) ? def.priority : "medium",
+    estimateMinutes:
+      typeof def.estimateMinutes === "number" && def.estimateMinutes > 0
+        ? Math.min(Math.round(def.estimateMinutes), 480)
+        : 30,
+    dueDate: typeof def.dueDate === "string" ? def.dueDate : null,
+    startTime: typeof def.startTime === "string" ? def.startTime : null,
+  };
+}
+
 /**
  * Parse a naive ISO datetime string (e.g. "2026-03-22T09:00:00") as local time
  * in the given IANA timezone. Without this, new Date() treats it as UTC.
@@ -101,6 +125,13 @@ async function handleCreateTasks(
   userId: string,
   timezone?: string
 ): Promise<ActionResult> {
+  if (!Array.isArray(taskDefs)) return { error: "No valid tasks provided" };
+
+  const validDefs = taskDefs.map(sanitizeTaskDef).filter(Boolean) as NonNullable<
+    ReturnType<typeof sanitizeTaskDef>
+  >[];
+  if (validDefs.length === 0) return { error: "No valid tasks provided" };
+
   const created: Task[] = [];
   const proposedBlocks: TimeBlock[] = [];
 
@@ -110,7 +141,7 @@ async function handleCreateTasks(
     .from(tasks)
     .where(eq(tasks.userId, userId));
 
-  for (const def of taskDefs) {
+  for (const def of validDefs) {
     // Check if a task with the same title already exists (case-insensitive)
     const duplicate = existingTasks.find(
       (t) => t.title.toLowerCase() === (def.title || "").toLowerCase()
@@ -185,7 +216,7 @@ async function handleCreateTasks(
     created.push(task);
 
     // If a specific start time was provided, create a time block at that time
-    if (hasSpecificTime) {
+    if (hasSpecificTime && def.startTime) {
       // The LLM sends naive ISO strings like "2026-03-22T09:00:00" (no timezone).
       // new Date() would parse this as UTC, but it's meant as the user's local time.
       // Append the timezone offset so the Date is constructed correctly.
@@ -361,7 +392,16 @@ async function handleAdjustBlock(
   weekEnd: string,
   timezone?: string
 ): Promise<ActionResult> {
-  const { blockTitle, newEstimateMinutes, newStartTime } = action;
+  const blockTitle =
+    typeof action.blockTitle === "string" ? action.blockTitle.trim() : null;
+  const newEstimateMinutes =
+    typeof action.newEstimateMinutes === "number" && action.newEstimateMinutes > 0
+      ? Math.min(Math.round(action.newEstimateMinutes), 480)
+      : undefined;
+  const newStartTime =
+    typeof action.newStartTime === "string" && !isNaN(Date.parse(action.newStartTime))
+      ? action.newStartTime
+      : undefined;
 
   if (!blockTitle) {
     return handleGenerateSchedule(userId, weekStart, weekEnd);

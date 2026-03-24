@@ -61,9 +61,8 @@ export async function listEvents(
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
-      throw new Error(
-        `Calendar API error ${res.status}: ${error.error?.message || res.statusText}`
-      );
+      console.error(`Calendar API error ${res.status}: ${error.error?.message || res.statusText}`);
+      throw new Error("Google Calendar request failed");
     }
 
     const data: EventsListResponse = await res.json();
