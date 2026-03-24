@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import { HangingLantern } from "@/components/landing/hanging-lantern";
 
 export default async function Home() {
   const session = await auth();
@@ -13,17 +14,14 @@ export default async function Home() {
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            "radial-gradient(ellipse at 50% 45%, rgba(200, 120, 40, 0.12) 0%, transparent 50%), radial-gradient(ellipse at 50% 80%, rgba(200, 100, 20, 0.06) 0%, transparent 40%)",
+            "radial-gradient(ellipse at 50% 35%, rgba(200, 120, 40, 0.12) 0%, transparent 50%), radial-gradient(ellipse at 50% 70%, rgba(200, 100, 20, 0.06) 0%, transparent 40%)",
         }}
       />
 
       <div className="max-w-lg text-center relative z-10">
-        {/* Campfire flame */}
+        {/* Hanging lantern */}
         <div className="mb-8 flex flex-col items-center">
-          <div className="relative">
-            <div className="campfire-flame" />
-            <div className="campfire-glow -bottom-4 left-1/2 -translate-x-1/2" />
-          </div>
+          <HangingLantern />
         </div>
 
         <h1 className="font-display text-display-lg font-light tracking-tight text-on-surface leading-[1.05]">
