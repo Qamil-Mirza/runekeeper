@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { PlannerProvider, usePlanner } from "@/context/planner-context";
-import type { ViewId } from "@/context/planner-context";
+import type { ViewId, TransitionMode } from "@/context/planner-context";
+import { viewInkSpread, viewInstant } from "@/lib/animations";
 import { Sidebar } from "@/components/layout/sidebar";
 import { AppHeader } from "@/components/layout/app-header";
 import { CalendarView } from "@/components/schedule/calendar-view";
@@ -67,8 +68,12 @@ const bottomNavItems: { id: ViewId; label: string; icon: (active: boolean) => Re
   },
 ];
 
+function getViewVariants(mode: TransitionMode) {
+  return mode === "ink-spread" ? viewInkSpread : viewInstant;
+}
+
 function PlannerShell() {
-  const { currentView, setCurrentView } = usePlanner();
+  const { currentView, setCurrentView, transitionMode, setTransitionMode } = usePlanner();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleNavigate = (view: ViewId) => {
@@ -124,15 +129,32 @@ function PlannerShell() {
           onOpenMenu={() => setSidebarOpen(true)}
         />
         <div className="flex-1 overflow-hidden min-h-0">
-          {currentView === "home" && <HomeDashboard />}
-          {currentView === "chat" && <ChatContainer />}
-          {currentView === "quest-log" && <InventoryPanel />}
-          {currentView === "calendar" && <CalendarView />}
-          {currentView === "settings" && (
-            <div className="overflow-y-auto archivist-scroll h-full">
-              <SettingsPage />
-            </div>
-          )}
+          <AnimatePresence
+            mode={transitionMode === "ink-spread" ? "wait" : "sync"}
+            initial={false}
+          >
+            <motion.div
+              key={currentView}
+              variants={getViewVariants(transitionMode)}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              onAnimationComplete={() => {
+                if (transitionMode !== "none") setTransitionMode("none");
+              }}
+              className="h-full"
+            >
+              {currentView === "home" && <HomeDashboard />}
+              {currentView === "chat" && <ChatContainer />}
+              {currentView === "quest-log" && <InventoryPanel />}
+              {currentView === "calendar" && <CalendarView />}
+              {currentView === "settings" && (
+                <div className="overflow-y-auto archivist-scroll h-full">
+                  <SettingsPage />
+                </div>
+              )}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </main>
 

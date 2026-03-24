@@ -7,14 +7,19 @@ import { ScheduledBlocks } from "./scheduled-blocks";
 import { PlanCTA } from "./plan-cta";
 
 export function HomeDashboard() {
-  const { user, setCurrentView } = usePlanner();
+  const { user, setCurrentView, setTransitionMode } = usePlanner();
+
+  const handlePlanCTA = () => {
+    setTransitionMode("ink-spread");
+    setCurrentView("chat");
+  };
 
   return (
     <div className="overflow-y-auto archivist-scroll h-full pb-8">
       <WelcomeSection userName={user.name} />
       <TodayQuests />
       <ScheduledBlocks />
-      <PlanCTA onNavigateToChat={() => setCurrentView("chat")} />
+      <PlanCTA onNavigateToChat={handlePlanCTA} />
     </div>
   );
 }
