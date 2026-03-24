@@ -79,7 +79,7 @@ function PlannerShell() {
   return (
     <div className="flex h-dvh overflow-hidden">
       {/* Sidebar — desktop */}
-      <div className="hidden md:flex">
+      <div className="hidden lg:flex">
         <Sidebar
           currentView={currentView}
           onNavigate={handleNavigate}
@@ -96,7 +96,7 @@ function PlannerShell() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-50 vellum-overlay md:hidden"
+              className="fixed inset-0 z-50 vellum-overlay lg:hidden"
               onClick={() => setSidebarOpen(false)}
               aria-hidden="true"
             />
@@ -105,7 +105,7 @@ function PlannerShell() {
               animate={{ x: 0 }}
               exit={{ x: "-100%" }}
               transition={{ duration: 0.25, ease: "easeOut" }}
-              className="fixed left-0 top-0 bottom-0 z-50 md:hidden"
+              className="fixed left-0 top-0 bottom-0 z-50 lg:hidden"
             >
               <Sidebar
                 currentView={currentView}
@@ -118,7 +118,7 @@ function PlannerShell() {
       </AnimatePresence>
 
       {/* Main content area */}
-      <main className="flex-1 flex flex-col min-w-0 wood-grain bg-surface pb-16 md:pb-0">
+      <main className="flex-1 flex flex-col min-w-0 wood-grain bg-surface pb-16 lg:pb-0">
         <AppHeader
           title={viewTitles[currentView]}
           onOpenMenu={() => setSidebarOpen(true)}
@@ -138,7 +138,7 @@ function PlannerShell() {
 
       {/* Mobile bottom nav */}
       <nav
-        className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-surface-dim wood-grain flex py-1.5 border-t border-[rgba(212,168,96,0.12)]"
+        className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-surface-dim flex py-1.5 border-t border-[rgba(212,168,96,0.12)]"
         role="navigation"
         aria-label="Main navigation"
       >
