@@ -15,6 +15,11 @@ export function isoToLocalDate(iso: string): string {
   return toLocalDateStr(new Date(iso));
 }
 
+/** Format a Date to YYYY-MM-DD in a specific timezone */
+export function toDateStrInTimezone(date: Date, timezone: string): string {
+  return date.toLocaleDateString("en-CA", { timeZone: timezone });
+}
+
 /** Check whether a timezone string is recognized by the Intl API */
 export function isValidTimezone(tz: string): boolean {
   try {

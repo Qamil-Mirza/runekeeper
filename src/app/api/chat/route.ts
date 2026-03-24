@@ -10,24 +10,27 @@ import { buildSystemPrompt } from "@/lib/chat/planner-prompt";
 import { handleAction, type ActionResult } from "@/lib/chat/action-handler";
 import { dbTaskToTask, dbBlockToTimeBlock } from "@/lib/types";
 import { jsonResponse, errorResponse } from "@/lib/api-helpers";
-import { toLocalDateStr, isValidTimezone } from "@/lib/utils";
+import { toLocalDateStr, toDateStrInTimezone, isValidTimezone } from "@/lib/utils";
 import { extractMemories, getMemoryDigest, saveMemories } from "@/lib/chat/memory";
 import { buildTieredContext } from "@/lib/chat/context-builder";
 import { rateLimit } from "@/lib/rate-limit";
 
 const chatLimiter = rateLimit({ key: "chat", limit: 20, windowMs: 60_000 });
 
-function getWeekRange() {
+function getWeekRange(timezone: string) {
   const now = new Date();
-  const day = now.getDay();
-  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(now);
+  // Get today's date in the user's timezone, then work from noon to avoid DST issues
+  const todayStr = toDateStrInTimezone(now, timezone);
+  const today = new Date(todayStr + "T12:00:00");
+  const day = today.getDay();
+  const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(today);
   monday.setDate(diff);
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
   return {
-    start: toLocalDateStr(monday),
-    end: toLocalDateStr(sunday),
+    start: toDateStrInTimezone(monday, timezone),
+    end: toDateStrInTimezone(sunday, timezone),
   };
 }
 
@@ -49,8 +52,6 @@ export async function POST(req: Request) {
   if (!withinLimit) {
     return errorResponse("Rate limit exceeded. Try again shortly.", 429);
   }
-  const weekRange = getWeekRange();
-
   // Save user message
   await db.insert(chatMessages).values({
     userId,
@@ -106,6 +107,8 @@ export async function POST(req: Request) {
       .where(eq(users.id, userId))
       .catch(() => null); // best-effort, don't block chat
   }
+
+  const weekRange = getWeekRange(userTimezone);
 
   // Build tiered context for the LLM
   const tieredContext = buildTieredContext({
