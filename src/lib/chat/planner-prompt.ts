@@ -1,5 +1,5 @@
 import type { User } from "@/lib/types";
-import { toLocalDateStr } from "@/lib/utils";
+import { toDateStrInTimezone } from "@/lib/utils";
 
 export function buildSimpleSystemPrompt(userName: string): string {
   return `You are Runekeeper, a warm and concise weekly planning assistant.
@@ -28,17 +28,16 @@ export function buildSystemPrompt(context: {
     memoryDigest,
   } = context;
 
+  const tz = user.timezone;
   const now = new Date();
-  const todayStr = toLocalDateStr(now);
+  const todayStr = toDateStrInTimezone(now, tz);
   const todayReadable = now.toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
     month: "long",
     day: "numeric",
+    timeZone: tz,
   });
-
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
 
   const dayNames = [
     "Sunday",
@@ -49,11 +48,19 @@ export function buildSystemPrompt(context: {
     "Friday",
     "Saturday",
   ];
+
+  // Build upcoming days using timezone-aware dates
+  const todayLocal = new Date(todayStr + "T12:00:00"); // noon avoids DST edge cases
+  const tomorrowLocal = new Date(todayLocal);
+  tomorrowLocal.setDate(tomorrowLocal.getDate() + 1);
+
   const upcomingDays = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(now);
-    d.setDate(d.getDate() + i);
-    const label = i === 0 ? "today" : i === 1 ? "tomorrow/tmr" : dayNames[d.getDay()];
-    return `  - ${label}: ${toLocalDateStr(d)} (${dayNames[d.getDay()]})`;
+    const d = new Date(todayLocal);
+    d.setDate(todayLocal.getDate() + i);
+    const dateStr = toDateStrInTimezone(d, tz);
+    const dayName = d.toLocaleDateString("en-US", { weekday: "long", timeZone: tz });
+    const label = i === 0 ? "today" : i === 1 ? "tomorrow/tmr" : dayName;
+    return `  - ${label}: ${dateStr} (${dayName})`;
   }).join("\n");
 
   return `You are Runekeeper, a weekly planning assistant. Your output is a JSON object with "message" (text for the user) and "actions" (array of actions to execute). The schema is enforced — just fill in the fields.
@@ -64,8 +71,8 @@ export function buildSystemPrompt(context: {
 - Reference the "Enchanted Archivist" theme subtly (e.g., "quests" for tasks, "map" for schedule)
 
 ## Current Date & Time Reference
-TODAY IS: ${todayReadable} (${todayStr}, ${dayNames[now.getDay()]})
-TOMORROW IS: ${toLocalDateStr(tomorrow)} (${dayNames[tomorrow.getDay()]})
+TODAY IS: ${todayReadable} (${todayStr})
+TOMORROW IS: ${toDateStrInTimezone(tomorrowLocal, tz)} (${tomorrowLocal.toLocaleDateString("en-US", { weekday: "long", timeZone: tz })})
 
 Date-to-day lookup (use these EXACTLY — do NOT guess day names):
 ${upcomingDays}
