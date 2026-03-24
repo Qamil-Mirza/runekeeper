@@ -3,6 +3,8 @@ import { Langfuse } from "langfuse";
 const isEnabled =
   !!process.env.LANGFUSE_SECRET_KEY && !!process.env.LANGFUSE_PUBLIC_KEY;
 
+const environment = process.env.NODE_ENV === "production" ? "production" : "development";
+
 const langfuse = isEnabled
   ? new Langfuse({
       secretKey: process.env.LANGFUSE_SECRET_KEY!,
@@ -41,6 +43,7 @@ export function createTrace(
     userId: opts.userId,
     sessionId: opts.sessionId,
     metadata: opts.metadata,
+    tags: [environment],
   });
 }
 
