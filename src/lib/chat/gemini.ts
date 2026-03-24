@@ -1,5 +1,8 @@
 import { GoogleGenerativeAI, SchemaType, type Schema } from "@google/generative-ai";
 import { GEMINI_CONFIG } from "./model-config";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("gemini");
 
 // ── Message types ─────────────────────────────────────────────────────────────
 
@@ -126,7 +129,8 @@ export type StreamEvent =
 
 export function chatCompletionStream(
   messages: GeminiMessage[],
-  systemPrompt: string
+  systemPrompt: string,
+  trace?: { generation: (opts: any) => any }
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
 
@@ -152,6 +156,13 @@ export function chatCompletionStream(
             role: m.role === "assistant" ? "model" : "user",
             parts: [{ text: m.content }],
           }));
+
+        const startTime = Date.now();
+        const generation = trace?.generation({
+          name: "gemini-chat",
+          model: GEMINI_CONFIG.model,
+          input: { messageCount: contents.length, systemPromptLength: systemPrompt.length },
+        });
 
         const result = await model.generateContentStream({ contents });
 
@@ -198,8 +209,11 @@ export function chatCompletionStream(
         }
 
         // Parse the full JSON response
-        console.log("[Gemini] Raw response:", fullRaw);
+        const latencyMs = Date.now() - startTime;
+        log.debug({ rawLength: fullRaw.length, latencyMs }, "raw response received");
+
         let parsed: StructuredResponse;
+        let parseSuccess = true;
         try {
           parsed = JSON.parse(fullRaw.trim());
           if (typeof parsed.message !== "string") {
@@ -209,14 +223,41 @@ export function chatCompletionStream(
           if (!Array.isArray(parsed.actions)) {
             parsed.actions = [];
           }
-          console.log("[Gemini] Parsed actions:", JSON.stringify(parsed.actions));
+          const actionTypes = parsed.actions.map((a) => a.type);
+          log.info({ actionCount: parsed.actions.length, actionTypes, latencyMs }, "parsed structured response");
         } catch (e) {
-          console.error("[Gemini] JSON parse failed:", e);
+          parseSuccess = false;
+          log.error({ err: e, latencyMs }, "JSON parse failed");
           parsed = {
             message: messageContent || "I've processed your request.",
             actions: [],
           };
         }
+
+        // Capture token usage if available
+        let usageMetadata: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number } | null = null;
+        try {
+          const finalResponse = await result.response;
+          usageMetadata = finalResponse?.usageMetadata ?? null;
+        } catch {
+          // Some Gemini SDK versions don't support .response after streaming
+        }
+
+        generation?.end({
+          output: { message: parsed.message.slice(0, 200), actionTypes: parsed.actions.map((a) => a.type) },
+          ...(usageMetadata ? {
+            usage: {
+              input: usageMetadata.promptTokenCount ?? 0,
+              output: usageMetadata.candidatesTokenCount ?? 0,
+              total: usageMetadata.totalTokenCount ?? 0,
+            },
+          } : {}),
+          metadata: {
+            parseSuccess,
+            actionCount: parsed.actions.length,
+            latencyMs,
+          },
+        });
 
         const finalMessage = unescapeJsonString(parsed.message);
 
@@ -231,7 +272,7 @@ export function chatCompletionStream(
 
         controller.close();
       } catch (error) {
-        console.error("[Gemini] Stream error:", error);
+        log.error({ err: error }, "stream error");
         const errorMessage =
           error instanceof TypeError &&
           (error.message.includes("fetch") ||

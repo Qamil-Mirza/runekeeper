@@ -1,4 +1,7 @@
 import type { StructuredResponse } from "./gemini";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("safety-net");
 
 export interface PendingTaskContext {
   title: string;
@@ -158,6 +161,8 @@ export function detectMissingAction(
   if (!estimateMinutes) {
     estimateMinutes = 60;
   }
+
+  log.warn({ title, estimateMinutes, priority: "medium" }, "detected missing action from LLM response");
 
   return {
     title,

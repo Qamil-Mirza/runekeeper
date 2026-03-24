@@ -6,6 +6,9 @@ import { schedule } from "@/lib/scheduler";
 import { generateDiff } from "@/lib/scheduler/diff";
 import { dbTaskToTask, dbBlockToTimeBlock } from "@/lib/types";
 import { jsonResponse, errorResponse } from "@/lib/api-helpers";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("plan");
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -86,6 +89,14 @@ export async function POST(req: Request) {
         .where(eq(tasks.id, block.taskId));
     }
   }
+
+  log.info({
+    userId: session.user.id,
+    start,
+    end,
+    proposedCount: result.proposedBlocks.length,
+    unschedulableCount: result.unschedulable.length,
+  }, "schedule generated");
 
   return jsonResponse({
     proposedBlocks: result.proposedBlocks,
