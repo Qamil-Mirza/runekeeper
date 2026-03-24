@@ -84,7 +84,7 @@ export async function handleAction(
     case "confirm_plan":
       return handleConfirmPlan(userId);
     case "adjust_block":
-      return handleAdjustBlock(action, userId, weekStart, weekEnd);
+      return handleAdjustBlock(action, userId, weekStart, weekEnd, timezone);
     default:
       return { error: `Unknown action type: ${action.type}` };
   }
@@ -303,37 +303,93 @@ async function handleAdjustBlock(
   action: any,
   userId: string,
   weekStart: string,
-  weekEnd: string
+  weekEnd: string,
+  timezone?: string
 ): Promise<ActionResult> {
-  // Simple adjustment: delete the matching block and regenerate
-  const { blockTitle } = action;
+  const { blockTitle, newEstimateMinutes, newStartTime } = action;
 
-  if (blockTitle) {
-    // Remove the block to be adjusted
-    const allBlocks = await db
-      .select()
-      .from(timeBlocks)
-      .where(eq(timeBlocks.userId, userId));
-
-    const targetBlock = allBlocks.find(
-      (b) =>
-        b.title.toLowerCase().includes(blockTitle.toLowerCase()) &&
-        !b.committed
-    );
-
-    if (targetBlock) {
-      await db.delete(timeBlocks).where(eq(timeBlocks.id, targetBlock.id));
-
-      // Also reset the task status
-      if (targetBlock.taskId) {
-        await db
-          .update(tasks)
-          .set({ status: "unscheduled", updatedAt: new Date() })
-          .where(eq(tasks.id, targetBlock.taskId));
-      }
-    }
+  if (!blockTitle) {
+    return handleGenerateSchedule(userId, weekStart, weekEnd);
   }
 
-  // Regenerate schedule with remaining tasks
+  // Find the block to adjust
+  const allBlocks = await db
+    .select()
+    .from(timeBlocks)
+    .where(eq(timeBlocks.userId, userId));
+
+  const targetBlock = allBlocks.find(
+    (b) =>
+      b.title.toLowerCase().includes(blockTitle.toLowerCase()) &&
+      !b.committed
+  );
+
+  if (!targetBlock) {
+    return handleGenerateSchedule(userId, weekStart, weekEnd);
+  }
+
+  // Update the task's estimateMinutes if a new duration was provided
+  if (targetBlock.taskId && newEstimateMinutes) {
+    await db
+      .update(tasks)
+      .set({ estimateMinutes: newEstimateMinutes, updatedAt: new Date() })
+      .where(eq(tasks.id, targetBlock.taskId));
+  }
+
+  // Delete the old block
+  await db.delete(timeBlocks).where(eq(timeBlocks.id, targetBlock.id));
+
+  // If a new start time was specified, place the block directly instead of regenerating
+  if (newStartTime) {
+    const startTime = parseNaiveDateTime(newStartTime, timezone);
+    const durationMinutes = newEstimateMinutes
+      ?? (targetBlock.taskId
+        ? (await db.select().from(tasks).where(eq(tasks.id, targetBlock.taskId)))[0]?.estimateMinutes
+        : null)
+      ?? 30;
+    const endTime = new Date(startTime.getTime() + durationMinutes * 60_000);
+
+    // Mark task as scheduled
+    if (targetBlock.taskId) {
+      await db
+        .update(tasks)
+        .set({ status: "scheduled", updatedAt: new Date() })
+        .where(eq(tasks.id, targetBlock.taskId));
+    }
+
+    const [blockRow] = await db
+      .insert(timeBlocks)
+      .values({
+        userId,
+        taskId: targetBlock.taskId,
+        title: targetBlock.title,
+        startTime,
+        endTime,
+        blockType: "focus",
+        committed: false,
+      })
+      .returning();
+
+    const pinnedBlockIds = new Set<string>([blockRow.id]);
+
+    // Regenerate remaining unscheduled tasks around this pinned block
+    const result = await handleGenerateSchedule(userId, weekStart, weekEnd, pinnedBlockIds);
+    return {
+      ...result,
+      proposedBlocks: [
+        dbBlockToTimeBlock(blockRow),
+        ...(result.proposedBlocks ?? []),
+      ],
+    };
+  }
+
+  // No specific time — reset task and regenerate the full schedule
+  if (targetBlock.taskId) {
+    await db
+      .update(tasks)
+      .set({ status: "unscheduled", updatedAt: new Date() })
+      .where(eq(tasks.id, targetBlock.taskId));
+  }
+
   return handleGenerateSchedule(userId, weekStart, weekEnd);
 }

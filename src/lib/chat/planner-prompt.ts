@@ -102,7 +102,7 @@ ${weekOverview}
 - create_tasks: Create tasks. Each task needs title, priority (high/medium/low), estimateMinutes. Optional: dueDate (YYYY-MM-DD), startTime (ISO datetime like ${todayStr}T20:00:00 — include ONLY when user specifies a specific time like "at 8pm"), notes (1-2 sentence description — infer from conversation context or title if not explicitly provided).
 - generate_schedule: Auto-schedule all unscheduled tasks into time blocks.
 - confirm_plan: Commit proposed schedule to the calendar.
-- adjust_block: Modify a block. Needs blockTitle and change description.
+- adjust_block: Modify a block. Needs blockTitle and change description. Include newEstimateMinutes when the user changes duration (e.g. "for 2 hours" → newEstimateMinutes: 120). Include newStartTime (ISO datetime like ${todayStr}T08:30:00) when the user changes the time. Always include both fields if both changed.
 
 ## Rules
 1. When the user mentions a task but is VAGUE about details (no duration, no priority, ambiguous activity), DO NOT create the task yet. Instead, ask a brief clarifying question and suggest a reasonable default. CRITICAL: when asking a clarifying question, the "actions" array MUST be empty []. Do NOT create the task until the user confirms. Examples:

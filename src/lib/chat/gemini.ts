@@ -24,6 +24,8 @@ export interface StructuredAction {
   tasks?: TaskAction[];
   blockTitle?: string;
   change?: string;
+  newEstimateMinutes?: number;
+  newStartTime?: string;
 }
 
 export interface StructuredResponse {
@@ -93,7 +95,17 @@ const RESPONSE_SCHEMA: Schema = {
           },
           change: {
             type: SchemaType.STRING,
-            description: "Required for adjust_block.",
+            description: "Required for adjust_block. Describe the change.",
+          },
+          newEstimateMinutes: {
+            type: SchemaType.NUMBER,
+            description:
+              "For adjust_block: the new duration in minutes. Include when the user changes how long a task should be.",
+          },
+          newStartTime: {
+            type: SchemaType.STRING,
+            description:
+              "For adjust_block: new start time as ISO datetime (e.g. 2026-03-24T08:30:00). Include when the user changes when a task should start.",
           },
         },
         required: ["type"],
