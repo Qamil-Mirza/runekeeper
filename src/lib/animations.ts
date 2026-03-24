@@ -46,3 +46,23 @@ export const collapseVariants: Variants = {
     transition: { duration: 0.2, ease: "easeIn" },
   },
 };
+
+export const viewInkSpread: Variants = {
+  initial: { opacity: 0, scale: 0.97 },
+  animate: {
+    opacity: 1,
+    scale: 1,
+    transition: { duration: 0.3, ease: "easeOut" },
+  },
+  exit: {
+    opacity: 0,
+    scale: 0.97,
+    transition: { duration: 0.25, ease: "easeIn" },
+  },
+};
+
+export const viewInstant: Variants = {
+  initial: { opacity: 1 },
+  animate: { opacity: 1 },
+  exit: { opacity: 1 },
+};

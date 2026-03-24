@@ -53,6 +53,7 @@ function getWeekRange(date: Date): WeekRange {
 // ─── Context Types ───────────────────────────────────────────────────────────
 
 export type ViewId = "home" | "chat" | "quest-log" | "calendar" | "settings";
+export type TransitionMode = "none" | "ink-spread";
 
 interface PlannerState {
   user: User;
@@ -62,6 +63,7 @@ interface PlannerState {
   isTyping: boolean;
   isLoading: boolean;
   currentView: ViewId;
+  transitionMode: TransitionMode;
   drawerOpen: boolean;
   weekRange: WeekRange;
 }
@@ -73,6 +75,7 @@ interface PlannerActions {
   updateTask: (taskId: string, updates: Partial<Task>, startTime?: string) => void;
   deleteTask: (taskId: string) => void;
   setCurrentView: (view: ViewId) => void;
+  setTransitionMode: (mode: TransitionMode) => void;
   toggleDrawer: () => void;
   commitProposedBlocks: () => void;
   navigateWeek: (direction: -1 | 1) => void;
@@ -95,6 +98,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const [isTyping, setIsTyping] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [currentView, setCurrentView] = useState<ViewId>("home");
+  const [transitionMode, setTransitionMode] = useState<TransitionMode>("none");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [weekRange, setWeekRange] = useState<WeekRange>(
     getWeekRange(new Date())
@@ -413,6 +417,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       isTyping,
       isLoading,
       currentView,
+      transitionMode,
       drawerOpen,
       weekRange,
       sendMessage,
@@ -421,6 +426,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       updateTask,
       deleteTask,
       setCurrentView,
+      setTransitionMode,
       toggleDrawer,
       commitProposedBlocks,
       navigateWeek,
@@ -434,6 +440,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       isTyping,
       isLoading,
       currentView,
+      transitionMode,
       drawerOpen,
       weekRange,
       sendMessage,
@@ -441,6 +448,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       addTask,
       updateTask,
       deleteTask,
+      setTransitionMode,
       toggleDrawer,
       commitProposedBlocks,
       navigateWeek,
