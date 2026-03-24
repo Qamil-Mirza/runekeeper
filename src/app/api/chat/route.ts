@@ -13,6 +13,7 @@ import { jsonResponse, errorResponse } from "@/lib/api-helpers";
 import { toLocalDateStr, toDateStrInTimezone, isValidTimezone } from "@/lib/utils";
 import { extractMemories, getMemoryDigest, saveMemories } from "@/lib/chat/memory";
 import { buildTieredContext } from "@/lib/chat/context-builder";
+import { detectMissingAction } from "@/lib/chat/safety-net";
 import { rateLimit } from "@/lib/rate-limit";
 
 const chatLimiter = rateLimit({ key: "chat", limit: 20, windowMs: 60_000 });
@@ -85,10 +86,23 @@ export async function POST(req: Request) {
 
   const messages = history
     .reverse()
-    .map((m) => ({
-      role: m.role as "user" | "assistant",
-      content: m.content,
-    }));
+    .map((m) => {
+      let content = m.content;
+      // Enrich assistant messages with action metadata so the LLM knows
+      // what actions were/weren't taken in prior turns
+      if (m.role === "assistant" && m.metadata) {
+        const meta = m.metadata as any;
+        if (meta.actionSummary) {
+          content += `\n[Actions taken: ${meta.actionSummary}]`;
+        } else {
+          content += `\n[Actions taken: none]`;
+        }
+      }
+      return {
+        role: m.role as "user" | "assistant",
+        content,
+      };
+    });
 
   // Load cross-session memory digest
   const memoryDigest = await getMemoryDigest(userId);
@@ -176,6 +190,35 @@ export async function POST(req: Request) {
                 actions: [],
               };
 
+              // Safety net: detect when message implies task creation
+              // but the actions array is empty (LLM inconsistency)
+              if (parsed.actions.length === 0) {
+                const pendingTask = detectMissingAction(parsed, messages);
+                if (pendingTask) {
+                  console.warn(
+                    "[SafetyNet] Detected missing create_tasks action, injecting:",
+                    pendingTask.title
+                  );
+                  parsed.actions.push({
+                    type: "create_tasks",
+                    tasks: [
+                      {
+                        title: pendingTask.title,
+                        notes: pendingTask.notes || `${pendingTask.title} session`,
+                        priority: pendingTask.priority,
+                        estimateMinutes: pendingTask.estimateMinutes,
+                        ...(pendingTask.dueDate
+                          ? { dueDate: pendingTask.dueDate }
+                          : {}),
+                        ...(pendingTask.startTime
+                          ? { startTime: pendingTask.startTime }
+                          : {}),
+                      },
+                    ],
+                  });
+                }
+              }
+
               const actionResults: ActionResult[] = [];
               const pinnedBlockIds = new Set<string>();
 
@@ -201,6 +244,12 @@ export async function POST(req: Request) {
                 }
               }
 
+              console.log("[Chat] Action results:", JSON.stringify(actionResults.map(r => ({
+                tasksCreated: r.tasksCreated?.length ?? 0,
+                proposedBlocks: r.proposedBlocks?.length ?? 0,
+                error: r.error,
+              }))));
+
               const quickActions = determineQuickActions(
                 userTasks,
                 userBlocks,
@@ -210,6 +259,7 @@ export async function POST(req: Request) {
               const schedulePreview =
                 actionResults.find((r) => r.proposedBlocks)?.proposedBlocks ?? null;
               const actionSummary = buildActionSummary(actionResults);
+              console.log("[Chat] Action summary:", actionSummary, "Quick actions:", quickActions);
 
               // Save assistant message to DB
               await db.insert(chatMessages).values({

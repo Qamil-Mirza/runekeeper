@@ -6,6 +6,6 @@ export interface GeminiConfig {
 
 export const GEMINI_CONFIG: GeminiConfig = {
   model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
-  temperature: 0.7,
+  temperature: 0.4,
   maxOutputTokens: 2048,
 };
