@@ -105,11 +105,60 @@ async function handleCreateTasks(
     .where(eq(tasks.userId, userId));
 
   for (const def of taskDefs) {
-    // Skip if a task with the same title already exists (case-insensitive)
+    // Check if a task with the same title already exists (case-insensitive)
     const duplicate = existingTasks.find(
       (t) => t.title.toLowerCase() === (def.title || "").toLowerCase()
     );
-    if (duplicate) continue;
+
+    if (duplicate) {
+      console.log("[ActionHandler] Duplicate task found, reusing:", duplicate.title);
+      const existingTask = dbTaskToTask(duplicate);
+
+      // Still create a time block if the request has a specific time and
+      // the existing task doesn't already have one at that time
+      if (def.startTime) {
+        const existingBlocksForTask = await db
+          .select()
+          .from(timeBlocks)
+          .where(and(eq(timeBlocks.userId, userId), eq(timeBlocks.taskId, existingTask.id)));
+
+        const startTime = parseNaiveDateTime(def.startTime, timezone);
+        const alreadyHasBlock = existingBlocksForTask.some(
+          (b) => Math.abs(new Date(b.startTime).getTime() - startTime.getTime()) < 60_000
+        );
+
+        if (!alreadyHasBlock) {
+          const endTime = new Date(
+            startTime.getTime() + (def.estimateMinutes ?? duplicate.estimateMinutes ?? 30) * 60_000
+          );
+
+          const [blockRow] = await db
+            .insert(timeBlocks)
+            .values({
+              userId,
+              taskId: existingTask.id,
+              title: existingTask.title,
+              startTime,
+              endTime,
+              blockType: "focus",
+              committed: false,
+            })
+            .returning();
+
+          // Update task status to scheduled
+          await db
+            .update(tasks)
+            .set({ status: "scheduled", updatedAt: new Date() })
+            .where(eq(tasks.id, existingTask.id));
+
+          proposedBlocks.push(dbBlockToTimeBlock(blockRow));
+        }
+      }
+
+      // Include the existing task in the result so the UI reflects it
+      created.push(existingTask);
+      continue;
+    }
 
     const hasSpecificTime = !!def.startTime;
 
