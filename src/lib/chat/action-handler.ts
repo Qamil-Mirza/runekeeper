@@ -4,6 +4,9 @@ import { eq, and } from "drizzle-orm";
 import { schedule } from "@/lib/scheduler";
 import { generateDiff } from "@/lib/scheduler/diff";
 import { dbTaskToTask, dbBlockToTimeBlock, type Task, type TimeBlock } from "@/lib/types";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("action-handler");
 
 /**
  * Parse a naive ISO datetime string (e.g. "2026-03-22T09:00:00") as local time
@@ -76,6 +79,8 @@ export async function handleAction(
   pinnedBlockIds?: Set<string>,
   timezone?: string
 ): Promise<ActionResult> {
+  log.info({ actionType: action.type, userId }, "executing action");
+
   switch (action.type) {
     case "create_tasks":
       return handleCreateTasks(action.tasks, userId, timezone);
@@ -86,6 +91,7 @@ export async function handleAction(
     case "adjust_block":
       return handleAdjustBlock(action, userId, weekStart, weekEnd, timezone);
     default:
+      log.warn({ actionType: action.type }, "unknown action type");
       return { error: `Unknown action type: ${action.type}` };
   }
 }
@@ -111,7 +117,7 @@ async function handleCreateTasks(
     );
 
     if (duplicate) {
-      console.log("[ActionHandler] Duplicate task found, reusing:", duplicate.title);
+      log.info({ taskTitle: duplicate.title }, "duplicate task found, reusing existing");
       const existingTask = dbTaskToTask(duplicate);
 
       // Still create a time block if the request has a specific time and

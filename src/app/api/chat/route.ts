@@ -15,7 +15,10 @@ import { extractMemories, getMemoryDigest, saveMemories } from "@/lib/chat/memor
 import { buildTieredContext } from "@/lib/chat/context-builder";
 import { detectMissingAction } from "@/lib/chat/safety-net";
 import { rateLimit } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
+import { createTrace, flushTracing } from "@/lib/tracing";
 
+const log = createLogger("chat");
 const chatLimiter = rateLimit({ key: "chat", limit: 20, windowMs: 60_000 });
 
 function getWeekRange(timezone: string) {
@@ -51,8 +54,12 @@ export async function POST(req: Request) {
 
   const { success: withinLimit } = chatLimiter.check(userId);
   if (!withinLimit) {
+    log.warn({ userId }, "rate limit exceeded");
     return errorResponse("Rate limit exceeded. Try again shortly.", 429);
   }
+
+  log.info({ userId, messageLength: message?.length, hasSession: !!sessionId }, "chat request received");
+  const trace = createTrace("chat", { userId, sessionId });
   // Save user message
   await db.insert(chatMessages).values({
     userId,
@@ -161,7 +168,7 @@ export async function POST(req: Request) {
   if (directAction) {
     structured = directAction;
   } else {
-    const stream = chatCompletionStream(messages, systemPrompt);
+    const stream = chatCompletionStream(messages, systemPrompt, trace);
 
     const encoder = new TextEncoder();
     let transformBuffer = "";
@@ -195,10 +202,8 @@ export async function POST(req: Request) {
               if (parsed.actions.length === 0) {
                 const pendingTask = detectMissingAction(parsed, messages);
                 if (pendingTask) {
-                  console.warn(
-                    "[SafetyNet] Detected missing create_tasks action, injecting:",
-                    pendingTask.title
-                  );
+                  log.warn({ taskTitle: pendingTask.title }, "safety net: injecting missing create_tasks action");
+                  trace.event?.({ name: "safety_net_triggered", metadata: { taskTitle: pendingTask.title } });
                   parsed.actions.push({
                     type: "create_tasks",
                     tasks: [
@@ -240,15 +245,15 @@ export async function POST(req: Request) {
                     }
                   }
                 } catch (err) {
-                  console.error("Action execution failed:", err);
+                  log.error({ err, actionType: action.type }, "action execution failed");
                 }
               }
 
-              console.log("[Chat] Action results:", JSON.stringify(actionResults.map(r => ({
+              log.info({ results: actionResults.map(r => ({
                 tasksCreated: r.tasksCreated?.length ?? 0,
                 proposedBlocks: r.proposedBlocks?.length ?? 0,
                 error: r.error,
-              }))));
+              })) }, "action results");
 
               const quickActions = determineQuickActions(
                 userTasks,
@@ -259,7 +264,7 @@ export async function POST(req: Request) {
               const schedulePreview =
                 actionResults.find((r) => r.proposedBlocks)?.proposedBlocks ?? null;
               const actionSummary = buildActionSummary(actionResults);
-              console.log("[Chat] Action summary:", actionSummary, "Quick actions:", quickActions);
+              log.info({ actionSummary, quickActions }, "action summary computed");
 
               // Save assistant message to DB
               await db.insert(chatMessages).values({
@@ -283,7 +288,7 @@ export async function POST(req: Request) {
                   await saveMemories(userId, memories);
                 }
               } catch (err) {
-                console.error("Memory extraction failed:", err);
+                log.error({ err }, "memory extraction failed");
               }
 
               // Send enriched done event
@@ -300,12 +305,13 @@ export async function POST(req: Request) {
                   })}\n\n`
                 )
               );
+              flushTracing();
               continue;
             }
 
             if (event.type === "error") {
               // Stream error — use fallback response
-              console.warn("Gemini stream error, using fallback");
+              log.warn("gemini stream error, using fallback response");
               const fallback = generateFallbackResponse(message, userTasks, userBlocks);
               const fallbackQuickActions = determineQuickActions(userTasks, userBlocks, []);
 
@@ -380,7 +386,7 @@ export async function POST(req: Request) {
         }
       }
     } catch (err) {
-      console.error("Action execution failed:", err);
+      log.error({ err, actionType: action.type }, "action execution failed");
     }
   }
 
@@ -409,8 +415,10 @@ export async function POST(req: Request) {
       await saveMemories(userId, memories);
     }
   } catch (err) {
-    console.error("Memory extraction failed:", err);
+    log.error({ err }, "memory extraction failed");
   }
+
+  await flushTracing();
 
   return jsonResponse({
     response: structured.message,

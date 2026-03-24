@@ -1,4 +1,5 @@
 import NextAuth from "next-auth";
+import { createLogger } from "@/lib/logger";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { db } from "@/db";
 import {
@@ -59,6 +60,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
 });
 
+const log = createLogger("auth");
+
 async function refreshAccessToken(token: any) {
   try {
     // Get encrypted refresh token from DB
@@ -110,7 +113,7 @@ async function refreshAccessToken(token: any) {
       ...(data.refresh_token ? { refreshToken: data.refresh_token } : {}),
     };
   } catch (error) {
-    console.error("Error refreshing access token:", error);
+    log.error({ err: error }, "failed to refresh access token");
     return { ...token, error: "RefreshTokenError" };
   }
 }

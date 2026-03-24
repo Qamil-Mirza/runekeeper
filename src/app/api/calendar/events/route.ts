@@ -4,6 +4,9 @@ import { db } from "@/db";
 import { timeBlocks } from "@/db/schema";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { jsonResponse, errorResponse } from "@/lib/api-helpers";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("calendar");
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -25,7 +28,7 @@ export async function GET(req: Request) {
         end ? new Date(end).toISOString() : undefined
       );
     } catch (err) {
-      console.error("Calendar sync failed:", err);
+      log.error({ err }, "calendar sync failed");
       // Continue — return whatever we have cached
     }
   }

@@ -137,7 +137,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       setTasks(tasksData.map(dbTaskToTask));
       setBlocks(blocksData.map(dbBlockToTimeBlock));
     } catch (err) {
-      console.error("Failed to load planner data:", err);
+
     } finally {
       setIsLoading(false);
     }
@@ -228,7 +228,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         // Refresh data — the server may have created tasks or blocks
         await loadData();
       } catch (err) {
-        console.error("Chat error:", err);
+
         const errorMsg: ChatMessage = {
           id: assistantMsgId,
           role: "assistant",
@@ -270,7 +270,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       const newStatus = task?.status === "done" ? "unscheduled" : "done";
       await api.updateTask(taskId, { status: newStatus } as any);
     } catch (err) {
-      console.error("Failed to toggle task:", err);
+
     }
   }, []);
 
@@ -292,7 +292,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         prev.map((t) => (t.id === tempId ? dbTaskToTask(created as any) : t))
       );
     } catch (err) {
-      console.error("Failed to add task:", err);
+
       setTasks((prev) => prev.filter((t) => t.id !== tempId));
     }
   }, []);
@@ -355,7 +355,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
           await loadData();
         }
       } catch (err) {
-        console.error("Failed to update task:", err);
+
         loadData();
       }
     },
@@ -373,7 +373,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         await Promise.all(linkedBlocks.map((b) => api.deleteBlock(b.id)));
         await api.deleteTask(taskId);
       } catch (err) {
-        console.error("Failed to delete task:", err);
+
         loadData();
       }
     },
@@ -390,7 +390,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       // Will be wired to /api/calendar/commit in Phase 4
       await api.commitPlan("current");
     } catch (err) {
-      console.error("Failed to commit blocks:", err);
+
     }
   }, []);
 

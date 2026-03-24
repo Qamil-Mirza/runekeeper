@@ -1,6 +1,9 @@
 import { db } from "@/db";
 import { chatMemories } from "@/db/schema";
 import { eq, desc, gt, or, isNull } from "drizzle-orm";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("memory");
 
 interface ExtractedMemory {
   content: string;
@@ -143,7 +146,10 @@ export async function saveMemories(
         mem.content.toLowerCase().includes(e.content.toLowerCase())
     );
 
-    if (isDuplicate) continue;
+    if (isDuplicate) {
+      log.debug({ content: mem.content }, "skipping duplicate memory");
+      continue;
+    }
 
     // Set expiry for time-sensitive facts (30 days)
     const expiresAt =
@@ -158,4 +164,9 @@ export async function saveMemories(
       expiresAt,
     });
   }
+
+  log.info(
+    { count: memories.length, categories: memories.map((m) => m.category) },
+    "saved memories"
+  );
 }

@@ -1,3 +1,7 @@
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("rate-limit");
+
 type RateLimitEntry = { count: number; resetAt: number };
 
 const stores = new Map<string, Map<string, RateLimitEntry>>();
@@ -23,6 +27,7 @@ export function rateLimit(opts: {
       }
 
       if (entry.count >= opts.limit) {
+        log.warn({ key: opts.key, identifier }, "rate limit exceeded");
         return { success: false, remaining: 0 };
       }
 

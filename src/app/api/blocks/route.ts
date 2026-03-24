@@ -7,6 +7,9 @@ import {
   errorResponse,
 } from "@/lib/api-helpers";
 import { rateLimit } from "@/lib/rate-limit";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("blocks");
 
 const blocksLimiter = rateLimit({ key: "blocks", limit: 30, windowMs: 60_000 });
 
@@ -73,5 +76,6 @@ export async function POST(req: Request) {
     })
     .returning();
 
+  log.info({ userId: user.id, title: body.title }, "block created");
   return jsonResponse(block, 201);
 }

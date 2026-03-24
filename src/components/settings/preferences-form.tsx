@@ -23,7 +23,7 @@ export function PreferencesForm({ user, onSaved }: PreferencesFormProps) {
       setTimeout(() => setSaved(false), 2000);
       onSaved();
     } catch (err) {
-      console.error("Failed to save preferences:", err);
+
     } finally {
       setSaving(false);
     }
