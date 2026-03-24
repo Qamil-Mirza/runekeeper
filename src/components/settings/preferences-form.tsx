@@ -46,7 +46,7 @@ export function PreferencesForm({ user, onSaved }: PreferencesFormProps) {
               onChange={(e) =>
                 setPrefs({ ...prefs, workingHoursStart: Number(e.target.value) })
               }
-              className="w-full bg-surface-container-low text-on-surface border-b-2 border-outline-variant px-3 py-2 font-body text-body-md focus:border-tertiary outline-none transition-colors"
+              className="w-full bg-surface-bright text-on-surface border-b-2 border-outline-variant px-3 py-2 font-body text-body-md focus:border-tertiary outline-none transition-colors"
             >
               {Array.from({ length: 24 }, (_, i) => (
                 <option key={i} value={i}>
@@ -64,7 +64,7 @@ export function PreferencesForm({ user, onSaved }: PreferencesFormProps) {
               onChange={(e) =>
                 setPrefs({ ...prefs, workingHoursEnd: Number(e.target.value) })
               }
-              className="w-full bg-surface-container-low text-on-surface border-b-2 border-outline-variant px-3 py-2 font-body text-body-md focus:border-tertiary outline-none transition-colors"
+              className="w-full bg-surface-bright text-on-surface border-b-2 border-outline-variant px-3 py-2 font-body text-body-md focus:border-tertiary outline-none transition-colors"
             >
               {Array.from({ length: 24 }, (_, i) => (
                 <option key={i} value={i}>
@@ -97,7 +97,7 @@ export function PreferencesForm({ user, onSaved }: PreferencesFormProps) {
               }
               min={0}
               max={120}
-              className="w-full bg-surface-container-low text-on-surface border-b-2 border-outline-variant px-3 py-2 font-body text-body-md focus:border-tertiary outline-none transition-colors"
+              className="w-full bg-surface-bright text-on-surface border-b-2 border-outline-variant px-3 py-2 font-body text-body-md focus:border-tertiary outline-none transition-colors"
             />
           </div>
           <div>
@@ -112,7 +112,7 @@ export function PreferencesForm({ user, onSaved }: PreferencesFormProps) {
               }
               min={0}
               max={60}
-              className="w-full bg-surface-container-low text-on-surface border-b-2 border-outline-variant px-3 py-2 font-body text-body-md focus:border-tertiary outline-none transition-colors"
+              className="w-full bg-surface-bright text-on-surface border-b-2 border-outline-variant px-3 py-2 font-body text-body-md focus:border-tertiary outline-none transition-colors"
             />
           </div>
         </div>
@@ -136,7 +136,7 @@ export function PreferencesForm({ user, onSaved }: PreferencesFormProps) {
             min={15}
             max={480}
             step={15}
-            className="w-full bg-surface-container-low text-on-surface border-b-2 border-outline-variant px-3 py-2 font-body text-body-md focus:border-tertiary outline-none transition-colors"
+            className="w-full bg-surface-bright text-on-surface border-b-2 border-outline-variant px-3 py-2 font-body text-body-md focus:border-tertiary outline-none transition-colors"
           />
         </div>
       </section>
@@ -151,7 +151,7 @@ export function PreferencesForm({ user, onSaved }: PreferencesFormProps) {
           value={timezone}
           onChange={(e) => setTimezone(e.target.value)}
           placeholder="America/New_York"
-          className="w-full bg-surface-container-low text-on-surface border-b-2 border-outline-variant px-3 py-2 font-body text-body-md focus:border-tertiary outline-none transition-colors"
+          className="w-full bg-surface-bright text-on-surface border-b-2 border-outline-variant px-3 py-2 font-body text-body-md focus:border-tertiary outline-none transition-colors"
         />
         <p className="font-label text-label-sm text-outline mt-1">
           IANA timezone identifier (e.g., America/New_York, Europe/London)
@@ -162,7 +162,7 @@ export function PreferencesForm({ user, onSaved }: PreferencesFormProps) {
       <button
         onClick={handleSave}
         disabled={saving}
-        className="bg-tertiary text-white px-6 py-2 font-label text-label-lg font-medium uppercase tracking-wide hover:opacity-90 transition-opacity disabled:opacity-50"
+        className="bg-tertiary text-[#1a1008] px-6 py-2 font-label text-label-lg font-medium uppercase tracking-wide hover:opacity-90 transition-opacity disabled:opacity-50"
       >
         {saving ? "Saving..." : saved ? "Saved" : "Save Preferences"}
       </button>

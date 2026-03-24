@@ -40,8 +40,8 @@ export function ChatMessage({ message, onQuickAction, isLast }: ChatMessageProps
             "px-4 py-3 max-w-prose",
             "rounded-lg",
             isUser
-              ? "bg-surface-container-high text-on-surface"
-              : "bg-surface-container-lowest shadow-ambient text-on-surface"
+              ? "bg-[rgba(212,140,40,0.18)] border border-[rgba(212,140,40,0.25)] text-on-surface"
+              : "bg-surface-container-lowest shadow-ambient text-[#3a2410]"
           )}
         >
           <div className="font-body text-body-lg leading-[1.6] whitespace-pre-wrap">
@@ -50,7 +50,7 @@ export function ChatMessage({ message, onQuickAction, isLast }: ChatMessageProps
         </div>
 
         {/* Timestamp */}
-        <span className="font-label text-label-sm text-outline-variant px-1">
+        <span className="font-label text-label-sm text-on-surface-variant px-1">
           {formatTime(message.timestamp)}
         </span>
 

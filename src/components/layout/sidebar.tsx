@@ -26,7 +26,7 @@ export function Sidebar({ currentView, onNavigate, collapsed }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "flex flex-col bg-surface-dim h-full",
+        "flex flex-col bg-surface-dim h-full wood-grain border-r-2 border-[rgba(212,168,96,0.2)] shadow-[4px_0_20px_rgba(0,0,0,0.4)]",
         collapsed ? "w-16 items-center" : "w-56"
       )}
     >
@@ -48,10 +48,10 @@ export function Sidebar({ currentView, onNavigate, collapsed }: SidebarProps) {
             key={item.id}
             onClick={() => onNavigate(item.id)}
             className={cn(
-              "flex items-center gap-3 rounded-none px-3 py-2.5 w-full text-left transition-colors duration-200",
+              "flex items-center gap-3 rounded-none px-3 py-2.5 w-full text-left transition-colors duration-200 cursor-pointer",
               currentView === item.id
-                ? "bg-surface-container-highest/60 text-on-surface"
-                : "text-on-surface-variant hover:bg-surface-container-highest/30"
+                ? "bg-[rgba(212,168,96,0.15)] text-[#d4a860]"
+                : "text-[rgba(212,168,96,0.35)] hover:bg-[rgba(212,168,96,0.08)] hover:text-[rgba(212,168,96,0.6)]"
             )}
             aria-current={currentView === item.id ? "page" : undefined}
           >

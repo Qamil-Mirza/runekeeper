@@ -174,7 +174,7 @@ export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: Q
             exit={{ y: "100%", opacity: 0 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
           >
-            <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
+            <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0 parchment-context">
               {/* Header */}
               <div className="flex items-center justify-between">
                 <h2 className="font-display text-headline-md text-on-surface uppercase tracking-wider">

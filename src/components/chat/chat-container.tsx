@@ -64,14 +64,14 @@ function WelcomeMessage({ name, onSend }: { name: string; onSend: (msg: string) 
 
   return (
     <div className="flex flex-col items-center justify-center text-center py-16 px-4 gap-6">
-      <div className="text-on-surface-variant opacity-40">
+      <div className="text-tertiary opacity-70">
         <svg className="w-12 h-12 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
           <path d="M20 2L4 22" />
           <path d="M20 2c-2 2-6 3-9 3s-5 2-5 5c0 2 1 4 3 5l7-9" />
           <path d="M6 18l2-2" />
         </svg>
       </div>
-      <p className="font-body text-body-lg text-on-surface-variant max-w-md leading-relaxed">
+      <p className="font-body text-body-lg text-on-surface max-w-md leading-relaxed">
         {greeting}
       </p>
       <div className="flex flex-wrap justify-center gap-2 mt-2">
@@ -79,7 +79,7 @@ function WelcomeMessage({ name, onSend }: { name: string; onSend: (msg: string) 
           <button
             key={hint}
             onClick={() => onSend(hint)}
-            className="font-label text-label-sm text-outline border border-outline-variant/40 rounded-none px-3 py-1 hover:bg-surface-container-highest/30 hover:text-on-surface transition-colors cursor-pointer"
+            className="font-label text-label-sm text-primary border border-primary/40 rounded-none px-3 py-1 hover:bg-primary/10 hover:text-on-surface transition-colors cursor-pointer"
           >
             {hint}
           </button>

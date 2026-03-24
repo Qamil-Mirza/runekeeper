@@ -33,7 +33,7 @@ export function AddTaskInput({ onAdd }: AddTaskInputProps) {
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Add a new quest..."
-        className="flex-1 bg-surface-container-high border-0 border-b-2 border-primary/20 rounded-none px-3 py-2 font-body text-body-lg text-on-surface placeholder:text-outline-variant focus:border-tertiary focus:outline-none transition-colors duration-200"
+        className="flex-1 bg-surface-bright border-0 border-b-2 border-primary/20 rounded-none px-3 py-2 font-body text-body-lg text-on-surface placeholder:text-[rgba(212,168,96,0.35)] focus:border-tertiary focus:outline-none transition-colors duration-200"
         aria-label="Add new task"
       />
       <button

@@ -24,26 +24,26 @@ export function DayColumn({
   isToday,
 }: DayColumnProps) {
   return (
-    <div className="flex-1 min-w-0">
+    <div className="flex-1 min-w-0 border-l border-[rgba(58,36,16,0.15)]">
       {/* Day header */}
-      <div className={cn("text-center py-2 sticky top-0 z-10", isToday ? "bg-tertiary/8" : "bg-surface-container-low")}>
-        <span className="font-label text-label-sm uppercase tracking-wide text-on-surface-variant block">
+      <div className={cn("text-center py-2.5 sticky top-0 z-10 border-b-2 border-[rgba(58,36,16,0.18)]", isToday ? "bg-[rgba(200,120,40,0.08)]" : "bg-[#e8d0a5]")}>
+        <span className="font-label text-[11px] font-bold uppercase tracking-[1.5px] text-[#3a2410] block">
           {dayLabel}
         </span>
-        <span className={cn("font-label text-label-md font-medium", isToday ? "text-tertiary" : "text-on-surface")}>
+        <span className={cn("font-label text-label-md font-medium", isToday ? "text-[#c87828]" : "text-[#3a2410]")}>
           {dateLabel}
         </span>
       </div>
 
       {/* Hour slots */}
       <div className="relative" style={{ height: `${hours.length * hourHeight}px` }}>
-        {/* AM/PM tonal shift */}
+        {/* Hour grid lines */}
         {hours.map((hour, i) => (
           <div
             key={hour}
             className={cn(
-              "absolute left-0 right-0",
-              hour < 12 ? "bg-transparent" : "bg-surface-container/30"
+              "absolute left-0 right-0 border-b border-[rgba(58,36,16,0.08)]",
+              hour >= 12 ? "bg-[rgba(58,36,16,0.04)]" : "bg-transparent"
             )}
             style={{ top: `${i * hourHeight}px`, height: `${hourHeight}px` }}
           />

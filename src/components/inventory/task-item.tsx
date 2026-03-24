@@ -5,8 +5,6 @@ import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { inkSpread } from "@/lib/animations";
 import type { Task } from "@/lib/types";
-import { Badge } from "@/components/ui/badge";
-
 interface TaskItemProps {
   task: Task;
   onToggleDone: (id: string) => void;
@@ -14,10 +12,10 @@ interface TaskItemProps {
   even?: boolean;
 }
 
-const priorityVariant = {
-  high: "gold" as const,
-  medium: "default" as const,
-  low: "dim" as const,
+const priorityDiamonds: Record<string, number> = {
+  high: 3,
+  medium: 2,
+  low: 1,
 };
 
 export function TaskItem({ task, onToggleDone, onEdit, even }: TaskItemProps) {
@@ -58,7 +56,7 @@ export function TaskItem({ task, onToggleDone, onEdit, even }: TaskItemProps) {
       }
       className={cn(
         "flex items-start gap-3 px-4 py-3 overflow-hidden",
-        even ? "bg-surface-container-low" : "bg-surface"
+        even ? "bg-surface-bright" : "bg-surface"
       )}
     >
       {/* Checkbox */}
@@ -112,9 +110,7 @@ export function TaskItem({ task, onToggleDone, onEdit, even }: TaskItemProps) {
           >
             {task.title}
           </span>
-          <Badge variant={priorityVariant[task.priority]}>
-            {task.priority}
-          </Badge>
+          <PriorityDiamonds priority={task.priority} />
         </div>
 
         {task.notes && (
@@ -143,5 +139,23 @@ export function TaskItem({ task, onToggleDone, onEdit, even }: TaskItemProps) {
         </div>
       </div>
     </motion.div>
+  );
+}
+
+function PriorityDiamonds({ priority }: { priority: string }) {
+  const filled = priorityDiamonds[priority] ?? 1;
+  const total = 3;
+  return (
+    <div className="flex items-center gap-1 shrink-0" title={`${priority} priority`}>
+      {Array.from({ length: total }, (_, i) => (
+        <span
+          key={i}
+          className={cn(
+            "w-[6px] h-[6px] rotate-45 inline-block",
+            i < filled ? "bg-tertiary" : "bg-[rgba(212,168,96,0.15)]"
+          )}
+        />
+      ))}
+    </div>
   );
 }

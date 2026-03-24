@@ -18,7 +18,7 @@ export function ScheduleHeader({ weekRange, onNavigate }: ScheduleHeaderProps) {
     <div className="flex items-center justify-between px-5 pb-3">
       <button
         onClick={() => onNavigate(-1)}
-        className="p-1.5 text-on-surface-variant hover:text-on-surface transition-colors duration-200"
+        className="p-1.5 text-[#6b5030] hover:text-[#3a2410] transition-colors duration-200"
         aria-label="Previous week"
       >
         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -26,13 +26,13 @@ export function ScheduleHeader({ weekRange, onNavigate }: ScheduleHeaderProps) {
         </svg>
       </button>
 
-      <span className="font-label text-label-md font-medium text-on-surface tracking-wide">
+      <span className="font-label text-label-md font-medium text-[#3a2410] tracking-wide">
         {formatDate(start)} — {formatDate(end)}
       </span>
 
       <button
         onClick={() => onNavigate(1)}
-        className="p-1.5 text-on-surface-variant hover:text-on-surface transition-colors duration-200"
+        className="p-1.5 text-[#6b5030] hover:text-[#3a2410] transition-colors duration-200"
         aria-label="Next week"
       >
         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

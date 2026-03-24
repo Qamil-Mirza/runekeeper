@@ -51,7 +51,7 @@ export function ChatTypingIndicator() {
           {[0, 1, 2].map((i) => (
             <motion.span
               key={i}
-              className="w-1.5 h-1.5 bg-on-surface-variant/50 rounded-full"
+              className="w-1.5 h-1.5 bg-[#6b5030] rounded-full"
               animate={{ opacity: [0.3, 1, 0.3] }}
               transition={{
                 duration: 1.2,
@@ -71,7 +71,7 @@ export function ChatTypingIndicator() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.25 }}
-              className="font-label text-[11px] italic text-on-surface-variant/60 select-none block"
+              className="font-label text-[11px] italic text-primary select-none block"
             >
               {musing}
             </motion.span>
