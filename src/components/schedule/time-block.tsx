@@ -11,11 +11,11 @@ interface TimeBlockProps {
 }
 
 const typeColors: Record<string, string> = {
-  focus: "bg-tertiary/12 border-l-2 border-tertiary text-on-surface",
-  meeting: "bg-primary/8 border-l-2 border-primary text-on-surface",
-  class: "bg-on-surface/6 border-l-2 border-on-surface/40 text-on-surface",
-  personal: "bg-surface-container-highest border-l-2 border-outline-variant text-on-surface",
-  admin: "bg-surface-container-high border-l-2 border-outline text-on-surface",
+  focus: "bg-surface-container-lowest border-l-3 border-[#c87828] text-[#3a2410] shadow-[0_2px_8px_rgba(58,36,16,0.08)]",
+  meeting: "bg-surface-container-lowest border-l-3 border-[#d4a860] text-[#3a2410] shadow-[0_2px_8px_rgba(58,36,16,0.08)]",
+  class: "bg-surface-container-lowest border-l-3 border-[#6b5030] text-[#3a2410] shadow-[0_2px_8px_rgba(58,36,16,0.08)]",
+  personal: "bg-surface-container-lowest border-l-3 border-[#ccb488] text-[#3a2410] shadow-[0_2px_8px_rgba(58,36,16,0.08)]",
+  admin: "bg-surface-container-lowest border-l-3 border-[#6b5030] text-[#3a2410] shadow-[0_2px_8px_rgba(58,36,16,0.08)]",
 };
 
 export function TimeBlockComponent({ block, hourHeight, startHour }: TimeBlockProps) {
@@ -44,7 +44,7 @@ export function TimeBlockComponent({ block, hourHeight, startHour }: TimeBlockPr
           {block.title}
         </span>
         {height > 36 && (
-          <span className="font-label text-[10px] text-on-surface-variant block truncate">
+          <span className="font-label text-[10px] text-[#6b5030] block truncate">
             {timeStr}
           </span>
         )}

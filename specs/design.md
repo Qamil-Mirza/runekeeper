@@ -1,25 +1,37 @@
-# Design System Document: The Enchanted Archivist
+# Design System Document: The Hearthside Keeper
 
 ## 1. Overview & Creative North Star
-**Creative North Star: The Living Manuscript**
-This design system rejects the sterile, "app-like" aesthetic of modern SaaS in favor of a high-end editorial experience. It is designed to feel like a rare, weathered artifact found in a sun-drenched library—a "Living Manuscript" that balances the atmospheric soul of ancient parchment with the rigorous legibility of a modern scholarly journal.
+**Creative North Star: The Tavern Journal**
+This design system evokes the feeling of sitting in a cozy medieval tavern by the fire, pulling out a well-worn notebook to plan the week ahead. The aesthetic is dark, warm, and enveloping—dark timber surfaces, firelight accents, and parchment content surfaces that glow against the dark.
 
-The system breaks the "template" look through **intentional asymmetry** and **tonal depth**. Rather than using rigid grids and dividers, we define space through "ink-wash" backgrounds and layered paper textures. It is an "Enchanted Archivist" personality: authoritative, timeless, and slightly mysterious, yet meticulously organized.
+The system uses a **two-zone layout**: dark timber (sidebar + chat) and warm parchment (schedule/content areas). Typography, textures, and tonal depth create an intimate, firelit atmosphere. The personality is that of a "Hearthside Keeper": warm, wise, and inviting.
 
 ---
 
-## 2. Colors: The Sepia Palette
-The palette moves away from synthetic vibrant tones toward a "dirty," desaturated spectrum of organic pigments—ink, gold, and dried botanical stains.
+## 2. Colors: The Hearthside Palette
+The palette is built around dark timber browns, warm parchment, and firelight accents. Dark by default with no light/dark toggle.
 
-### Surface & Tonal Architecture
-- **Base Surface (`surface` #fff9ed):** The primary canvas. It should never feel like a flat hex code; apply a subtle, non-tiling paper grain texture at 3-5% opacity.
-- **Surface Tiers:** Use `surface_container_low` (#faf3e3) for large layout blocks and `surface_container_highest` (#ebe2c7) for localized points of interest.
-- **The "No-Line" Rule:** Explicitly prohibit 1px solid borders for sectioning. Boundaries must be defined solely through background color shifts. A sidebar is not "bordered"; it is simply a vertical slab of `surface_dim` (#e3dabb) resting against the `surface` (#fff9ed) main stage.
+### Surface & Tonal Architecture (Dark Timber)
+- **Base Surface (`surface` #2c1810):** Dark timber — the primary canvas. Apply wood grain texture at 6% opacity via `.wood-grain` class.
+- **Surface Dim (`surface-dim` #1a1008):** Deepest dark — sidebar and navigation.
+- **Surface Bright (`surface-bright` #3d2518):** Slightly lighter timber for hover states and alternating rows.
+
+### Parchment Content Surfaces
+- **Container Lowest (`surface-container-lowest` #f0dbb8):** Warm parchment for floating cards, AI chat bubbles.
+- **Container (`surface-container` #dcc8a0):** Schedule/calendar background. Use `.paper-grain` texture.
+- **Container High (`surface-container-high` #d4bc90):** Input fields on parchment areas.
+- **Container Highest (`surface-container-highest` #ccb488):** Active states on parchment.
+- **Parchment Context:** Use `.parchment-context` class on parchment surfaces to override text colors to dark ink (#3a2410).
 
 ### Accents & Emphasis
-- **Primary Ink (`primary` #5f5e5e):** A faded charcoal. Use this for structural elements that need to feel like they were printed by an 18th-century press.
-- **The Stained Accent (`secondary` #9b4342):** A "dried blood" red. Use sparingly for critical errors or high-importance alerts.
-- **The Gilded Accent (`tertiary` #745b29):** A "vintage gold." This is our primary interaction color for call-to-actions, signifying value and discovery.
+- **Warm Gold (`primary` #d4a860):** Primary interactive color, structural elements, navigation highlights.
+- **Dried Blood Red (`secondary` #9b4342):** Unchanged — critical errors, high-importance.
+- **Firelight Orange (`tertiary` #c87828):** Primary CTA color, time block accents, discovery elements.
+
+### Text Colors
+- **On dark surfaces:** `on-surface` (#f0dbb8) — light warm text.
+- **On parchment surfaces:** `#3a2410` (dark ink) — applied via `.parchment-context` or explicit classes.
+- **Secondary text on dark:** `on-surface-variant` (rgba(212,168,96,0.6)) — gold-tinted.
 
 ---
 
@@ -33,21 +45,30 @@ We rely on **Newsreader** to provide a bespoke, scholarly elegance. The contrast
 ---
 
 ## 4. Elevation & Depth: Tonal Layering
-Traditional drop shadows are forbidden. We achieve depth through the **Layering Principle**.
+Depth is achieved through the two-zone contrast and warm shadow staining.
 
-- **Atmospheric Stacking:** To create a "card," place a `surface_container_lowest` (#ffffff) object onto a `surface_container` (#f5edda) background. This creates a soft, natural "lift" mimicking a fresh sheet of paper laid atop a weathered desk.
-- **Ambient Shadows:** For floating elements (menus/modals), use a "Shadow Stain." The shadow color must be a tinted version of `on_surface` (#373220) at 5% opacity with a massive 40px-60px blur. It should look like an ambient occlusion glow, not a plastic shadow.
-- **The Ghost Border:** If a boundary is strictly required for accessibility, use `outline_variant` (#bab298) at 15% opacity. It must be felt, not seen.
-- **Ink-Wash Glassmorphism:** For overlays, use `surface_container_low` with a 12px backdrop-blur. This simulates a "vellum" effect, allowing the "ink" of the content below to bleed through softly.
+- **Two-Zone Layout:** Dark timber shell (sidebar + chat) contrasts with warm parchment content (schedule). This creates natural visual hierarchy.
+- **Parchment Cards on Dark:** Content cards use `surface-container-lowest` (#f0dbb8) with warm ambient shadows (`0 8px 50px rgba(0,0,0,0.35), 0 0 30px rgba(220,150,50,0.06)`). The warm outer glow simulates firelight.
+- **Wood Grain Texture:** Dark surfaces use `.wood-grain` class with directional SVG noise (baseFrequency 0.03×0.3) at 6% opacity.
+- **Paper Grain Texture:** Parchment surfaces use `.paper-grain` class with fractal noise at 4% opacity.
+- **Ghost Border:** `rgba(212,168,96,0.1)` inset box-shadow for subtle warm boundaries.
+- **Vellum Overlay:** Dark timber glassmorphism (`rgba(44,24,16,0.85)` with 12px backdrop-blur) for mobile overlays.
+
+## 4b. Campfire Animation (Landing Page)
+- CSS-only flame using layered `::before`/`::after` pseudo-elements with `border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%`.
+- Colors: gradient from firelight (#c87828) through gold (#d4a860).
+- `@keyframes flicker` with 2-3s cycle for organic movement.
+- `.campfire-glow` radial gradient for ambient light cast.
+- Respects `prefers-reduced-motion` with static warm glow fallback.
 
 ---
 
 ## 5. Components: The Archivist’s Tools
 
 ### Buttons
-- **Primary:** A solid block of `tertiary` (#745b29) with `on_tertiary` text. **Corner radius is 0px.** Sharp edges are mandatory to reinforce the "cut paper" aesthetic.
-- **Secondary:** An "Ink-Outline" style using a 1px `outline` (#817b64) but only on the bottom edge, mimicking a signature line.
-- **Tertiary:** Pure text in `secondary` (#9b4342) with a subtle "ink-bleed" hover state (slight opacity increase).
+- **Primary:** A solid block of `tertiary` (#c87828 firelight) with dark text (#1a1008). **Corner radius is 0px.** Sharp edges reinforced.
+- **Secondary:** Bottom-border only using warm gold `rgba(212,168,96,0.3)`. Light text on dark.
+- **Ghost:** Text in `rgba(212,168,96,0.6)` with `rgba(212,168,96,0.05)` hover background.
 
 ### Input Fields
 - **Text Inputs:** No bounding boxes. Use a background of `surface_container_high` (#f0e8d0) with a 2px bottom-border of `primary_dim`. Labels must be in `label-sm` (Work Sans) to provide a "metadata" feel.

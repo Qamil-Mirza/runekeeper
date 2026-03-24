@@ -9,10 +9,10 @@ interface BadgeProps {
 }
 
 const variantStyles: Record<BadgeVariant, string> = {
-  gold: "bg-tertiary/15 text-tertiary border-b border-tertiary/30",
-  default: "bg-surface-container-high text-on-surface-variant",
+  gold: "bg-[rgba(200,120,40,0.15)] text-[#c87828] border-b border-tertiary/30",
+  default: "bg-[rgba(212,168,96,0.1)] text-[rgba(212,168,96,0.6)]",
   dim: "bg-surface-container text-outline",
-  status: "bg-secondary/10 text-secondary",
+  status: "bg-[rgba(155,67,66,0.15)] text-[#9b4342]",
 };
 
 export function Badge({ variant = "default", className, children }: BadgeProps) {

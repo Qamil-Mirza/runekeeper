@@ -41,7 +41,7 @@ export function QuestCard({ task, onToggleDone, even }: QuestCardProps) {
       <div className="flex-1 min-w-0">
         <span
           className={cn(
-            "font-body text-body-lg leading-tight block transition-all duration-300",
+            "font-body text-body-lg leading-tight block transition-all duration-300 text-[#3a2410]",
             showDone && "text-outline-variant"
           )}
           style={{
@@ -54,7 +54,7 @@ export function QuestCard({ task, onToggleDone, even }: QuestCardProps) {
         </span>
         {task.notes && (
           <p className={cn(
-            "font-body text-body-md text-on-surface-variant mt-0.5 truncate transition-opacity duration-300",
+            "font-body text-body-md text-[#3a2410]/70 mt-0.5 truncate transition-opacity duration-300",
             showDone && "opacity-50"
           )}>
             {task.notes}
@@ -73,7 +73,7 @@ export function QuestCard({ task, onToggleDone, even }: QuestCardProps) {
           "w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all duration-300",
           showDone
             ? "bg-tertiary/15 text-tertiary scale-110"
-            : "bg-surface-container-highest text-on-surface-variant hover:bg-surface-container-high"
+            : "bg-surface-container-highest text-[#3a2410]/60 hover:bg-surface-container-high"
         )}
         aria-label={isDone ? `Mark "${task.title}" incomplete` : `Complete "${task.title}"`}
       >

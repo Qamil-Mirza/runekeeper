@@ -7,23 +7,23 @@ export default async function Home() {
   if (session) redirect("/planner");
 
   return (
-    <main className="paper-grain min-h-dvh flex flex-col items-center justify-center bg-surface px-6 relative overflow-hidden">
-      {/* Ink-wash gradient overlay */}
+    <main className="wood-grain min-h-dvh flex flex-col items-center justify-center bg-surface px-6 relative overflow-hidden">
+      {/* Firelight radial glow */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            "radial-gradient(ellipse at 50% 0%, rgba(116, 91, 41, 0.06) 0%, transparent 60%), radial-gradient(ellipse at 80% 100%, rgba(155, 67, 66, 0.04) 0%, transparent 50%)",
+            "radial-gradient(ellipse at 50% 45%, rgba(200, 120, 40, 0.12) 0%, transparent 50%), radial-gradient(ellipse at 50% 80%, rgba(200, 100, 20, 0.06) 0%, transparent 40%)",
         }}
       />
 
       <div className="max-w-lg text-center relative z-10">
-        {/* Decorative mark */}
-        <div className="mb-8 flex justify-center">
-          <svg className="w-12 h-12 text-tertiary/40" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="1">
-            <circle cx="24" cy="24" r="20" />
-            <path d="M24 8v32M12 16l24 16M12 32l24-16" />
-          </svg>
+        {/* Campfire flame */}
+        <div className="mb-8 flex flex-col items-center">
+          <div className="relative">
+            <div className="campfire-flame" />
+            <div className="campfire-glow -bottom-4 left-1/2 -translate-x-1/2" />
+          </div>
         </div>
 
         <h1 className="font-display text-display-lg font-light tracking-tight text-on-surface leading-[1.05]">
@@ -40,13 +40,13 @@ export default async function Home() {
         </div>
 
         {/* Tagline */}
-        <p className="mt-16 font-label text-label-sm text-outline-variant uppercase tracking-[0.2em]">
-          The Enchanted Archivist
+        <p className="mt-16 font-label text-label-sm text-[rgba(212,168,96,0.4)] uppercase tracking-[0.2em]">
+          The Hearthside Keeper
         </p>
       </div>
 
       {/* Bottom decorative line */}
-      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-outline-variant/30 to-transparent" />
+      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[rgba(212,168,96,0.2)] to-transparent" />
     </main>
   );
 }

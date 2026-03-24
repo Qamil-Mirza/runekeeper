@@ -11,11 +11,11 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    "bg-tertiary text-white font-label text-label-lg font-medium tracking-wide uppercase px-6 py-2.5 hover:opacity-90 transition-opacity duration-200",
+    "bg-tertiary text-[#1a1008] font-label text-label-lg font-medium tracking-wide uppercase px-6 py-2.5 hover:opacity-90 transition-opacity duration-200",
   secondary:
     "bg-transparent text-on-surface font-label text-label-lg font-medium tracking-wide border-b-[1px] border-outline px-4 py-2 hover:border-on-surface transition-colors duration-200",
   ghost:
-    "bg-transparent text-secondary font-label text-label-lg font-medium tracking-wide px-4 py-2 hover:bg-secondary/5 transition-all duration-200",
+    "bg-transparent text-[rgba(212,168,96,0.6)] font-label text-label-lg font-medium tracking-wide px-4 py-2 hover:bg-[rgba(212,168,96,0.05)] transition-all duration-200",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(

@@ -24,11 +24,11 @@ const blockEmoji: Record<BlockType, string> = {
 };
 
 const blockAccent: Record<BlockType, { bg: string; dot: string }> = {
-  focus: { bg: "bg-tertiary/10", dot: "bg-tertiary" },
-  meeting: { bg: "bg-surface-container-high", dot: "bg-primary" },
-  class: { bg: "bg-surface-container", dot: "bg-on-surface/50" },
-  personal: { bg: "bg-tertiary/6", dot: "bg-tertiary/60" },
-  admin: { bg: "bg-surface-container-low", dot: "bg-outline" },
+  focus: { bg: "bg-surface-container-lowest", dot: "bg-[#c87828]" },
+  meeting: { bg: "bg-surface-container-lowest", dot: "bg-[#d4a860]" },
+  class: { bg: "bg-surface-container-lowest", dot: "bg-[#6b5030]" },
+  personal: { bg: "bg-surface-container-lowest", dot: "bg-[#ccb488]" },
+  admin: { bg: "bg-surface-container-lowest", dot: "bg-[#6b5030]" },
 };
 
 // ─── Date formatting helpers ─────────────────────────────────────────────────
@@ -89,7 +89,7 @@ function NowMarker({ startHour }: { startHour: number }) {
     >
       <div className="w-2 h-2 rounded-full bg-tertiary shrink-0" />
       <div className="flex-1 h-px bg-tertiary/60" />
-      <span className="font-label text-[10px] font-semibold text-tertiary uppercase tracking-wider bg-tertiary/15 px-2 py-0.5 rounded-full">
+      <span className="font-label text-[10px] font-semibold text-[#c87828] uppercase tracking-wider bg-[rgba(200,120,40,0.15)] px-2 py-0.5 rounded-full">
         Now
       </span>
     </div>
@@ -139,8 +139,8 @@ function EventCard({ block, isDone, linkedTask, onEdit }: { block: TimeBlock; is
         <div className="flex items-start justify-between gap-2">
           <h4 className={cn(
             "font-display text-body-lg font-semibold leading-snug",
-            isExternal ? "text-on-surface/70" : "text-on-surface",
-            isDone && "line-through text-on-surface/50"
+            isExternal ? "text-[#6b5030]" : "text-[#3a2410]",
+            isDone && "line-through text-[#6b5030]/50"
           )}>
             {block.title}
           </h4>
@@ -160,7 +160,7 @@ function EventCard({ block, isDone, linkedTask, onEdit }: { block: TimeBlock; is
         {isLarge && (
           <div className="mt-1 flex items-center gap-1.5">
             <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", isExternal ? "bg-[#4285F4]/40" : accent.dot)} />
-            <span className="font-label text-label-sm text-on-surface-variant">
+            <span className="font-label text-label-sm text-[#6b5030]">
               {isExternal ? "Google Calendar" : blockSubtitle(block.type)}
             </span>
           </div>
@@ -168,7 +168,7 @@ function EventCard({ block, isDone, linkedTask, onEdit }: { block: TimeBlock; is
 
         {/* Time range at bottom if enough room */}
         {height >= 100 && (
-          <span className="mt-auto pt-1.5 font-label text-[10px] text-on-surface-variant/70 uppercase tracking-wide">
+          <span className="mt-auto pt-1.5 font-label text-[10px] text-[#6b5030]/70 uppercase tracking-wide">
             {formatTimeShort(block.start)} – {formatTimeShort(block.end)}
           </span>
         )}
@@ -185,7 +185,7 @@ function UnmappedQuestRow({ task, even, onEdit }: { task: Task; even: boolean; o
       variants={slideUp}
       className={cn(
         "flex items-center gap-3 px-5 py-3",
-        even ? "bg-surface-container-low" : "bg-surface",
+        even ? "bg-surface-bright" : "bg-surface",
         onEdit && "cursor-pointer"
       )}
       onClick={() => onEdit?.(task)}
@@ -215,7 +215,7 @@ function UnmappedQuestRow({ task, even, onEdit }: { task: Task; even: boolean; o
 
 export function CalendarView() {
   const { blocks, tasks, navigateWeek, weekRange, updateTask, deleteTask } = usePlanner();
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDateStr, setSelectedDateStr] = useState(() => toLocalDateStr(new Date()));
   const [mode, setMode] = useState<CalendarMode>("day");
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
@@ -223,31 +223,27 @@ export function CalendarView() {
     ? blocks.find((b) => b.taskId === editingTask.id) ?? null
     : null;
 
-  const selectedDateStr = toLocalDateStr(selectedDate);
+  const selectedDate = new Date(selectedDateStr + "T00:00:00");
   const todayStr = toLocalDateStr(new Date());
   const isToday = selectedDateStr === todayStr;
+
+  const setSelectedDate = (d: Date) => setSelectedDateStr(toLocalDateStr(d));
 
   // Navigate by the appropriate unit based on current mode
   const navigateDay = (dir: -1 | 1) => {
     if (mode === "month") {
-      setSelectedDate((prev) => {
-        const d = new Date(prev);
-        d.setMonth(d.getMonth() + dir);
-        return d;
-      });
+      const d = new Date(selectedDateStr + "T00:00:00");
+      d.setMonth(d.getMonth() + dir);
+      setSelectedDate(d);
     } else if (mode === "week") {
       navigateWeek(dir);
-      setSelectedDate((prev) => {
-        const d = new Date(prev);
-        d.setDate(d.getDate() + dir * 7);
-        return d;
-      });
+      const d = new Date(selectedDateStr + "T00:00:00");
+      d.setDate(d.getDate() + dir * 7);
+      setSelectedDate(d);
     } else {
-      setSelectedDate((prev) => {
-        const d = new Date(prev);
-        d.setDate(d.getDate() + dir);
-        return d;
-      });
+      const d = new Date(selectedDateStr + "T00:00:00");
+      d.setDate(d.getDate() + dir);
+      setSelectedDate(d);
     }
   };
 
@@ -288,7 +284,7 @@ export function CalendarView() {
         className="px-6 pt-6 pb-2"
       >
         <span className="font-label text-label-sm uppercase tracking-[0.15em] text-tertiary">
-          The Archivist&apos;s Schedule
+          The Keeper&apos;s Schedule
         </span>
         <div className="flex items-center justify-between mt-1">
           <h2 className="font-display text-headline-lg italic text-on-surface leading-tight">
@@ -305,15 +301,7 @@ export function CalendarView() {
                 <polyline points="15 18 9 12 15 6" />
               </svg>
             </button>
-            {!isToday && (
-              <button
-                onClick={() => setSelectedDate(new Date())}
-                className="font-label text-[10px] uppercase tracking-wider text-tertiary hover:text-on-surface px-2 py-1 transition-colors"
-              >
-                Today
-              </button>
-            )}
-            <button
+<button
               onClick={() => navigateDay(1)}
               className="p-1.5 text-on-surface-variant hover:text-on-surface transition-colors"
               aria-label={`Next ${mode}`}
@@ -328,7 +316,7 @@ export function CalendarView() {
 
       {/* ── Mode tabs ── */}
       <div className="px-6 pt-3 pb-4">
-        <div className="inline-flex bg-surface-container-low p-0.5">
+        <div className="inline-flex bg-[rgba(212,168,96,0.1)] p-0.5">
           {(["day", "week", "month"] as CalendarMode[]).map((m) => (
             <button
               key={m}
@@ -336,7 +324,7 @@ export function CalendarView() {
               className={cn(
                 "font-label text-label-md capitalize px-4 py-1.5 transition-colors duration-200",
                 mode === m
-                  ? "bg-surface text-on-surface shadow-ambient"
+                  ? "bg-surface-bright text-on-surface shadow-ambient"
                   : "text-on-surface-variant hover:text-on-surface"
               )}
             >
@@ -367,10 +355,10 @@ export function CalendarView() {
                   className="absolute left-0 right-0 flex items-start"
                   style={{ top: `${i * HOUR_HEIGHT}px`, height: `${HOUR_HEIGHT}px` }}
                 >
-                  <span className="font-label text-label-sm text-outline-variant w-8 text-right pr-2 -mt-1.5 select-none">
+                  <span className="font-label text-label-sm font-semibold text-on-surface w-8 text-right pr-2 -mt-1.5 select-none">
                     {formatHourLabel(hour)}
                   </span>
-                  <div className="flex-1 border-t border-outline-variant/20 mt-px" />
+                  <div className="flex-1 border-t border-[rgba(212,168,96,0.15)] mt-px" />
                 </div>
               ))}
 
@@ -547,7 +535,7 @@ function WeekMiniView({
             {hours.map((hour) => (
               <div
                 key={hour}
-                className="font-label text-[10px] text-outline-variant text-right pr-1 leading-none"
+                className="font-label text-[10px] text-on-surface-variant text-right pr-1 leading-none"
                 style={{ height: `${MINI_HOUR_HEIGHT}px` }}
               >
                 {`${String(hour).padStart(2, "0")}`}
@@ -568,7 +556,7 @@ function WeekMiniView({
                   }}
                   className={cn(
                     "w-full text-center py-1.5 transition-colors",
-                    isSelected ? "bg-tertiary/12" : isToday ? "bg-tertiary/5" : "bg-surface-container-low"
+                    isSelected ? "bg-[rgba(200,120,40,0.12)]" : isToday ? "bg-[rgba(200,120,40,0.06)]" : "bg-surface-bright"
                   )}
                 >
                   <span className="font-label text-label-sm uppercase tracking-wide text-on-surface-variant block">{dd.label}</span>
@@ -578,7 +566,7 @@ function WeekMiniView({
                   {hours.map((hour, i) => (
                     <div
                       key={hour}
-                      className={cn("absolute left-0 right-0 border-t border-outline-variant/10", hour >= 12 ? "bg-surface-container/20" : "")}
+                      className={cn("absolute left-0 right-0 border-t border-[rgba(212,168,96,0.08)]", hour >= 12 ? "bg-[rgba(212,168,96,0.04)]" : "")}
                       style={{ top: `${i * MINI_HOUR_HEIGHT}px`, height: `${MINI_HOUR_HEIGHT}px` }}
                     />
                   ))}
@@ -603,7 +591,7 @@ function WeekMiniView({
                         )}
                         style={{ top: `${top}px`, height: `${Math.max(h, 14)}px`, borderLeftColor: isExt ? "#4285F4" : "var(--color-tertiary)" }}
                       >
-                        <span className={cn("font-label text-[9px] font-medium leading-tight block truncate", isExt ? "text-on-surface/60" : "text-on-surface")}>
+                        <span className={cn("font-label text-[9px] font-medium leading-tight block truncate", isExt ? "text-[#6b5030]" : "text-[#3a2410]")}>
                           {block.title}
                         </span>
                       </div>
@@ -660,7 +648,7 @@ function MonthMiniView({
       {/* Day-of-week headers */}
       <div className="grid grid-cols-7 mb-2">
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-          <span key={d} className="font-label text-[10px] text-outline-variant uppercase tracking-wider text-center">
+          <span key={d} className="font-label text-[10px] text-on-surface-variant uppercase tracking-wider text-center">
             {d}
           </span>
         ))}
@@ -687,10 +675,10 @@ function MonthMiniView({
               className={cn(
                 "flex flex-col items-center py-1.5 transition-colors rounded-sm",
                 isSelected
-                  ? "bg-tertiary/15 text-on-surface"
+                  ? "bg-[rgba(200,120,40,0.15)] text-on-surface"
                   : isToday
-                    ? "bg-tertiary/5 text-tertiary"
-                    : "text-on-surface hover:bg-surface-container-low"
+                    ? "bg-[rgba(200,120,40,0.06)] text-tertiary"
+                    : "text-on-surface hover:bg-surface-bright"
               )}
             >
               <span className={cn("font-label text-label-md", isToday && "font-semibold")}>
@@ -699,7 +687,7 @@ function MonthMiniView({
               {count > 0 && (
                 <div className="flex gap-0.5 mt-0.5">
                   {Array.from({ length: Math.min(count, 3) }).map((_, j) => (
-                    <div key={j} className="w-1 h-1 rounded-full bg-tertiary/50" />
+                    <div key={j} className="w-1 h-1 rounded-full bg-[#c87828]/50" />
                   ))}
                 </div>
               )}

@@ -1,32 +1,32 @@
 @import "tailwindcss";
 
 @theme {
-  /* ── Surface & Tonal Architecture ── */
-  --color-surface: #fff9ed;
-  --color-surface-container-lowest: #ffffff;
-  --color-surface-container-low: #faf3e3;
-  --color-surface-container: #f5edda;
-  --color-surface-container-high: #f0e8d0;
-  --color-surface-container-highest: #ebe2c7;
-  --color-surface-dim: #e3dabb;
-  --color-surface-bright: #fffdf7;
+  /* ── Surface & Tonal Architecture (Hearthside Dark Timber) ── */
+  --color-surface: #2c1810;
+  --color-surface-container-lowest: #f0dbb8;
+  --color-surface-container-low: #e8d0a5;
+  --color-surface-container: #dcc8a0;
+  --color-surface-container-high: #d4bc90;
+  --color-surface-container-highest: #ccb488;
+  --color-surface-dim: #1a1008;
+  --color-surface-bright: #3d2518;
 
   /* ── Accents & Emphasis ── */
-  --color-primary: #5f5e5e;
-  --color-primary-container: #d4d0c8;
-  --color-on-primary: #ffffff;
+  --color-primary: #d4a860;
+  --color-primary-container: #8b6830;
+  --color-on-primary: #1a1008;
   --color-secondary: #9b4342;
-  --color-secondary-container: #e8c4c3;
+  --color-secondary-container: #5a2020;
   --color-on-secondary: #ffffff;
-  --color-tertiary: #745b29;
-  --color-tertiary-container: #c9ad6c;
-  --color-on-tertiary: #ffffff;
+  --color-tertiary: #c87828;
+  --color-tertiary-container: #7a4818;
+  --color-on-tertiary: #1a1008;
 
   /* ── Text & Surface Content ── */
-  --color-on-surface: #373220;
-  --color-on-surface-variant: #5c5644;
-  --color-outline: #817b64;
-  --color-outline-variant: #bab298;
+  --color-on-surface: #f0dbb8;
+  --color-on-surface-variant: rgba(212, 168, 96, 0.6);
+  --color-outline: rgba(212, 168, 96, 0.35);
+  --color-outline-variant: rgba(212, 168, 96, 0.15);
 
   /* ── Utility ── */
   --color-white: #ffffff;
@@ -34,8 +34,8 @@
   --color-error: #ba1a1a;
 
   /* ── Inverse ── */
-  --color-inverse-surface: #100e08;
-  --color-inverse-on-surface: #f5edda;
+  --color-inverse-surface: #f0dbb8;
+  --color-inverse-on-surface: #2c1810;
 
   /* ── Typography Scale ── */
   --font-display: "Newsreader", serif;
@@ -56,9 +56,9 @@
   --spacing-rhythm: 1.4rem;
   --spacing-editorial: 5.5rem;
 
-  /* ── Shadows ── */
-  --shadow-ambient: 0 8px 50px rgba(55, 50, 32, 0.05);
-  --shadow-float: 0 12px 60px rgba(55, 50, 32, 0.08);
+  /* ── Shadows (warm dark) ── */
+  --shadow-ambient: 0 8px 50px rgba(0, 0, 0, 0.35), 0 0 30px rgba(220, 150, 50, 0.06);
+  --shadow-float: 0 12px 60px rgba(0, 0, 0, 0.4), 0 0 40px rgba(220, 150, 50, 0.08);
 }
 
 /* ── Paper Grain Texture ── */
@@ -83,16 +83,79 @@
   z-index: 1;
 }
 
-/* ── Ink-Wash Glassmorphism ── */
+/* ── Wood Grain Texture (Dark Timber Surfaces) ── */
+.wood-grain {
+  position: relative;
+}
+
+.wood-grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.06;
+  pointer-events: none;
+  z-index: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='wood'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.03 0.3' numOctaves='4' seed='5' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23wood)' fill='%238b6040'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+
+.wood-grain > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Parchment Context (dark ink text on parchment surfaces) ── */
+.parchment-context {
+  color: #3a2410;
+}
+
+.parchment-context .text-on-surface {
+  color: #3a2410;
+}
+
+.parchment-context .text-on-surface-variant {
+  color: #6b5030;
+}
+
+.parchment-context .text-outline-variant {
+  color: #9b8060;
+}
+
+.parchment-context .text-outline {
+  color: #7a6040;
+}
+
+.parchment-context .bg-surface-container-high {
+  background-color: #dcc8a0;
+}
+
+.parchment-context .bg-surface-container {
+  background-color: #e8d0a5;
+}
+
+.parchment-context .text-tertiary {
+  color: #a05a10;
+}
+
+.parchment-context .text-error {
+  color: #ba1a1a;
+}
+
+.parchment-context .hover\:text-on-surface:hover {
+  color: #3a2410;
+}
+
+/* ── Ink-Wash Glassmorphism (Dark Timber) ── */
 .vellum-overlay {
-  background: rgba(250, 243, 227, 0.85);
+  background: rgba(44, 24, 16, 0.85);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
 
 /* ── Ghost Border ── */
 .ghost-border {
-  box-shadow: inset 0 0 0 1px rgba(186, 178, 152, 0.15);
+  box-shadow: inset 0 0 0 1px rgba(212, 168, 96, 0.1);
 }
 
 /* ── Archivist Scroll Custom Scrollbar ── */
@@ -125,15 +188,29 @@
     min-height: 100dvh;
   }
 
+  /* ── Interactive elements: pointer cursor ── */
+  button,
+  [role="button"],
+  a,
+  select,
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="submit"],
+  input[type="reset"],
+  label[for],
+  summary {
+    cursor: pointer;
+  }
+
   /* ── Selection ── */
   ::selection {
-    background-color: var(--color-tertiary-container);
-    color: var(--color-on-surface);
+    background-color: #7a4818;
+    color: #f0dbb8;
   }
 
   /* ── Focus Ring ── */
   :focus-visible {
-    outline: 2px solid var(--color-outline-variant);
+    outline: 2px solid rgba(212, 168, 96, 0.5);
     outline-offset: 2px;
   }
 }
@@ -153,11 +230,71 @@
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(116, 91, 41, 0.15) 50%,
+    rgba(200, 120, 40, 0.15) 50%,
     transparent 100%
   );
   background-size: 200% 100%;
   animation: goldShimmer 1.5s ease-in-out;
+}
+
+@keyframes ember {
+  0% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+  100% { opacity: 0.7; transform: scale(0.95); }
+}
+
+@keyframes flicker {
+  0%, 100% { transform: scaleY(1) scaleX(1) translateY(0); opacity: 1; }
+  25% { transform: scaleY(1.05) scaleX(0.95) translateY(-2px); opacity: 0.9; }
+  50% { transform: scaleY(0.95) scaleX(1.05) translateY(1px); opacity: 1; }
+  75% { transform: scaleY(1.08) scaleX(0.97) translateY(-3px); opacity: 0.85; }
+}
+
+@keyframes flickerGlow {
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  33% { opacity: 0.4; transform: scale(1.05); }
+  66% { opacity: 0.25; transform: scale(0.95); }
+}
+
+/* ── Campfire Flame (Landing Page Hero) ── */
+.campfire-flame {
+  position: relative;
+  width: 60px;
+  height: 80px;
+}
+
+.campfire-flame::before,
+.campfire-flame::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+}
+
+.campfire-flame::before {
+  width: 40px;
+  height: 60px;
+  background: linear-gradient(to top, #c87828 0%, #d4a860 40%, rgba(200, 120, 40, 0.3) 100%);
+  animation: flicker 2s ease-in-out infinite;
+  box-shadow: 0 0 40px rgba(200, 120, 40, 0.4), 0 0 80px rgba(200, 120, 40, 0.2);
+}
+
+.campfire-flame::after {
+  width: 24px;
+  height: 40px;
+  background: linear-gradient(to top, #e8a030 0%, #f0c060 50%, rgba(240, 200, 100, 0.2) 100%);
+  animation: flicker 1.5s ease-in-out infinite 0.3s;
+}
+
+.campfire-glow {
+  position: absolute;
+  width: 200px;
+  height: 120px;
+  background: radial-gradient(ellipse at center bottom, rgba(200, 120, 40, 0.15) 0%, rgba(200, 100, 20, 0.05) 50%, transparent 80%);
+  animation: flickerGlow 3s ease-in-out infinite;
+  pointer-events: none;
 }
 
 /* ── Reduce Motion ── */
@@ -168,5 +305,19 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .campfire-flame::before {
+    animation: none;
+    box-shadow: 0 0 40px rgba(200, 120, 40, 0.3), 0 0 80px rgba(200, 120, 40, 0.15);
+  }
+
+  .campfire-flame::after {
+    animation: none;
+  }
+
+  .campfire-glow {
+    animation: none;
+    opacity: 0.3;
   }
 }
