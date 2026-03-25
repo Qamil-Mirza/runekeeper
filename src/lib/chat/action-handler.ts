@@ -3,12 +3,14 @@ import { tasks, timeBlocks, planSessions } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { schedule } from "@/lib/scheduler";
 import { generateDiff } from "@/lib/scheduler/diff";
-import { dbTaskToTask, dbBlockToTimeBlock, type Task, type TimeBlock } from "@/lib/types";
+import { dbTaskToTask, dbBlockToTimeBlock, type Task, type TimeBlock, type BlockType } from "@/lib/types";
+import { inferBlockType } from "@/lib/scheduler";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("action-handler");
 
 const VALID_PRIORITIES = ["high", "medium", "low"];
+const VALID_BLOCK_TYPES: BlockType[] = ["focus", "admin", "personal", "meeting", "class"];
 
 function sanitizeTaskDef(def: any): {
   title: string;
@@ -17,10 +19,12 @@ function sanitizeTaskDef(def: any): {
   estimateMinutes: number;
   dueDate: string | null;
   startTime: string | null;
+  blockType: BlockType;
 } | null {
   if (!def || typeof def.title !== "string" || def.title.trim().length === 0) return null;
+  const title = def.title.trim().slice(0, 500);
   return {
-    title: def.title.trim().slice(0, 500),
+    title,
     notes: typeof def.notes === "string" ? def.notes.slice(0, 500) : null,
     priority: VALID_PRIORITIES.includes(def.priority) ? def.priority : "medium",
     estimateMinutes:
@@ -29,6 +33,7 @@ function sanitizeTaskDef(def: any): {
         : 30,
     dueDate: typeof def.dueDate === "string" ? def.dueDate : null,
     startTime: typeof def.startTime === "string" ? def.startTime : null,
+    blockType: VALID_BLOCK_TYPES.includes(def.blockType) ? def.blockType : inferBlockType({ title }),
   };
 }
 
@@ -199,7 +204,7 @@ async function handleCreateTasks(
               title: existingTask.title,
               startTime,
               endTime,
-              blockType: "focus",
+              blockType: def.blockType,
               committed: false,
             })
             .returning();
@@ -253,7 +258,7 @@ async function handleCreateTasks(
           title: task.title,
           startTime,
           endTime,
-          blockType: "focus",
+          blockType: def.blockType,
           committed: false,
         })
         .returning();
@@ -459,7 +464,7 @@ async function handleAdjustBlock(
             title: matchedTask.title,
             startTime,
             endTime,
-            blockType: "focus",
+            blockType: inferBlockType(matchedTask),
             committed: false,
           })
           .returning();
@@ -516,7 +521,7 @@ async function handleAdjustBlock(
         title: targetBlock.title,
         startTime,
         endTime,
-        blockType: "focus",
+        blockType: inferBlockType({ title: targetBlock.title }),
         committed: false,
       })
       .returning();

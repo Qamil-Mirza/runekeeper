@@ -20,6 +20,7 @@ export interface TaskAction {
   estimateMinutes: number;
   dueDate?: string;
   startTime?: string;
+  blockType?: "focus" | "admin" | "personal" | "meeting" | "class";
 }
 
 export interface StructuredAction {
@@ -87,6 +88,13 @@ const RESPONSE_SCHEMA: Schema = {
                   type: SchemaType.STRING,
                   description:
                     "ISO datetime (e.g. 2026-03-21T20:00:00). Include ONLY when the user specifies a specific time.",
+                },
+                blockType: {
+                  type: SchemaType.STRING,
+                  format: "enum",
+                  enum: ["focus", "admin", "personal", "meeting", "class"],
+                  description:
+                    "Category for the time block. Use 'focus' for deep work (studying, coding, writing). Use 'personal' for leisure, errands, exercise, gaming, cooking, social activities. Use 'meeting' for calls/meetings. Use 'admin' for emails, paperwork. Use 'class' for lectures/seminars.",
                 },
               },
               required: ["title", "notes", "priority", "estimateMinutes"],

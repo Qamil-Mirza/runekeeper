@@ -135,26 +135,46 @@ function findSlot(
   return null;
 }
 
-function inferBlockType(task: Task): BlockType {
+export function inferBlockType(task: Pick<Task, "title">): BlockType {
   const lower = task.title.toLowerCase();
-  if (lower.includes("meeting") || lower.includes("call")) return "meeting";
+  if (lower.includes("meeting") || lower.includes("call") || lower.includes("standup") || lower.includes("sync"))
+    return "meeting";
+  if (lower.includes("class") || lower.includes("lecture") || lower.includes("seminar"))
+    return "class";
+  if (lower.includes("admin") || lower.includes("email") || lower.includes("invoice") || lower.includes("paperwork"))
+    return "admin";
+  // Personal: exercise, leisure, errands, social, food
   if (
     lower.includes("gym") ||
     lower.includes("run") ||
     lower.includes("workout") ||
-    lower.includes("exercise")
-  )
-    return "personal";
-  if (
+    lower.includes("exercise") ||
     lower.includes("lunch") ||
     lower.includes("dinner") ||
     lower.includes("breakfast") ||
     lower.includes("coffee") ||
     lower.includes("movie") ||
-    lower.includes("break")
+    lower.includes("break") ||
+    lower.includes("gaming") ||
+    lower.includes("game") ||
+    lower.includes("play") ||
+    lower.includes("cook") ||
+    lower.includes("recipe") ||
+    lower.includes("clean") ||
+    lower.includes("laundry") ||
+    lower.includes("grocery") ||
+    lower.includes("shop") ||
+    lower.includes("errand") ||
+    lower.includes("walk") ||
+    lower.includes("hike") ||
+    lower.includes("yoga") ||
+    lower.includes("meditat") ||
+    lower.includes("nap") ||
+    lower.includes("read for fun") ||
+    lower.includes("hangout") ||
+    lower.includes("party") ||
+    lower.includes("date")
   )
     return "personal";
-  if (lower.includes("admin") || lower.includes("email")) return "admin";
-  if (lower.includes("class") || lower.includes("lecture")) return "class";
   return "focus";
 }
