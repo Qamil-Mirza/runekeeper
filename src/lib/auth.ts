@@ -29,7 +29,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.refreshToken = account.refresh_token;
         token.expiresAt = account.expires_at;
 
-        // Encrypt tokens before storing in the database
+        // Encrypt tokens and persist scope in the database
         if (account.access_token) {
           await db
             .update(accounts)
@@ -38,6 +38,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               refresh_token: account.refresh_token
                 ? encrypt(account.refresh_token)
                 : null,
+              scope: account.scope ?? null,
             })
             .where(eq(accounts.providerAccountId, account.providerAccountId));
         }

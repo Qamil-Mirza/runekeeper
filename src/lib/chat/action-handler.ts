@@ -149,7 +149,29 @@ async function handleCreateTasks(
 
     if (duplicate) {
       log.info({ taskTitle: duplicate.title }, "duplicate task found, reusing existing");
-      const existingTask = dbTaskToTask(duplicate);
+
+      // Update task fields if the new def differs (e.g. LLM changed estimate)
+      const taskUpdates: Record<string, any> = {};
+      if (def.estimateMinutes !== duplicate.estimateMinutes) {
+        taskUpdates.estimateMinutes = def.estimateMinutes;
+      }
+      if (def.priority !== duplicate.priority) {
+        taskUpdates.priority = def.priority;
+      }
+      if (def.dueDate && def.dueDate !== duplicate.dueDate) {
+        taskUpdates.dueDate = def.dueDate;
+      }
+      if (Object.keys(taskUpdates).length > 0) {
+        await db
+          .update(tasks)
+          .set({ ...taskUpdates, updatedAt: new Date() })
+          .where(eq(tasks.id, duplicate.id));
+      }
+
+      const existingTask = dbTaskToTask({
+        ...duplicate,
+        ...taskUpdates,
+      });
 
       // Still create a time block if the request has a specific time and
       // the existing task doesn't already have one at that time

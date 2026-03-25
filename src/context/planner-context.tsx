@@ -45,7 +45,7 @@ function getWeekRange(date: Date): WeekRange {
 
 // ─── Context Types ───────────────────────────────────────────────────────────
 
-export type ViewId = "home" | "chat" | "quest-log" | "calendar";
+export type ViewId = "home" | "chat" | "quest-log" | "calendar" | "integrations";
 export type TransitionMode = "none" | "ink-spread";
 
 interface PlannerState {
@@ -103,8 +103,11 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     if (status !== "authenticated") return;
     setIsLoading(true);
     try {
-      // Sync Google Calendar first (best-effort), then fetch all data
-      await api.syncCalendar().catch(() => null);
+      // Sync Google Calendar + Gmail (best-effort), then fetch all data
+      await Promise.all([
+        api.syncCalendar().catch(() => null),
+        api.syncGmail().catch(() => null),
+      ]);
 
       const [userPrefs, tasksData, blocksData] = await Promise.all([
         api.fetchUserPreferences(),

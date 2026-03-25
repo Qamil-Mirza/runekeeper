@@ -244,3 +244,63 @@ export function undoPlan(sessionId: string) {
     body: JSON.stringify({ sessionId }),
   });
 }
+
+// ─── Gmail Integration ──────────────────────────────────────────────────────
+
+export interface GmailIntegrationConfig {
+  enabled: boolean;
+  config: {
+    monitoredSenders: string[];
+    autoCreateTasks: boolean;
+    pubsubSubscriptionActive: boolean;
+  };
+  lastSyncAt: string | null;
+  lastSyncError: string | null;
+}
+
+export interface GmailSyncResult {
+  processed: number;
+  tasksCreated: number;
+  errors: string[];
+}
+
+export interface ProcessedEmail {
+  id: string;
+  gmailMessageId: string;
+  senderEmail: string;
+  subject: string | null;
+  processedAt: string;
+  actionTaken: string;
+  taskId: string | null;
+}
+
+export function fetchGmailIntegration() {
+  return apiFetch<GmailIntegrationConfig>("/api/integrations/gmail");
+}
+
+export function updateGmailIntegration(data: {
+  enabled?: boolean;
+  config?: { monitoredSenders?: string[]; autoCreateTasks?: boolean };
+}) {
+  return apiFetch<any>("/api/integrations/gmail", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function syncGmail() {
+  return apiFetch<GmailSyncResult>("/api/integrations/gmail/sync", {
+    method: "POST",
+  });
+}
+
+export function fetchGmailHistory() {
+  return apiFetch<ProcessedEmail[]>("/api/integrations/gmail/history");
+}
+
+export function setupGmailPubsub() {
+  return apiFetch<{ historyId: string; expiration: string }>(
+    "/api/integrations/gmail/setup-pubsub",
+    { method: "POST" }
+  );
+}

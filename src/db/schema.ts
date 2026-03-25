@@ -7,6 +7,7 @@ import {
   timestamp,
   jsonb,
   primaryKey,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // ─── Users ───────────────────────────────────────────────────────────────────
@@ -160,3 +161,63 @@ export const chatMessages = pgTable("chat_messages", {
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// ─── Integrations ───────────────────────────────────────────────────────────
+
+export const integrations = pgTable(
+  "integrations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(), // "gmail" | "slack" | "github" | "linear"
+    enabled: boolean("enabled").default(false).notNull(),
+    config: jsonb("config").$type<{
+      monitoredSenders?: string[];
+      autoCreateTasks?: boolean;
+      pubsubSubscriptionActive?: boolean;
+    }>().default({}),
+    gmailHistoryId: text("gmail_history_id"),
+    watchExpiration: timestamp("watch_expiration"),
+    lastSyncAt: timestamp("last_sync_at"),
+    lastSyncError: text("last_sync_error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("integrations_user_provider_idx").on(
+      table.userId,
+      table.provider
+    ),
+  ]
+);
+
+// ─── Processed Emails ───────────────────────────────────────────────────────
+
+export const processedEmails = pgTable(
+  "processed_emails",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    integrationId: uuid("integration_id")
+      .notNull()
+      .references(() => integrations.id, { onDelete: "cascade" }),
+    gmailMessageId: text("gmail_message_id").notNull(),
+    gmailThreadId: text("gmail_thread_id"),
+    senderEmail: text("sender_email").notNull(),
+    subject: text("subject"),
+    processedAt: timestamp("processed_at").defaultNow().notNull(),
+    actionTaken: text("action_taken").notNull(), // "task_created" | "skipped" | "no_action" | "error"
+    taskId: uuid("task_id").references(() => tasks.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("processed_emails_user_msg_idx").on(
+      table.userId,
+      table.gmailMessageId
+    ),
+  ]
+);
