@@ -66,3 +66,28 @@ export const viewInstant: Variants = {
   animate: { opacity: 1 },
   exit: { opacity: 1 },
 };
+
+// ─── Onboarding ──────────────────────────────────────────────────────────────
+
+export const onboardingOverlayFade: Variants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { duration: 0.4 } },
+  exit: { opacity: 0, transition: { duration: 0.3 } },
+};
+
+export const onboardingStepSlide: Variants = {
+  enter: (direction: number) => ({
+    x: direction > 0 ? 80 : -80,
+    opacity: 0,
+  }),
+  center: {
+    x: 0,
+    opacity: 1,
+    transition: { duration: 0.35, ease: "easeOut" },
+  },
+  exit: (direction: number) => ({
+    x: direction > 0 ? -80 : 80,
+    opacity: 0,
+    transition: { duration: 0.25, ease: "easeIn" },
+  }),
+};

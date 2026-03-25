@@ -26,6 +26,7 @@ export const users = pgTable("users", {
     lunchDurationMinutes: number;
     maxBlockMinutes: number;
     meetingBuffer: number;
+    onboardingCompleted?: boolean;
   }>().default({
     workingHoursStart: 9,
     workingHoursEnd: 18,
