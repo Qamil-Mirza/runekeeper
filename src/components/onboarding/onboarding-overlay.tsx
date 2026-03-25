@@ -133,21 +133,19 @@ export function OnboardingOverlay({ onComplete }: OnboardingOverlayProps) {
       <div className="pb-10 pt-4 flex flex-col items-center gap-8 w-full max-w-md px-6">
         <OnboardingProgress totalSteps={STEPS.length} currentStep={currentStep} />
 
-        <div className="flex items-center gap-4 w-full">
-          {currentStep > 0 ? (
+        <div className="flex items-center justify-center gap-4 w-full">
+          {currentStep > 0 && (
             <button
               onClick={goBack}
-              className="flex-1 min-h-[44px] font-label text-label-md uppercase tracking-wide text-on-surface-variant hover:text-on-surface border border-on-surface-variant/20 rounded-lg transition-colors"
+              className="flex-1 max-w-[10rem] min-h-[44px] font-label text-label-md uppercase tracking-wide text-on-surface-variant hover:text-on-surface border border-on-surface-variant/20 rounded-lg transition-colors"
             >
               Back
             </button>
-          ) : (
-            <div className="flex-1" />
           )}
 
           <button
             onClick={goNext}
-            className="flex-1 min-h-[44px] font-label text-label-md uppercase tracking-wide text-surface-dim bg-primary hover:bg-primary/90 rounded-lg transition-colors font-medium"
+            className="flex-1 max-w-[10rem] min-h-[44px] font-label text-label-md uppercase tracking-wide text-surface-dim bg-primary hover:bg-primary/90 rounded-lg transition-colors font-medium"
           >
             {isLastStep ? "Begin your quest" : "Next"}
           </button>
