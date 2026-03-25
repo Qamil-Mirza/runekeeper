@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -18,8 +18,16 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
     setValue("");
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
+      textareaRef.current.focus();
     }
   }, [value, disabled, onSend]);
+
+  // Refocus when the input becomes enabled again (e.g. after streaming finishes)
+  useEffect(() => {
+    if (!disabled) {
+      textareaRef.current?.focus();
+    }
+  }, [disabled]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

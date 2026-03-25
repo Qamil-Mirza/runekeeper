@@ -122,26 +122,10 @@ export function sendChatMessage(data: {
   });
 }
 
-// ─── User Preferences ────────────────────────────────────────────────────────
+// ─── User Profile ─────────────────────────────────────────────────────────────
 
 export function fetchUserPreferences() {
   return apiFetch<any>("/api/user/preferences");
-}
-
-export function updateUserPreferences(data: {
-  timezone?: string;
-  preferences?: Partial<{
-    workingHoursStart: number;
-    workingHoursEnd: number;
-    lunchDurationMinutes: number;
-    maxBlockMinutes: number;
-    meetingBuffer: number;
-  }>;
-}) {
-  return apiFetch<any>("/api/user/preferences", {
-    method: "PATCH",
-    body: JSON.stringify(data),
-  });
 }
 
 // ─── Chat with Ollama ────────────────────────────────────────────────────────

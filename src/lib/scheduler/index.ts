@@ -54,7 +54,7 @@ export function schedule(input: SchedulerInput): SchedulerOutput {
         if (blockIndex === 0) {
           const reason = deadline
             ? `No available ${blockMinutes}-minute slot before ${task.dueDate}`
-            : `No available ${blockMinutes}-minute slot in working hours`;
+            : `No available ${blockMinutes}-minute slot this week`;
           unschedulable.push({ task, reason });
         } else {
           unschedulable.push({

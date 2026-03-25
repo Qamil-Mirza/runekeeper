@@ -161,7 +161,7 @@ export function chatCompletionStream(
         const generation = trace?.generation({
           name: "gemini-chat",
           model: GEMINI_CONFIG.model,
-          input: { messageCount: contents.length, systemPromptLength: systemPrompt.length },
+          input: { messages: contents, systemPrompt },
         });
 
         const result = await model.generateContentStream({ contents });
@@ -244,7 +244,7 @@ export function chatCompletionStream(
         }
 
         generation?.end({
-          output: { message: parsed.message.slice(0, 200), actionTypes: parsed.actions.map((a) => a.type) },
+          output: parsed,
           ...(usageMetadata ? {
             usage: {
               input: usageMetadata.promptTokenCount ?? 0,

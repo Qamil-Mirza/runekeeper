@@ -10,9 +10,6 @@ export function buildFreeTimeMap(
   weekRange: WeekRange,
   busyWindows: TimeBlock[],
   preferences: {
-    workingHoursStart: number;
-    workingHoursEnd: number;
-    lunchDurationMinutes: number;
     maxBlockMinutes: number;
     meetingBuffer: number;
   }
@@ -28,10 +25,10 @@ export function buildFreeTimeMap(
     day.setDate(weekStart.getDate() + dayOffset);
 
     const dayStart = new Date(day);
-    dayStart.setHours(preferences.workingHoursStart, 0, 0, 0);
+    dayStart.setHours(0, 0, 0, 0);
 
     const dayEnd = new Date(day);
-    dayEnd.setHours(preferences.workingHoursEnd, 0, 0, 0);
+    dayEnd.setHours(23, 59, 59, 999);
 
     // Skip if the entire day is in the past
     if (dayEnd <= now) continue;
@@ -49,24 +46,6 @@ export function buildFreeTimeMap(
           end: interval.end,
         }))
         .filter((interval) => interval.start < interval.end);
-    }
-
-    // Subtract lunch break (centered in the working day) — weekdays only
-    const jsDay = day.getDay(); // 0=Sun, 6=Sat
-    const isWeekday = jsDay >= 1 && jsDay <= 5;
-
-    if (preferences.lunchDurationMinutes > 0 && isWeekday) {
-      const midpoint =
-        preferences.workingHoursStart +
-        (preferences.workingHoursEnd - preferences.workingHoursStart) / 2;
-      const lunchStart = new Date(day);
-      lunchStart.setHours(Math.floor(midpoint), (midpoint % 1) * 60, 0, 0);
-      const lunchEnd = new Date(lunchStart);
-      lunchEnd.setMinutes(
-        lunchEnd.getMinutes() + preferences.lunchDurationMinutes
-      );
-
-      intervals = subtractInterval(intervals, lunchStart, lunchEnd);
     }
 
     // Subtract busy windows (with meeting buffer)

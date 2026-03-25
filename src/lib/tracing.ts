@@ -34,7 +34,7 @@ const noopSpan = {
 
 export function createTrace(
   name: string,
-  opts: { userId?: string; sessionId?: string; metadata?: Record<string, unknown> } = {}
+  opts: { userId?: string; sessionId?: string; input?: unknown; metadata?: Record<string, unknown> } = {}
 ) {
   if (!langfuse) return noopSpan;
 
@@ -42,6 +42,7 @@ export function createTrace(
     name,
     userId: opts.userId,
     sessionId: opts.sessionId,
+    input: opts.input,
     metadata: opts.metadata,
     tags: [environment],
   });

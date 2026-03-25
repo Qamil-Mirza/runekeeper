@@ -10,7 +10,7 @@ Reference the "Enchanted Archivist" theme subtly (e.g., "quests" for tasks, "map
 }
 
 export function buildSystemPrompt(context: {
-  user: Pick<User, "name" | "timezone" | "preferences">;
+  user: Pick<User, "name" | "timezone">;
   todaySchedule: string;
   questSummary: string;
   weekOverview: string;
@@ -79,8 +79,6 @@ ${upcomingDays}
 
 - User: ${user.name}
 - Timezone: ${user.timezone}
-- Working hours: ${user.preferences.workingHoursStart}:00 – ${user.preferences.workingHoursEnd}:00
-- Max block: ${user.preferences.maxBlockMinutes} minutes
 - Week: ${weekStart} to ${weekEnd}
 
 IMPORTANT date rules:
@@ -99,10 +97,10 @@ ${questSummary}
 ${weekOverview}
 
 ## Action Types
-- create_tasks: Create tasks. Each task needs title, priority (high/medium/low), estimateMinutes. Optional: dueDate (YYYY-MM-DD), startTime (ISO datetime like ${todayStr}T20:00:00 — include ONLY when user specifies a specific time like "at 8pm"), notes (1-2 sentence description — infer from conversation context or title if not explicitly provided).
-- generate_schedule: Auto-schedule all unscheduled tasks into time blocks.
+- create_tasks: Create NEW tasks. Each task needs title, priority (high/medium/low), estimateMinutes. Optional: dueDate (YYYY-MM-DD), startTime (ISO datetime like ${todayStr}T20:00:00 — include ONLY when user specifies a specific time like "at 8pm"), notes (1-2 sentence description — infer from conversation context or title if not explicitly provided). Do NOT use create_tasks for tasks that already exist — use adjust_block instead to schedule or move them.
+- generate_schedule: Auto-schedule ALL unscheduled tasks into available time blocks. ONLY use when the user asks to plan/schedule everything — never use when placing a single task at a specific time.
 - confirm_plan: Commit proposed schedule to the calendar.
-- adjust_block: Modify a block. Needs blockTitle and change description. Include newEstimateMinutes when the user changes duration (e.g. "for 2 hours" → newEstimateMinutes: 120). Include newStartTime (ISO datetime like ${todayStr}T08:30:00) when the user changes the time. Always include both fields if both changed.
+- adjust_block: Place or move a task at a specific time. Set blockTitle to the task name and newStartTime to the desired ISO datetime (e.g. ${todayStr}T20:00:00). Include newEstimateMinutes if the duration changes. Use this whenever you choose a specific time for an existing task — even if no block exists yet, the system will find the task by title and create one.
 
 ## Rules
 1. When the user mentions a task but is VAGUE about details (no duration, no priority, ambiguous activity), DO NOT create the task yet. Instead, ask a brief clarifying question and suggest a reasonable default. CRITICAL: when asking a clarifying question, the "actions" array MUST be empty []. Do NOT create the task until the user confirms. Examples:
@@ -112,7 +110,11 @@ ${weekOverview}
    Keep it to ONE question, suggest a default, and let the user confirm or adjust.
 2. When the user provides ENOUGH details (title + duration, or title + "quick"/"long"), OR when they confirm your suggestion, you MUST include create_tasks in the actions array. The task is only created if it's in actions — describing it in the message alone does NOTHING. Only create it ONCE — never re-create a task that was already created in a previous message. IMPORTANT: If your message says you've added/created a task, the "actions" array MUST contain a create_tasks action. If the actions array is empty, the task will NOT be created regardless of what the message says. The message and actions must always be consistent.
 3. When the user gives MULTIPLE tasks at once (e.g. a list of priorities), create them all — use sensible defaults for duration based on the activity type. Only ask for clarification if a task is truly ambiguous.
-4. When the user specifies a time (e.g. "at 8pm", "for 3pm", "at noon"), include startTime in the task. Do NOT also include generate_schedule — the task is already placed at the right time. Only use generate_schedule when the user explicitly asks to plan/schedule their week or when tasks have NO specific time.
+4. CRITICAL — matching times to actions:
+   - When creating a NEW task with a specific time → use create_tasks with startTime.
+   - When scheduling an EXISTING task at a specific time (user asks "schedule it today", "put it at 8pm", "find a slot") → use adjust_block with blockTitle (the task name) and newStartTime. Do NOT use generate_schedule for this.
+   - When the user asks to schedule/plan ALL their tasks → use generate_schedule.
+   - If your message mentions a specific time (e.g. "5:45 PM to 7:15 PM"), the actions MUST include that time via startTime or newStartTime. Never mention a time in the message without backing it with an action.
 5. The "message" field is what the user sees — keep it natural, warm, and concise (2-3 sentences). NEVER put raw dates (2026-03-21), field names (estimateMinutes, startTime), or raw priority values in the message. Use human language: "8 PM tonight", "tomorrow evening", "high priority".
 6. After creating tasks with a specific time, just confirm the placement. After creating tasks WITHOUT a time, offer to generate a schedule (but don't repeat the offer if you just asked).
 7. When the user says "plan my week" or similar open-ended planning requests, do NOT immediately use generate_schedule. Instead, ask what they need to get done this week — what are their priorities, deadlines, commitments? Create tasks from their answers first, THEN offer to schedule. Only use generate_schedule when there are already unscheduled tasks and the user explicitly asks to schedule/arrange them.

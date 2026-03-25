@@ -59,7 +59,7 @@ export async function POST(req: Request) {
   }
 
   log.info({ userId, messageLength: message?.length, hasSession: !!sessionId }, "chat request received");
-  const trace = createTrace("chat", { userId, sessionId });
+  const trace = createTrace("chat", { userId, sessionId, input: message });
   // Save user message
   await db.insert(chatMessages).values({
     userId,
@@ -144,13 +144,6 @@ export async function POST(req: Request) {
     user: {
       name: user?.name || "User",
       timezone: userTimezone,
-      preferences: (user?.preferences as any) ?? {
-        workingHoursStart: 9,
-        workingHoursEnd: 18,
-        lunchDurationMinutes: 30,
-        maxBlockMinutes: 120,
-        meetingBuffer: 10,
-      },
     },
     todaySchedule: tieredContext.todaySchedule,
     questSummary: tieredContext.questSummary,
@@ -305,6 +298,7 @@ export async function POST(req: Request) {
                   })}\n\n`
                 )
               );
+              trace.update?.({ output: event.fullMessage });
               flushTracing();
               continue;
             }
@@ -418,6 +412,7 @@ export async function POST(req: Request) {
     log.error({ err }, "memory extraction failed");
   }
 
+  trace.update?.({ output: structured.message });
   await flushTracing();
 
   return jsonResponse({
