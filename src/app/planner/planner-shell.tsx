@@ -11,14 +11,11 @@ import { CalendarView } from "@/components/schedule/calendar-view";
 import { InventoryPanel } from "@/components/inventory/inventory-panel";
 import { ChatContainer } from "@/components/chat/chat-container";
 import { HomeDashboard } from "@/components/home/home-dashboard";
-import SettingsPage from "./settings/page";
-
 const viewTitles: Record<ViewId, string> = {
   home: "Hearth",
   chat: "Chronicle",
   "quest-log": "Quest Log",
   calendar: "Calendar",
-  settings: "Settings",
 };
 
 const bottomNavItems: { id: ViewId; label: string; icon: (active: boolean) => React.ReactNode }[] = [
@@ -148,11 +145,6 @@ function PlannerShell() {
               {currentView === "chat" && <ChatContainer />}
               {currentView === "quest-log" && <InventoryPanel />}
               {currentView === "calendar" && <CalendarView />}
-              {currentView === "settings" && (
-                <div className="overflow-y-auto archivist-scroll h-full">
-                  <SettingsPage />
-                </div>
-              )}
             </motion.div>
           </AnimatePresence>
         </div>

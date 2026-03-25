@@ -8,13 +8,6 @@ export interface User {
   name: string;
   initials: string;
   timezone: string;
-  preferences: {
-    workingHoursStart: number; // 24h format, e.g. 9
-    workingHoursEnd: number; // e.g. 18
-    lunchDurationMinutes: number;
-    maxBlockMinutes: number;
-    meetingBuffer: number; // minutes between meetings
-  };
 }
 
 export interface Task {
@@ -79,7 +72,10 @@ export interface PlanSession {
 export interface SchedulerInput {
   tasks: Task[];
   busyWindows: TimeBlock[];
-  preferences: User["preferences"];
+  preferences: {
+    maxBlockMinutes: number;
+    meetingBuffer: number;
+  };
   weekRange: WeekRange;
 }
 

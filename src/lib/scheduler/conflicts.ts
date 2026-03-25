@@ -41,8 +41,7 @@ export function detectConflicts(
 
 export function findAlternativeSlot(
   conflicting: TimeBlock,
-  existingBlocks: TimeBlock[],
-  preferences: { workingHoursStart: number; workingHoursEnd: number }
+  existingBlocks: TimeBlock[]
 ): { start: string; end: string } | null {
   const blockDuration =
     new Date(conflicting.end).getTime() - new Date(conflicting.start).getTime();
@@ -53,8 +52,7 @@ export function findAlternativeSlot(
     .filter((b) => b.start.startsWith(day))
     .sort((a, b) => a.start.localeCompare(b.start));
 
-  const dayEnd = new Date(day + "T00:00:00");
-  dayEnd.setHours(preferences.workingHoursEnd, 0, 0, 0);
+  const dayEnd = new Date(day + "T23:59:59");
 
   for (let i = 0; i < dayBlocks.length; i++) {
     const gapStart = new Date(dayBlocks[i].end);

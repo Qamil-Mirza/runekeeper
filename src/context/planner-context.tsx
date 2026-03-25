@@ -28,13 +28,6 @@ const defaultUser: User = {
   name: "Guest",
   initials: "?",
   timezone: "America/New_York",
-  preferences: {
-    workingHoursStart: 9,
-    workingHoursEnd: 18,
-    lunchDurationMinutes: 30,
-    maxBlockMinutes: 120,
-    meetingBuffer: 10,
-  },
 };
 
 function getWeekRange(date: Date): WeekRange {
@@ -52,7 +45,7 @@ function getWeekRange(date: Date): WeekRange {
 
 // ─── Context Types ───────────────────────────────────────────────────────────
 
-export type ViewId = "home" | "chat" | "quest-log" | "calendar" | "settings";
+export type ViewId = "home" | "chat" | "quest-log" | "calendar";
 export type TransitionMode = "none" | "ink-spread";
 
 interface PlannerState {
@@ -130,7 +123,6 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
             .toUpperCase()
             .slice(0, 2),
           timezone: userPrefs.timezone,
-          preferences: userPrefs.preferences ?? defaultUser.preferences,
         });
       }
 

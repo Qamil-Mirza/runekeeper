@@ -252,21 +252,7 @@ async function handleGenerateSchedule(
   weekEnd: string,
   pinnedBlockIds?: Set<string>
 ): Promise<ActionResult> {
-  // Load user preferences
-  const { users } = await import("@/db/schema");
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-
-  const preferences = (user?.preferences as any) ?? {
-    workingHoursStart: 9,
-    workingHoursEnd: 18,
-    lunchDurationMinutes: 30,
-    maxBlockMinutes: 120,
-    meetingBuffer: 10,
-  };
+  const preferences = { maxBlockMinutes: 120, meetingBuffer: 10 };
 
   // Load tasks and existing blocks
   const userTasks = (
@@ -420,6 +406,54 @@ async function handleAdjustBlock(
   );
 
   if (!targetBlock) {
+    // No existing block found — but if a specific time was requested, find
+    // the task by title and create a block directly instead of falling back
+    // to the generic scheduler (which is constrained to working hours).
+    if (newStartTime) {
+      const allTasks = await db
+        .select()
+        .from(tasks)
+        .where(eq(tasks.userId, userId));
+
+      const matchedTask = allTasks.find(
+        (t) => t.title.toLowerCase().includes(blockTitle!.toLowerCase())
+      );
+
+      if (matchedTask) {
+        const startTime = parseNaiveDateTime(newStartTime, timezone);
+        const durationMinutes = newEstimateMinutes ?? matchedTask.estimateMinutes ?? 30;
+        const endTime = new Date(startTime.getTime() + durationMinutes * 60_000);
+
+        await db
+          .update(tasks)
+          .set({ status: "scheduled", updatedAt: new Date() })
+          .where(eq(tasks.id, matchedTask.id));
+
+        const [blockRow] = await db
+          .insert(timeBlocks)
+          .values({
+            userId,
+            taskId: matchedTask.id,
+            title: matchedTask.title,
+            startTime,
+            endTime,
+            blockType: "focus",
+            committed: false,
+          })
+          .returning();
+
+        const pinnedBlockIds = new Set<string>([blockRow.id]);
+        const result = await handleGenerateSchedule(userId, weekStart, weekEnd, pinnedBlockIds);
+        return {
+          ...result,
+          proposedBlocks: [
+            dbBlockToTimeBlock(blockRow),
+            ...(result.proposedBlocks ?? []),
+          ],
+        };
+      }
+    }
+
     return handleGenerateSchedule(userId, weekStart, weekEnd);
   }
 

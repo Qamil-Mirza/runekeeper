@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { tasks, timeBlocks, users } from "@/db/schema";
+import { tasks, timeBlocks } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { schedule } from "@/lib/scheduler";
 import { generateDiff } from "@/lib/scheduler/diff";
@@ -21,22 +21,7 @@ export async function POST(req: Request) {
     return errorResponse("start and end dates are required");
   }
 
-  // Load user preferences
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, session.user.id))
-    .limit(1);
-
-  if (!user) return errorResponse("User not found", 404);
-
-  const preferences = (user.preferences as any) ?? {
-    workingHoursStart: 9,
-    workingHoursEnd: 18,
-    lunchDurationMinutes: 30,
-    maxBlockMinutes: 120,
-    meetingBuffer: 10,
-  };
+  const preferences = { maxBlockMinutes: 120, meetingBuffer: 10 };
 
   // Load unscheduled tasks
   const userTasks = await db
