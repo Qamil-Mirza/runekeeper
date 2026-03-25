@@ -92,7 +92,7 @@ export async function syncGmailForUser(
   if (effectiveMode === "full") {
     const listResult = await listMessages(
       accessToken,
-      "is:unread newer_than:1d",
+      "newer_than:1d",
       50
     );
     messageIds = listResult.messages.map((m) => m.id);
