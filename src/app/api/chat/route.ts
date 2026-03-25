@@ -139,6 +139,31 @@ export async function POST(req: Request) {
     timezone: userTimezone,
   });
 
+  // Log context sources to Langfuse (RAG-style)
+  const contextSources = [
+    { name: "today-schedule", content: tieredContext.todaySchedule },
+    { name: "quest-summary", content: tieredContext.questSummary },
+    { name: "week-overview", content: tieredContext.weekOverview },
+    ...(memoryDigest ? [{ name: "memory-digest", content: memoryDigest }] : []),
+    { name: "conversation-history", content: `${messages.length} messages` },
+  ];
+  const contextSpan = trace.span?.({
+    name: "context-retrieval",
+    input: { sources: contextSources.map((s) => s.name) },
+  });
+  for (const source of contextSources) {
+    contextSpan?.span?.({
+      name: source.name,
+      input: { content: source.content },
+      metadata: { tokenEstimate: Math.ceil(source.content.length / 4) },
+    })?.end?.({
+      output: { content: source.content },
+    });
+  }
+  contextSpan?.end?.({
+    output: { sourceCount: contextSources.length },
+  });
+
   // Build system prompt
   const systemPrompt = buildSystemPrompt({
     user: {
