@@ -77,7 +77,7 @@ function LinearIcon() {
 // ---------------------------------------------------------------------------
 
 const DESKTOP_RADIUS = 180;
-const MOBILE_RADIUS = 130;
+const MOBILE_RADIUS = 160;
 const MOBILE_BREAKPOINT = 640;
 const CENTER_NODE_RADIUS = 60; // half of the 120px flame node
 
@@ -92,11 +92,13 @@ export default function IntegrationsGraph() {
   const [graphRadius, setGraphRadius] = useState(DESKTOP_RADIUS);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
 
+  const [isMobile, setIsMobile] = useState(false);
+
   // Responsive radius + container size
   const updateDimensions = useCallback(() => {
-    setGraphRadius(
-      window.innerWidth < MOBILE_BREAKPOINT ? MOBILE_RADIUS : DESKTOP_RADIUS
-    );
+    const mobile = window.innerWidth < MOBILE_BREAKPOINT;
+    setIsMobile(mobile);
+    setGraphRadius(mobile ? MOBILE_RADIUS : DESKTOP_RADIUS);
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       setContainerSize({ w: rect.width, h: rect.height });
@@ -142,6 +144,101 @@ export default function IntegrationsGraph() {
     };
   }
 
+  // ---- Mobile: vertical card list ----
+  if (isMobile) {
+    const statusBadge: Record<IntegrationNodeDef["status"], { label: string; cls: string }> = {
+      active: { label: "Connected", cls: "bg-[#2d5a2d] text-[#6bcb6b] border-[#3a7a3a]" },
+      "setup-required": { label: "Setup Required", cls: "bg-[#5a4a2d] text-[#d4a860] border-[#7a6a3a]" },
+      "coming-soon": { label: "Coming Soon", cls: "bg-[#333] text-[#888] border-[#555]" },
+    };
+
+    return (
+      <div ref={containerRef} className="h-full overflow-y-auto px-4 py-6 space-y-4">
+        {/* Small flame header */}
+        <div className="flex justify-center" style={{ transform: "scale(0.7)", transformOrigin: "center top" }}>
+          <CenterFlameNode />
+        </div>
+
+        {/* Integration cards */}
+        <div className="space-y-3">
+          {integrationNodes.map((node) => {
+            const isClickable = node.status !== "coming-soon";
+            const isExpanded = expandedNode === node.id;
+            const badge = statusBadge[node.status];
+
+            return (
+              <div key={node.id}>
+                <button
+                  type="button"
+                  onClick={isClickable ? () => setExpandedNode((prev) => (prev === node.id ? null : node.id)) : undefined}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg border transition-colors ${
+                    node.status === "coming-soon"
+                      ? "border-[rgba(255,255,255,0.08)] bg-[rgba(0,0,0,0.15)] opacity-40 cursor-default"
+                      : isExpanded
+                        ? "border-[rgba(212,168,96,0.4)] bg-[rgba(212,168,96,0.08)]"
+                        : "border-[rgba(212,168,96,0.15)] bg-[rgba(0,0,0,0.2)] active:bg-[rgba(212,168,96,0.08)]"
+                  }`}
+                >
+                  {/* Icon circle */}
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                      node.status === "coming-soon" ? "bg-[#2c2018] border border-dashed border-[#555]" : "border"
+                    }`}
+                    style={
+                      isClickable
+                        ? {
+                            background: `radial-gradient(circle at 40% 40%, ${node.color}, ${node.color}88)`,
+                            borderColor: node.color,
+                            boxShadow: `0 0 12px ${node.color}44`,
+                          }
+                        : undefined
+                    }
+                  >
+                    <div className="w-5 h-5">{node.icon}</div>
+                  </div>
+
+                  {/* Label */}
+                  <span className={`font-label text-label-md flex-1 text-left ${
+                    node.status === "coming-soon" ? "text-[#666]" : "text-on-surface"
+                  }`}>
+                    {node.label}
+                  </span>
+
+                  {/* Status badge */}
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border font-label font-medium whitespace-nowrap ${badge.cls}`}>
+                    {badge.label}
+                  </span>
+                </button>
+
+                {/* Inline config panel */}
+                <AnimatePresence>
+                  {isExpanded && node.id === "gmail" && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="pt-3">
+                        <GmailConfigPanel
+                          config={gmailConfig}
+                          onClose={() => setExpandedNode(null)}
+                          onUpdate={setGmailConfig}
+                        />
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // ---- Desktop: radial graph ----
   return (
     <div
       ref={containerRef}
@@ -157,9 +254,8 @@ export default function IntegrationsGraph() {
         >
           {integrationNodes.map((node) => {
             const pos = nodePosition(node.angle);
-            const isActive = node.status === "active" || node.status === "setup-required";
 
-            if (isActive && node.id === "gmail") {
+            if (node.id === "gmail" && (node.status === "active" || node.status === "setup-required")) {
               return (
                 <FieryEdge
                   key={node.id}
@@ -194,29 +290,26 @@ export default function IntegrationsGraph() {
       <CenterFlameNode />
 
       {/* Orbital integration nodes */}
-      {integrationNodes.map((node) => {
-        const pos = nodePosition(node.angle);
-        return (
-          <div
-            key={node.id}
-            className="absolute"
-            style={{
-              left: `calc(50% + ${Math.cos(((node.angle - 90) * Math.PI) / 180) * graphRadius}px)`,
-              top: `calc(50% + ${Math.sin(((node.angle - 90) * Math.PI) / 180) * graphRadius}px)`,
-              transform: "translate(-50%, -50%)",
-            }}
-          >
-            <IntegrationNode
-              node={node}
-              onClick={() =>
-                setExpandedNode((prev) => (prev === node.id ? null : node.id))
-              }
-            />
-          </div>
-        );
-      })}
+      {integrationNodes.map((node) => (
+        <div
+          key={node.id}
+          className="absolute"
+          style={{
+            left: `calc(50% + ${Math.cos(((node.angle - 90) * Math.PI) / 180) * graphRadius}px)`,
+            top: `calc(50% + ${Math.sin(((node.angle - 90) * Math.PI) / 180) * graphRadius}px)`,
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <IntegrationNode
+            node={node}
+            onClick={() =>
+              setExpandedNode((prev) => (prev === node.id ? null : node.id))
+            }
+          />
+        </div>
+      ))}
 
-      {/* Gmail config panel */}
+      {/* Gmail config panel — beside node */}
       <AnimatePresence>
         {expandedNode === "gmail" && (
           <motion.div

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { signIn } from "next-auth/react";
 import * as api from "@/lib/api-client";
 import type { IntegrationConfig } from "./integration-types";
 
@@ -28,22 +29,35 @@ export function GmailConfigPanel({
   const [history, setHistory] = useState<api.ProcessedEmail[]>([]);
   const [isEnabling, setIsEnabling] = useState(false);
 
-  // Load history on mount
-  useEffect(() => {
-    if (config?.enabled) {
-      api.fetchGmailHistory().then(setHistory).catch(() => {});
-    }
-  }, [config?.enabled]);
+  // History is loaded after manual sync, not on mount
 
   const monitoredSenders = config?.config?.monitoredSenders ?? [];
+
+  // After OAuth redirect, auto-enable if we came back with the flag
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("enable_gmail") === "1") {
+      // Clean up URL
+      window.history.replaceState({}, "", window.location.pathname);
+      (async () => {
+        try {
+          await api.updateGmailIntegration({ enabled: true });
+          const updated = await api.fetchGmailIntegration();
+          onUpdate(updated as IntegrationConfig);
+        } catch {
+          // ignore
+        }
+      })();
+    }
+  }, [onUpdate]);
 
   async function handleEnable() {
     setIsEnabling(true);
     try {
       const result = await api.updateGmailIntegration({ enabled: true });
       if (result.requiresReauth) {
-        // Redirect to re-auth
-        window.location.href = "/api/auth/signin/google";
+        // Redirect to re-auth — come back with flag to auto-enable
+        signIn("google", { callbackUrl: "/planner?enable_gmail=1" });
         return;
       }
       const updated = await api.fetchGmailIntegration();
@@ -123,7 +137,7 @@ export function GmailConfigPanel({
 
   return (
     <motion.div
-      className="w-[320px] max-h-[500px] overflow-y-auto bg-[#2c1810] border border-[rgba(212,168,96,0.2)] rounded-lg shadow-[0_0_30px_rgba(0,0,0,0.5)] p-4 archivist-scroll"
+      className="w-full sm:w-[320px] max-h-[500px] overflow-y-auto bg-[#2c1810] border border-[rgba(212,168,96,0.2)] rounded-lg shadow-[0_0_30px_rgba(0,0,0,0.5)] p-4 archivist-scroll"
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}

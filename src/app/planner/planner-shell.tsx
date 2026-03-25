@@ -20,6 +20,10 @@ const viewTitles: Record<ViewId, string> = {
   integrations: "Nexus",
 };
 
+const viewSubtitles: Partial<Record<ViewId, string>> = {
+  integrations: "Connect your tools and let the flame tend your workflow.",
+};
+
 const bottomNavItems: { id: ViewId; label: string; icon: (active: boolean) => React.ReactNode }[] = [
   {
     id: "home",
@@ -142,6 +146,7 @@ function PlannerShell() {
       <main className="flex-1 flex flex-col min-w-0 wood-grain bg-surface pb-16 lg:pb-0">
         <AppHeader
           title={viewTitles[currentView]}
+          subtitle={viewSubtitles[currentView]}
           onOpenMenu={() => setSidebarOpen(true)}
         />
         <div className="flex-1 overflow-hidden min-h-0">

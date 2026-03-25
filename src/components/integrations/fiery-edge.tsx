@@ -118,6 +118,8 @@ export function FieryEdge({
       {PARTICLE_COLORS.map((particleColor, i) => (
         <motion.circle
           key={i}
+          cx={perimeterX}
+          cy={perimeterY}
           r={PARTICLE_RADII[i]}
           fill={particleColor}
           animate={{

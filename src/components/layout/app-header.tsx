@@ -2,10 +2,11 @@
 
 interface AppHeaderProps {
   title: string;
+  subtitle?: string;
   onOpenMenu?: () => void;
 }
 
-export function AppHeader({ title, onOpenMenu }: AppHeaderProps) {
+export function AppHeader({ title, subtitle, onOpenMenu }: AppHeaderProps) {
 
   return (
     <header className="flex items-center justify-between px-5 py-4 bg-surface/80 backdrop-blur-sm sticky top-0 z-20">
@@ -26,9 +27,16 @@ export function AppHeader({ title, onOpenMenu }: AppHeaderProps) {
       <h2 className="font-display text-headline-md text-on-surface lg:hidden absolute left-1/2 -translate-x-1/2">
         Runekeeper
       </h2>
-      <h2 className="font-display text-headline-md text-on-surface hidden lg:block">
-        {title}
-      </h2>
+      <div className="hidden lg:block">
+        <h2 className="font-display text-headline-md text-on-surface">
+          {title}
+        </h2>
+        {subtitle && (
+          <p className="font-label text-label-md text-on-surface-variant mt-0.5">
+            {subtitle}
+          </p>
+        )}
+      </div>
 
       {/* Spacer to keep header layout balanced */}
       <div className="w-8 lg:hidden" />
