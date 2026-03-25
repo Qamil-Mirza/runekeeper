@@ -80,7 +80,7 @@ curl https://<your-machine>.<tailnet>.ts.net
 From your dev machine:
 
 ```bash
-git push origin deploy
+git push origin main
 ```
 
 Then SSH to the server and run:

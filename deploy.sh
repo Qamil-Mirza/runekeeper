@@ -5,7 +5,7 @@ ENV_FILE=".env.production"
 COMPOSE_FILE="docker-compose.prod.yml"
 
 echo "==> Pulling latest code..."
-git pull origin deploy
+git pull origin main
 
 echo "==> Building and starting services..."
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build
