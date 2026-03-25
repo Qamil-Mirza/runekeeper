@@ -29,7 +29,7 @@ function sanitizeTaskDef(def: any): {
     priority: VALID_PRIORITIES.includes(def.priority) ? def.priority : "medium",
     estimateMinutes:
       typeof def.estimateMinutes === "number" && def.estimateMinutes > 0
-        ? Math.min(Math.round(def.estimateMinutes), 480)
+        ? Math.min(Math.round(def.estimateMinutes), 1440)
         : 30,
     dueDate: typeof def.dueDate === "string" ? def.dueDate : null,
     startTime: typeof def.startTime === "string" ? def.startTime : null,
