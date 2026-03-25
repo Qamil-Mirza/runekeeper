@@ -12,6 +12,8 @@ import { InventoryPanel } from "@/components/inventory/inventory-panel";
 import { ChatContainer } from "@/components/chat/chat-container";
 import { HomeDashboard } from "@/components/home/home-dashboard";
 import IntegrationsGraph from "@/components/integrations/integrations-graph";
+import { useOnboarding } from "@/components/onboarding/use-onboarding";
+import { OnboardingOverlay } from "@/components/onboarding/onboarding-overlay";
 const viewTitles: Record<ViewId, string> = {
   home: "Hearth",
   chat: "Chronicle",
@@ -95,6 +97,7 @@ function getViewVariants(mode: TransitionMode) {
 function PlannerShell() {
   const { currentView, setCurrentView, transitionMode, setTransitionMode } = usePlanner();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { showOnboarding, completeOnboarding } = useOnboarding();
 
   const handleNavigate = (view: ViewId) => {
     setCurrentView(view);
@@ -195,6 +198,11 @@ function PlannerShell() {
           </button>
         ))}
       </nav>
+
+      {/* Onboarding overlay for first-time users */}
+      <AnimatePresence>
+        {showOnboarding && <OnboardingOverlay onComplete={completeOnboarding} />}
+      </AnimatePresence>
     </div>
   );
 }

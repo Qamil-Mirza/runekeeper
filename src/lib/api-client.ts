@@ -128,6 +128,13 @@ export function fetchUserPreferences() {
   return apiFetch<any>("/api/user/preferences");
 }
 
+export function updateUserPreferences(data: Record<string, unknown>) {
+  return apiFetch<any>("/api/user/preferences", {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
 // ─── Chat with Ollama ────────────────────────────────────────────────────────
 
 export interface ChatResponse {
