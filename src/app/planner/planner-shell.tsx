@@ -11,11 +11,13 @@ import { CalendarView } from "@/components/schedule/calendar-view";
 import { InventoryPanel } from "@/components/inventory/inventory-panel";
 import { ChatContainer } from "@/components/chat/chat-container";
 import { HomeDashboard } from "@/components/home/home-dashboard";
+import IntegrationsGraph from "@/components/integrations/integrations-graph";
 const viewTitles: Record<ViewId, string> = {
   home: "Hearth",
   chat: "Chronicle",
   "quest-log": "Quest Log",
   calendar: "Calendar",
+  integrations: "Nexus",
 };
 
 const bottomNavItems: { id: ViewId; label: string; icon: (active: boolean) => React.ReactNode }[] = [
@@ -60,6 +62,23 @@ const bottomNavItems: { id: ViewId; label: string; icon: (active: boolean) => Re
         <line x1="16" y1="2" x2="16" y2="6" />
         <line x1="8" y1="2" x2="8" y2="6" />
         <line x1="3" y1="10" x2="21" y2="10" />
+      </svg>
+    ),
+  },
+  {
+    id: "integrations",
+    label: "Nexus",
+    icon: () => (
+      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="3" />
+        <circle cx="12" cy="3" r="1.5" />
+        <circle cx="21" cy="12" r="1.5" />
+        <circle cx="12" cy="21" r="1.5" />
+        <circle cx="3" cy="12" r="1.5" />
+        <line x1="12" y1="6" x2="12" y2="9" />
+        <line x1="15" y1="12" x2="18" y2="12" />
+        <line x1="12" y1="15" x2="12" y2="18" />
+        <line x1="9" y1="12" x2="6" y2="12" />
       </svg>
     ),
   },
@@ -145,6 +164,7 @@ function PlannerShell() {
               {currentView === "chat" && <ChatContainer />}
               {currentView === "quest-log" && <InventoryPanel />}
               {currentView === "calendar" && <CalendarView />}
+              {currentView === "integrations" && <IntegrationsGraph />}
             </motion.div>
           </AnimatePresence>
         </div>
