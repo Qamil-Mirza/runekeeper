@@ -16,4 +16,5 @@ export interface IntegrationConfig {
   };
   lastSyncAt: string | null;
   lastSyncError: string | null;
+  watchExpiration: string | null;
 }

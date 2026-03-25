@@ -28,6 +28,8 @@ export function GmailConfigPanel({
   } | null>(null);
   const [history, setHistory] = useState<api.ProcessedEmail[]>([]);
   const [isEnabling, setIsEnabling] = useState(false);
+  const [isSettingUpPush, setIsSettingUpPush] = useState(false);
+  const [pushResult, setPushResult] = useState<string | null>(null);
 
   // History is loaded after manual sync, not on mount
 
@@ -114,6 +116,21 @@ export function GmailConfigPanel({
       // ignore
     } finally {
       setIsSyncing(false);
+    }
+  }
+
+  async function handleSetupPush() {
+    setIsSettingUpPush(true);
+    setPushResult(null);
+    try {
+      await api.setupGmailPubsub();
+      const updated = await api.fetchGmailIntegration();
+      onUpdate(updated as IntegrationConfig);
+      setPushResult("Push notifications enabled");
+    } catch {
+      setPushResult("Failed to enable push notifications");
+    } finally {
+      setIsSettingUpPush(false);
     }
   }
 
@@ -301,6 +318,29 @@ export function GmailConfigPanel({
             <p className="text-[11px] text-[#6bcb6b] mt-1 text-center">
               Processed {syncResult.processed} emails, created{" "}
               {syncResult.tasksCreated} tasks
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Push notifications */}
+      {config?.enabled && (
+        <div className="mb-4">
+          <button
+            onClick={handleSetupPush}
+            disabled={isSettingUpPush}
+            className="w-full py-2 px-3 rounded bg-[rgba(212,168,96,0.08)] text-[rgba(212,168,96,0.7)] font-label text-label-sm hover:bg-[rgba(212,168,96,0.15)] hover:text-[#d4a860] transition-colors disabled:opacity-50"
+          >
+            {isSettingUpPush ? "Setting up..." : config?.watchExpiration ? "Renew Push Notifications" : "Enable Push Notifications"}
+          </button>
+          {pushResult && (
+            <p className={`text-[11px] mt-1 text-center ${pushResult.includes("Failed") ? "text-[#ea4335]" : "text-[#6bcb6b]"}`}>
+              {pushResult}
+            </p>
+          )}
+          {config?.watchExpiration && (
+            <p className="text-[10px] text-[#666] mt-1 text-center">
+              Expires: {new Date(config.watchExpiration).toLocaleDateString()}
             </p>
           )}
         </div>
