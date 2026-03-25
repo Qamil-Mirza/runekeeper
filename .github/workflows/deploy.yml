@@ -31,6 +31,7 @@ jobs:
           echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh -o StrictHostKeyChecking=accept-new \
+              -p 22 \
               -i ~/.ssh/deploy_key \
               "${DEPLOY_USER}@${DEPLOY_HOST}" \
               'cd ~/Code/runekeeper && ./deploy.sh'
