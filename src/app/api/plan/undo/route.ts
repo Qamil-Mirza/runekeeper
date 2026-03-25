@@ -32,6 +32,7 @@ export async function POST(req: Request) {
       errors: result.errors,
     });
   } catch (err: any) {
-    return errorResponse(err.message || "Undo failed", 400);
+    console.error("Undo failed:", err);
+    return errorResponse("Undo failed", 400);
   }
 }
