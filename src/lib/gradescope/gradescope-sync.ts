@@ -58,7 +58,8 @@ function isSubmitted(status: string): boolean {
   return (
     lower.includes("submitted") ||
     lower.includes("graded") ||
-    lower.includes("regrade")
+    lower.includes("regrade") ||
+    /\d+\.?\d*\s*\/\s*\d+/.test(status) // score like "75.0 / 75.0"
   );
 }
 

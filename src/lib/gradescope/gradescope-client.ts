@@ -143,18 +143,17 @@ export async function fetchCourses(
   const $ = cheerio.load(html);
   const courses: GradescopeCourse[] = [];
 
-  // Student courses section
+  // The term header is a sibling BEFORE .courseList--coursesForTerm, not inside it.
+  // Try prev sibling first, then extract term from course name as fallback.
   $(".courseList--coursesForTerm").each((_, termSection) => {
-    const termName = $(termSection)
-      .find(".courseList--term")
-      .text()
-      .trim();
+    // Try to get term from preceding sibling heading
+    let termName = $(termSection).prev().text().trim();
 
     $(termSection)
       .find(".courseBox")
       .each((__, courseEl) => {
-        const link = $(courseEl).find("a[href^='/courses/']");
-        const href = link.attr("href") ?? "";
+        // The .courseBox IS the <a> tag itself, not a wrapper
+        const href = $(courseEl).attr("href") ?? "";
         const courseId = href.match(/\/courses\/(\d+)/)?.[1];
         if (!courseId) return;
 
@@ -167,11 +166,30 @@ export async function fetchCourses(
           .text()
           .trim();
 
+        // Extract term from course name if section header is empty
+        // e.g. "Data Discovery Sp26" → "Spring 2026", "Probability (Fall 2025)" → "Fall 2025"
+        let courseTerm = termName;
+        if (!courseTerm) {
+          const nameStr = fullName || name;
+          const termMatch = nameStr.match(/\b(Spring|Summer|Fall|Winter)\s+(\d{4})\b/i)
+            || nameStr.match(/\b(Sp|Su|Fa|Wi)(\d{2,4})\b/i);
+          if (termMatch) {
+            const seasonMap: Record<string, string> = {
+              sp: "Spring", su: "Summer", fa: "Fall", wi: "Winter",
+              spring: "Spring", summer: "Summer", fall: "Fall", winter: "Winter",
+            };
+            const season = seasonMap[termMatch[1].toLowerCase()] || termMatch[1];
+            let year = termMatch[2];
+            if (year.length === 2) year = `20${year}`;
+            courseTerm = `${season} ${year}`;
+          }
+        }
+
         courses.push({
           id: courseId,
           name: fullName || name,
           shortName: name || fullName,
-          term: termName,
+          term: courseTerm || "Unknown",
         });
       });
   });
@@ -203,28 +221,38 @@ export async function fetchAssignments(
   const $ = cheerio.load(html);
   const assignments: GradescopeAssignment[] = [];
 
-  // Assignment table rows
-  $("table.table--assignments tbody tr, .assignmentTable--body .assignmentBox").each((_, row) => {
+  // Assignment rows: each <tr> has <th class="table--primaryLink"> containing either:
+  // - an <a> link (submitted assignments) with href like /assignments/123/submissions/456
+  // - a <button> (unsubmitted) with data-assignment-id="123"
+  $("tr").each((_, row) => {
     const $row = $(row);
 
-    // Try table row format first
+    // Try <a> link first (submitted assignments)
     const nameLink = $row.find("a[href*='/assignments/']");
-    const href = nameLink.attr("href") ?? "";
-    const assignmentId = href.match(/\/assignments\/(\d+)/)?.[1];
+    let assignmentId = nameLink.attr("href")?.match(/\/assignments\/(\d+)/)?.[1];
+    let name = nameLink.text().trim();
+
+    // Fall back to <button> (unsubmitted assignments)
+    if (!assignmentId) {
+      const submitBtn = $row.find("button[data-assignment-id]");
+      assignmentId = submitBtn.attr("data-assignment-id");
+      name = submitBtn.text().trim();
+    }
+
     if (!assignmentId) return;
 
-    const name = nameLink.text().trim();
-
-    // Due date — look in the due date column or time element
+    // Due date — the dueDate <time> element has class submissionTimeChart--dueDate
+    // and a datetime attribute. The releaseDate has submissionTimeChart--releaseDate.
     const dueDateText =
+      $row.find(".submissionTimeChart--dueDate").attr("datetime")?.trim() ||
       $row.find(".submissionTimeChart--dueDate").text().trim() ||
-      $row.find("time").attr("datetime") ||
-      $row.find(".table--primaryLink + .table--secondaryLink, td:nth-child(2)").text().trim();
+      $row.find("time:not(.submissionTimeChart--releaseDate)").attr("datetime")?.trim() ||
+      "";
 
-    // Submission status
+    // Submission status — score or status text
     const status =
+      $row.find(".submissionStatus--score").text().trim() ||
       $row.find(".submissionStatus").text().trim() ||
-      $row.find(".submissionStatus--text").text().trim() ||
       "No Submission";
 
     let dueAt: string | null = null;
