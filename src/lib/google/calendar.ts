@@ -1,3 +1,6 @@
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("google:calendar");
 const CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 
 export interface GoogleEvent {
@@ -61,7 +64,7 @@ export async function listEvents(
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
-      console.error(`Calendar API error ${res.status}: ${error.error?.message || res.statusText}`);
+      log.error({ status: res.status, message: error.error?.message || res.statusText }, "Calendar API error");
       throw new Error("Google Calendar request failed");
     }
 

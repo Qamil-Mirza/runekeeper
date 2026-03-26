@@ -6,13 +6,20 @@ import { schedule } from "@/lib/scheduler";
 import { generateDiff } from "@/lib/scheduler/diff";
 import { dbTaskToTask, dbBlockToTimeBlock } from "@/lib/types";
 import { jsonResponse, errorResponse } from "@/lib/api-helpers";
+import { rateLimit } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("plan");
+const generateLimiter = rateLimit({ key: "plan-generate", limit: 5, windowMs: 60_000 });
 
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.id) return errorResponse("Unauthorized", 401);
+
+  const { success: withinLimit } = generateLimiter.check(session.user.id);
+  if (!withinLimit) {
+    return errorResponse("Rate limit exceeded. Try again shortly.", 429);
+  }
 
   const body = await req.json();
   const { start, end } = body;
