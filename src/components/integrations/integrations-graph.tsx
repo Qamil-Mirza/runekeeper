@@ -431,9 +431,8 @@ export default function IntegrationsGraph() {
             transition={{ duration: 0.2 }}
             className="absolute z-10"
             style={{
-              left: `calc(50% + ${Math.cos(((180 - 90) * Math.PI) / 180) * graphRadius}px)`,
-              top: `calc(50% + ${Math.sin(((180 - 90) * Math.PI) / 180) * graphRadius + 60}px)`,
-              transform: "translateX(-50%)",
+              left: `calc(50% + ${Math.cos(((180 - 90) * Math.PI) / 180) * graphRadius + 60}px)`,
+              bottom: `calc(50% - ${Math.sin(((180 - 90) * Math.PI) / 180) * graphRadius}px + 20px)`,
             }}
           >
             <GradescopeConfigPanel
