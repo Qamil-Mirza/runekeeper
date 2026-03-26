@@ -93,6 +93,7 @@ export const tasks = pgTable("tasks", {
   googleTaskId: text("google_task_id"),
   googleTasklistId: text("google_tasklist_id"),
   canvasAssignmentId: text("canvas_assignment_id"),
+  gradescopeAssignmentId: text("gradescope_assignment_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -181,6 +182,8 @@ export const integrations = pgTable(
       pubsubSubscriptionActive?: boolean;
       canvasApiToken?: string;
       canvasBaseUrl?: string;
+      gradescopeEmail?: string;
+      gradescopePassword?: string; // encrypted
     }>().default({}),
     gmailHistoryId: text("gmail_history_id"),
     watchExpiration: timestamp("watch_expiration"),

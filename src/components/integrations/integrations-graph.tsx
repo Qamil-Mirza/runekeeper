@@ -8,8 +8,9 @@ import { IntegrationNode } from "./integration-node";
 import { FieryEdge } from "./fiery-edge";
 import { GmailConfigPanel } from "./gmail-config-panel";
 import { CanvasConfigPanel } from "./canvas-config-panel";
+import { GradescopeConfigPanel } from "./gradescope-config-panel";
 import type { IntegrationNodeDef, IntegrationConfig } from "./integration-types";
-import type { CanvasIntegrationConfig } from "@/lib/api-client";
+import type { CanvasIntegrationConfig, GradescopeIntegrationConfig } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
 // Inline icon components
@@ -47,16 +48,28 @@ function SlackIcon() {
   );
 }
 
-function GitHubIcon() {
+function GradescopeIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
       <path
-        d="M9 3l-5 8 5 8M15 3l5 8-5 8"
-        stroke="currentColor"
+        d="M12 3L2 8l10 5 10-5-10-5z"
+        stroke="#fff"
         strokeWidth={1.5}
-        strokeLinecap="round"
         strokeLinejoin="round"
       />
+      <path
+        d="M2 8v6l10 5 10-5V8"
+        stroke="#fff"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+      />
+      <path
+        d="M20 8v8"
+        stroke="#fff"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+      />
+      <circle cx="20" cy="18" r="1.5" fill="#fff" />
     </svg>
   );
 }
@@ -103,6 +116,7 @@ export default function IntegrationsGraph() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [gmailConfig, setGmailConfig] = useState<IntegrationConfig | null>(null);
   const [canvasConfig, setCanvasConfig] = useState<CanvasIntegrationConfig | null>(null);
+  const [gradescopeConfig, setGradescopeConfig] = useState<GradescopeIntegrationConfig | null>(null);
   const [expandedNode, setExpandedNode] = useState<string | null>(null);
   const [graphRadius, setGraphRadius] = useState(DESKTOP_RADIUS);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
@@ -136,6 +150,10 @@ export default function IntegrationsGraph() {
       .fetchCanvasIntegration()
       .then((c) => setCanvasConfig(c))
       .catch(() => {});
+    api
+      .fetchGradescopeIntegration()
+      .then((c) => setGradescopeConfig(c))
+      .catch(() => {});
   }, []);
 
   // Derive statuses
@@ -145,12 +163,15 @@ export default function IntegrationsGraph() {
   const canvasStatus: IntegrationNodeDef["status"] = canvasConfig?.enabled
     ? "active"
     : "setup-required";
+  const gradescopeStatus: IntegrationNodeDef["status"] = gradescopeConfig?.enabled
+    ? "active"
+    : "setup-required";
 
   // Node definitions
   const integrationNodes: IntegrationNodeDef[] = [
     { id: "gmail", label: "Gmail", icon: <GmailIcon />, status: gmailStatus, color: "#EA4335", angle: 0 },
     { id: "slack", label: "Slack", icon: <SlackIcon />, status: "coming-soon", color: "#4A154B", angle: 90 },
-    { id: "github", label: "GitHub", icon: <GitHubIcon />, status: "coming-soon", color: "#6e5494", angle: 180 },
+    { id: "gradescope", label: "Gradescope", icon: <GradescopeIcon />, status: gradescopeStatus, color: "#00B4D8", angle: 180 },
     { id: "canvas", label: "Canvas", icon: <CanvasIcon />, status: canvasStatus, color: "#E13F29", angle: 270 },
   ];
 
@@ -268,6 +289,23 @@ export default function IntegrationsGraph() {
                       </div>
                     </motion.div>
                   )}
+                  {isExpanded && node.id === "gradescope" && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="pt-3">
+                        <GradescopeConfigPanel
+                          config={gradescopeConfig}
+                          onClose={() => setExpandedNode(null)}
+                          onUpdate={setGradescopeConfig}
+                        />
+                      </div>
+                    </motion.div>
+                  )}
                 </AnimatePresence>
               </div>
             );
@@ -293,7 +331,7 @@ export default function IntegrationsGraph() {
         >
           {integrationNodes.map((node) => {
             const pos = nodePosition(node.angle);
-            const isConfigurable = node.id === "gmail" || node.id === "canvas";
+            const isConfigurable = node.id === "gmail" || node.id === "canvas" || node.id === "gradescope";
             const isActive = isConfigurable && (node.status === "active" || node.status === "setup-required");
 
             return (
@@ -378,6 +416,30 @@ export default function IntegrationsGraph() {
               config={canvasConfig}
               onClose={() => setExpandedNode(null)}
               onUpdate={setCanvasConfig}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Gradescope config panel — beside node (180° = bottom) */}
+      <AnimatePresence>
+        {expandedNode === "gradescope" && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="absolute z-10"
+            style={{
+              left: `calc(50% + ${Math.cos(((180 - 90) * Math.PI) / 180) * graphRadius}px)`,
+              top: `calc(50% + ${Math.sin(((180 - 90) * Math.PI) / 180) * graphRadius + 60}px)`,
+              transform: "translateX(-50%)",
+            }}
+          >
+            <GradescopeConfigPanel
+              config={gradescopeConfig}
+              onClose={() => setExpandedNode(null)}
+              onUpdate={setGradescopeConfig}
             />
           </motion.div>
         )}
