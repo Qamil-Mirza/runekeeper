@@ -92,6 +92,7 @@ export const tasks = pgTable("tasks", {
   status: text("status").notNull().default("unscheduled"),
   googleTaskId: text("google_task_id"),
   googleTasklistId: text("google_tasklist_id"),
+  canvasAssignmentId: text("canvas_assignment_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -172,12 +173,14 @@ export const integrations = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    provider: text("provider").notNull(), // "gmail" | "slack" | "github" | "linear"
+    provider: text("provider").notNull(), // "gmail" | "canvas" | "slack" | "github"
     enabled: boolean("enabled").default(false).notNull(),
     config: jsonb("config").$type<{
       monitoredSenders?: string[];
       autoCreateTasks?: boolean;
       pubsubSubscriptionActive?: boolean;
+      canvasApiToken?: string;
+      canvasBaseUrl?: string;
     }>().default({}),
     gmailHistoryId: text("gmail_history_id"),
     watchExpiration: timestamp("watch_expiration"),

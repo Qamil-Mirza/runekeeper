@@ -20,6 +20,7 @@ export interface Task {
   recurrenceRule?: string;
   status: TaskStatus;
   timeBlockId?: string; // linked to a TimeBlock
+  canvasAssignmentId?: string;
 }
 
 export interface TimeBlock {
@@ -98,6 +99,7 @@ export interface DbTask {
   status: string;
   googleTaskId: string | null;
   googleTasklistId: string | null;
+  canvasAssignmentId: string | null;
   createdAt: string;
   updatedAt: string;
 }

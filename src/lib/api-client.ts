@@ -311,3 +311,42 @@ export function setupGmailPubsub() {
     { method: "POST" }
   );
 }
+
+// ─── Canvas Integration ────────────────────────────────────────────────────
+
+export interface CanvasIntegrationConfig {
+  enabled: boolean;
+  config: {
+    canvasBaseUrl: string | null;
+    hasToken: boolean;
+  };
+  lastSyncAt: string | null;
+  lastSyncError: string | null;
+}
+
+export interface CanvasSyncResult {
+  processed: number;
+  tasksCreated: number;
+  errors: string[];
+}
+
+export function fetchCanvasIntegration() {
+  return apiFetch<CanvasIntegrationConfig>("/api/integrations/canvas");
+}
+
+export function updateCanvasIntegration(data: {
+  enabled?: boolean;
+  canvasBaseUrl?: string;
+  canvasApiToken?: string;
+}) {
+  return apiFetch<CanvasIntegrationConfig>("/api/integrations/canvas", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function syncCanvas() {
+  return apiFetch<CanvasSyncResult>("/api/integrations/canvas/sync", {
+    method: "POST",
+  });
+}
