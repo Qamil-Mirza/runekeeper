@@ -165,11 +165,9 @@ export function FieryEdge({
           <g key={i}>
             {/* Trail ember 1 — delayed, smaller, faster fade */}
             <motion.circle
-              cx={perimeterX}
-              cy={perimeterY}
               r={PARTICLE_RADII[i] * 0.35}
               fill={particleColor}
-              opacity={0}
+              initial={{ cx: perimeterX, cy: perimeterY, opacity: 0 }}
               animate={{
                 cx: kf.cx,
                 cy: kf.cy,
@@ -185,11 +183,9 @@ export function FieryEdge({
 
             {/* Trail ember 2 */}
             <motion.circle
-              cx={perimeterX}
-              cy={perimeterY}
               r={PARTICLE_RADII[i] * 0.2}
               fill={particleColor}
-              opacity={0}
+              initial={{ cx: perimeterX, cy: perimeterY, opacity: 0 }}
               animate={{
                 cx: kf.cx,
                 cy: kf.cy,
@@ -205,10 +201,9 @@ export function FieryEdge({
 
             {/* Main particle — wobbling path */}
             <motion.circle
-              cx={perimeterX}
-              cy={perimeterY}
               r={PARTICLE_RADII[i]}
               fill={particleColor}
+              initial={{ cx: perimeterX, cy: perimeterY, opacity: 0 }}
               animate={{
                 cx: kf.cx,
                 cy: kf.cy,
