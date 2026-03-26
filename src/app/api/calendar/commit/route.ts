@@ -3,10 +3,18 @@ import { db } from "@/db";
 import { timeBlocks, planSessions } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { jsonResponse, errorResponse } from "@/lib/api-helpers";
+import { rateLimit } from "@/lib/rate-limit";
+
+const commitLimiter = rateLimit({ key: "calendar-commit", limit: 10, windowMs: 60_000 });
 
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.id) return errorResponse("Unauthorized", 401);
+
+  const { success: withinLimit } = commitLimiter.check(session.user.id);
+  if (!withinLimit) {
+    return errorResponse("Rate limit exceeded. Try again shortly.", 429);
+  }
 
   const body = await req.json();
   const sessionId = body.sessionId;

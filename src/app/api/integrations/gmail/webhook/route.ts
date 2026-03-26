@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { db } from "@/db";
 import { users, integrations, accounts } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -9,10 +10,17 @@ import { syncGmailForUser } from "@/lib/google/gmail-sync";
 
 const log = createLogger("api:integrations:gmail:webhook");
 
+function verifyWebhookToken(token: string | null): boolean {
+  const secret = process.env.GMAIL_WEBHOOK_SECRET;
+  if (!token || !secret) return false;
+  if (token.length !== secret.length) return false;
+  return timingSafeEqual(Buffer.from(token), Buffer.from(secret));
+}
+
 export async function POST(request: NextRequest) {
-  // Verify shared secret
+  // Verify shared secret (timing-safe comparison)
   const token = request.nextUrl.searchParams.get("token");
-  if (!token || token !== process.env.GMAIL_WEBHOOK_SECRET) {
+  if (!verifyWebhookToken(token)) {
     return errorResponse("Forbidden", 403);
   }
 
@@ -40,7 +48,7 @@ export async function POST(request: NextRequest) {
       .limit(1);
 
     if (!user) {
-      log.warn({ emailAddress }, "webhook received for unknown user");
+      log.warn("webhook received for unknown user");
       return jsonResponse({ status: "ok" });
     }
 
@@ -89,7 +97,7 @@ export async function POST(request: NextRequest) {
       "webhook gmail sync completed"
     );
   } catch (err) {
-    log.error({ err, emailAddress }, "webhook processing error");
+    log.error({ err }, "webhook processing error");
   }
 
   // Always return 200 to acknowledge receipt
