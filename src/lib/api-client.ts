@@ -350,3 +350,41 @@ export function syncCanvas() {
     method: "POST",
   });
 }
+
+// ─── Gradescope Integration ─────────────────────────────────────────────────
+
+export interface GradescopeIntegrationConfig {
+  enabled: boolean;
+  config: {
+    hasCredentials: boolean;
+  };
+  lastSyncAt: string | null;
+  lastSyncError: string | null;
+}
+
+export interface GradescopeSyncResult {
+  processed: number;
+  tasksCreated: number;
+  errors: string[];
+}
+
+export function fetchGradescopeIntegration() {
+  return apiFetch<GradescopeIntegrationConfig>("/api/integrations/gradescope");
+}
+
+export function updateGradescopeIntegration(data: {
+  enabled?: boolean;
+  gradescopeEmail?: string;
+  gradescopePassword?: string;
+}) {
+  return apiFetch<GradescopeIntegrationConfig>("/api/integrations/gradescope", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function syncGradescope() {
+  return apiFetch<GradescopeSyncResult>("/api/integrations/gradescope/sync", {
+    method: "POST",
+  });
+}
