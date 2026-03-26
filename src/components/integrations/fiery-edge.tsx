@@ -17,6 +17,15 @@ const PARTICLE_COLORS = ["#ff6b35", "#d4a860", "#f0c060", "#ffaa00", "#c87828"];
 const PARTICLE_DELAYS = [0, 0.3, 0.6, 0.9, 1.2];
 const PARTICLE_RADII = [4, 3, 5, 3.5, 6];
 
+// Unique wobble patterns per particle (perpendicular amplitude at t = 0, 0.25, 0.5, 0.75, 1.0)
+const WOBBLE_PATTERNS = [
+  [0, 10, -6, 8, 0],
+  [0, -8, 12, -4, 0],
+  [0, 6, -10, 5, 0],
+  [0, -12, 7, -9, 0],
+  [0, 9, -5, 11, 0],
+];
+
 export function FieryEdge({
   startX,
   startY,
@@ -44,9 +53,17 @@ export function FieryEdge({
   const nx = length > 0 ? dx / length : 0;
   const ny = length > 0 ? dy / length : 0;
 
+  // Perpendicular vector for wobble
+  const perpX = -ny;
+  const perpY = nx;
+
   // Perimeter start point — particles begin from the edge of the center node
   const perimeterX = startX + nx * nodeRadius;
   const perimeterY = startY + ny * nodeRadius;
+
+  // Edge vector from perimeter to end
+  const edgeDx = endX - perimeterX;
+  const edgeDy = endY - perimeterY;
 
   if (!active) {
     return (
@@ -63,9 +80,22 @@ export function FieryEdge({
     );
   }
 
+  // Pre-compute wobbling keyframes for each particle
+  const particleKeyframes = WOBBLE_PATTERNS.map((wobble) => {
+    const tSteps = [0, 0.25, 0.5, 0.75, 1.0];
+    return {
+      cx: tSteps.map((t, j) => perimeterX + edgeDx * t + perpX * wobble[j]),
+      cy: tSteps.map((t, j) => perimeterY + edgeDy * t + perpY * wobble[j]),
+    };
+  });
+
   return (
-    <g>
-      {/* Gradient definition */}
+    <motion.g
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5 }}
+    >
+      {/* Gradient + filter definitions */}
       <defs>
         <linearGradient
           id={gradientId}
@@ -87,18 +117,17 @@ export function FieryEdge({
         </filter>
       </defs>
 
-      {/* Glow line (behind) */}
+      {/* Glow line (behind) — breathes with width + opacity */}
       <motion.line
         x1={perimeterX}
         y1={perimeterY}
         x2={endX}
         y2={endY}
         stroke={`url(#${gradientId})`}
-        strokeWidth={3}
         filter={`url(#${glowFilterId})`}
         strokeLinecap="round"
-        animate={{ opacity: [0.4, 0.8, 0.4] }}
-        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+        animate={{ opacity: [0.3, 0.9, 0.3], strokeWidth: [2, 5, 2] }}
+        transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
       />
 
       {/* Main line */}
@@ -111,30 +140,90 @@ export function FieryEdge({
         strokeWidth={1.5}
         strokeLinecap="round"
         animate={{ opacity: [0.6, 1, 0.6] }}
-        transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+        transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
       />
 
-      {/* Fire particles */}
-      {PARTICLE_COLORS.map((particleColor, i) => (
-        <motion.circle
-          key={i}
-          cx={perimeterX}
-          cy={perimeterY}
-          r={PARTICLE_RADII[i]}
-          fill={particleColor}
-          animate={{
-            cx: [perimeterX, endX],
-            cy: [perimeterY, endY],
-            opacity: [0.9, 0.6, 0],
-          }}
-          transition={{
-            duration: 1.8,
-            repeat: Infinity,
-            delay: PARTICLE_DELAYS[i],
-            ease: "easeOut",
-          }}
-        />
-      ))}
-    </g>
+      {/* Energy flow line — dashed, cycling offset */}
+      <motion.line
+        x1={perimeterX}
+        y1={perimeterY}
+        x2={endX}
+        y2={endY}
+        stroke={`url(#${gradientId})`}
+        strokeWidth={1}
+        strokeLinecap="round"
+        strokeDasharray="8 12"
+        strokeOpacity={0.4}
+        animate={{ strokeDashoffset: [0, -40] }}
+        transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+      />
+
+      {/* Fire particles with wobble + ember trails */}
+      {PARTICLE_COLORS.map((particleColor, i) => {
+        const kf = particleKeyframes[i];
+        return (
+          <g key={i}>
+            {/* Trail ember 1 — delayed, smaller, faster fade */}
+            <motion.circle
+              cx={perimeterX}
+              cy={perimeterY}
+              r={PARTICLE_RADII[i] * 0.35}
+              fill={particleColor}
+              opacity={0}
+              animate={{
+                cx: kf.cx,
+                cy: kf.cy,
+                opacity: [0.5, 0.3, 0],
+              }}
+              transition={{
+                duration: 1.8,
+                repeat: Infinity,
+                delay: PARTICLE_DELAYS[i] + 0.15,
+                ease: "easeOut",
+              }}
+            />
+
+            {/* Trail ember 2 */}
+            <motion.circle
+              cx={perimeterX}
+              cy={perimeterY}
+              r={PARTICLE_RADII[i] * 0.2}
+              fill={particleColor}
+              opacity={0}
+              animate={{
+                cx: kf.cx,
+                cy: kf.cy,
+                opacity: [0.35, 0.15, 0],
+              }}
+              transition={{
+                duration: 1.8,
+                repeat: Infinity,
+                delay: PARTICLE_DELAYS[i] + 0.3,
+                ease: "easeOut",
+              }}
+            />
+
+            {/* Main particle — wobbling path */}
+            <motion.circle
+              cx={perimeterX}
+              cy={perimeterY}
+              r={PARTICLE_RADII[i]}
+              fill={particleColor}
+              animate={{
+                cx: kf.cx,
+                cy: kf.cy,
+                opacity: [0.9, 0.8, 0.5, 0.2, 0],
+              }}
+              transition={{
+                duration: 1.8,
+                repeat: Infinity,
+                delay: PARTICLE_DELAYS[i],
+                ease: "easeOut",
+              }}
+            />
+          </g>
+        );
+      })}
+    </motion.g>
   );
 }

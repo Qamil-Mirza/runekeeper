@@ -5,6 +5,7 @@ import type { IntegrationNodeDef } from "./integration-types";
 
 interface IntegrationNodeProps {
   node: IntegrationNodeDef;
+  size?: number;
   onClick?: () => void;
 }
 
@@ -23,7 +24,7 @@ const statusBadge = {
   },
 };
 
-export function IntegrationNode({ node, onClick }: IntegrationNodeProps) {
+export function IntegrationNode({ node, size = 80, onClick }: IntegrationNodeProps) {
   const isClickable = node.status !== "coming-soon";
   const badge = statusBadge[node.status];
 
@@ -33,7 +34,7 @@ export function IntegrationNode({ node, onClick }: IntegrationNodeProps) {
       onClick={isClickable ? onClick : undefined}
       className={`
         relative flex flex-col items-center justify-center
-        w-[80px] h-[80px] rounded-full
+        rounded-full
         text-center transition-colors
         ${
           node.status === "coming-soon"
@@ -43,15 +44,17 @@ export function IntegrationNode({ node, onClick }: IntegrationNodeProps) {
               : "border-2 border-dashed cursor-pointer"
         }
       `}
-      style={
-        isClickable
+      style={{
+        width: size,
+        height: size,
+        ...(isClickable
           ? {
               background: `radial-gradient(circle at 40% 40%, ${node.color}, ${node.color}88)`,
               borderColor: node.color,
               boxShadow: `0 0 20px ${node.color}66`,
             }
-          : undefined
-      }
+          : {}),
+      }}
       whileHover={isClickable ? { scale: 1.1 } : undefined}
       whileTap={isClickable ? { scale: 0.95 } : undefined}
     >

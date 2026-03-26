@@ -103,10 +103,12 @@ function CanvasIcon() {
 // Constants
 // ---------------------------------------------------------------------------
 
-const DESKTOP_RADIUS = 180;
 const MOBILE_RADIUS = 160;
 const MOBILE_BREAKPOINT = 640;
-const CENTER_NODE_RADIUS = 60; // half of the 120px flame node
+
+// Design baseline: at 500px min-dimension, sizes match original fixed values
+const DESIGN_BASELINE = 500;
+const clamp = (min: number, val: number, max: number) => Math.min(max, Math.max(min, val));
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -118,16 +120,30 @@ export default function IntegrationsGraph() {
   const [canvasConfig, setCanvasConfig] = useState<CanvasIntegrationConfig | null>(null);
   const [gradescopeConfig, setGradescopeConfig] = useState<GradescopeIntegrationConfig | null>(null);
   const [expandedNode, setExpandedNode] = useState<string | null>(null);
-  const [graphRadius, setGraphRadius] = useState(DESKTOP_RADIUS);
+  const [graphRadius, setGraphRadius] = useState(180);
+  const [centerNodeSize, setCenterNodeSize] = useState(120);
+  const [integrationNodeSize, setIntegrationNodeSize] = useState(80);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
 
   const [isMobile, setIsMobile] = useState(false);
 
-  // Responsive radius + container size
+  // Responsive radius + container size — scales with viewport
   const updateDimensions = useCallback(() => {
     const mobile = window.innerWidth < MOBILE_BREAKPOINT;
     setIsMobile(mobile);
-    setGraphRadius(mobile ? MOBILE_RADIUS : DESKTOP_RADIUS);
+    if (mobile) {
+      setGraphRadius(MOBILE_RADIUS);
+      setCenterNodeSize(120);
+      setIntegrationNodeSize(80);
+    } else if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setContainerSize({ w: rect.width, h: rect.height });
+      const scale = Math.min(rect.width, rect.height) / DESIGN_BASELINE;
+      setGraphRadius(clamp(140, 180 * scale, 280));
+      setCenterNodeSize(clamp(90, 120 * scale, 160));
+      setIntegrationNodeSize(clamp(60, 80 * scale, 110));
+      return; // containerSize already set
+    }
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       setContainerSize({ w: rect.width, h: rect.height });
@@ -178,6 +194,7 @@ export default function IntegrationsGraph() {
   // Helpers
   const centerX = containerSize.w / 2;
   const centerY = containerSize.h / 2;
+  const centerNodeRadius = centerNodeSize / 2;
 
   function nodePosition(angle: number) {
     const rad = ((angle - 90) * Math.PI) / 180;
@@ -343,7 +360,7 @@ export default function IntegrationsGraph() {
                 endY={pos.y}
                 color={node.color}
                 active={isActive ? node.status === "active" : false}
-                nodeRadius={CENTER_NODE_RADIUS}
+                nodeRadius={centerNodeRadius}
               />
             );
           })}
@@ -351,7 +368,7 @@ export default function IntegrationsGraph() {
       )}
 
       {/* Center flame */}
-      <CenterFlameNode />
+      <CenterFlameNode size={centerNodeSize} />
 
       {/* Orbital integration nodes */}
       {integrationNodes.map((node) => (
@@ -366,6 +383,7 @@ export default function IntegrationsGraph() {
         >
           <IntegrationNode
             node={node}
+            size={integrationNodeSize}
             onClick={() =>
               setExpandedNode((prev) => (prev === node.id ? null : node.id))
             }
@@ -383,7 +401,7 @@ export default function IntegrationsGraph() {
             transition={{ duration: 0.2 }}
             className="absolute z-10"
             style={{
-              left: `calc(50% + ${Math.cos(((0 - 90) * Math.PI) / 180) * graphRadius + 60}px)`,
+              left: `calc(50% + ${Math.cos(((0 - 90) * Math.PI) / 180) * graphRadius + integrationNodeSize / 2 + 20}px)`,
               top: `calc(50% + ${Math.sin(((0 - 90) * Math.PI) / 180) * graphRadius}px)`,
               transform: "translateY(-50%)",
             }}
@@ -407,7 +425,7 @@ export default function IntegrationsGraph() {
             transition={{ duration: 0.2 }}
             className="absolute z-10"
             style={{
-              left: `calc(50% + ${Math.cos(((270 - 90) * Math.PI) / 180) * graphRadius - 380}px)`,
+              left: `calc(50% + ${Math.cos(((270 - 90) * Math.PI) / 180) * graphRadius - integrationNodeSize / 2 - 340}px)`,
               top: `calc(50% + ${Math.sin(((270 - 90) * Math.PI) / 180) * graphRadius}px)`,
               transform: "translateY(-50%)",
             }}
@@ -431,7 +449,7 @@ export default function IntegrationsGraph() {
             transition={{ duration: 0.2 }}
             className="absolute z-10"
             style={{
-              left: `calc(50% + ${Math.cos(((180 - 90) * Math.PI) / 180) * graphRadius + 60}px)`,
+              left: `calc(50% + ${Math.cos(((180 - 90) * Math.PI) / 180) * graphRadius + integrationNodeSize / 2 + 20}px)`,
               bottom: `calc(50% - ${Math.sin(((180 - 90) * Math.PI) / 180) * graphRadius}px + 20px)`,
             }}
           >

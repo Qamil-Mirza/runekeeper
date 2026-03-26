@@ -239,25 +239,32 @@
 
 /* ── Hanging Lantern Keyframes ── */
 @keyframes lanternFlameCore {
-  0%, 100% { transform: translateX(-50%) scaleY(1) scaleX(1) translateY(0); opacity: 1; }
-  15% { transform: translateX(-50%) scaleY(1.06) scaleX(0.94) translateY(-1px); opacity: 0.92; }
-  35% { transform: translateX(-50%) scaleY(0.94) scaleX(1.04) translateY(1px); opacity: 1; }
-  55% { transform: translateX(-50%) scaleY(1.08) scaleX(0.96) translateY(-2px); opacity: 0.88; }
-  75% { transform: translateX(-50%) scaleY(0.97) scaleX(1.02) translateY(0); opacity: 0.95; }
+  0%, 100% { transform: translateX(-50%) scaleY(1) scaleX(1) translateY(0) rotate(0deg); opacity: 1; }
+  15% { transform: translateX(-50%) scaleY(1.1) scaleX(0.92) translateY(-3px) rotate(1deg); opacity: 0.9; }
+  35% { transform: translateX(-50%) scaleY(0.9) scaleX(1.06) translateY(2px) rotate(-1.5deg); opacity: 1; }
+  55% { transform: translateX(-50%) scaleY(1.14) scaleX(0.94) translateY(-4px) rotate(2deg); opacity: 0.85; }
+  75% { transform: translateX(-50%) scaleY(0.95) scaleX(1.03) translateY(1px) rotate(-0.5deg); opacity: 0.95; }
 }
 
 @keyframes lanternFlameMid {
-  0%, 100% { transform: translateX(-50%) scaleY(1) scaleX(1) translateY(0); opacity: 0.7; }
-  20% { transform: translateX(-48%) scaleY(1.1) scaleX(0.92) translateY(-2px); opacity: 0.6; }
-  45% { transform: translateX(-52%) scaleY(0.92) scaleX(1.06) translateY(1px); opacity: 0.75; }
-  70% { transform: translateX(-50%) scaleY(1.05) scaleX(0.98) translateY(-1px); opacity: 0.65; }
+  0%, 100% { transform: translateX(-50%) scaleY(1) scaleX(1) translateY(0) rotate(0deg); opacity: 0.7; }
+  20% { transform: translateX(-46%) scaleY(1.15) scaleX(0.88) translateY(-3px) rotate(-1.5deg); opacity: 0.55; }
+  45% { transform: translateX(-54%) scaleY(0.88) scaleX(1.08) translateY(2px) rotate(2deg); opacity: 0.78; }
+  70% { transform: translateX(-49%) scaleY(1.08) scaleX(0.95) translateY(-2px) rotate(-1deg); opacity: 0.6; }
 }
 
 @keyframes lanternFlameOuter {
   0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.4; }
-  30% { transform: translateX(-50%) scale(1.08); opacity: 0.3; }
-  60% { transform: translateX(-50%) scale(0.95); opacity: 0.45; }
-  85% { transform: translateX(-50%) scale(1.04); opacity: 0.35; }
+  30% { transform: translateX(-50%) scale(1.15); opacity: 0.25; }
+  60% { transform: translateX(-50%) scale(0.88); opacity: 0.5; }
+  85% { transform: translateX(-50%) scale(1.08); opacity: 0.32; }
+}
+
+@keyframes lanternFlameWisp {
+  0%, 100% { transform: translateX(-50%) scaleY(1) scaleX(1) translateY(0) rotate(0deg); opacity: 0.25; }
+  20% { transform: translateX(-45%) scaleY(1.3) scaleX(0.85) translateY(-6px) rotate(3deg); opacity: 0.18; }
+  50% { transform: translateX(-55%) scaleY(0.8) scaleX(1.1) translateY(2px) rotate(-2deg); opacity: 0.3; }
+  75% { transform: translateX(-48%) scaleY(1.2) scaleX(0.9) translateY(-4px) rotate(1.5deg); opacity: 0.2; }
 }
 
 @keyframes lanternGlow {
@@ -332,6 +339,19 @@
   will-change: transform, opacity;
 }
 
+.lantern-flame-wisp {
+  position: absolute;
+  bottom: 20%;
+  left: 50%;
+  width: 8px;
+  height: 44px;
+  background: radial-gradient(ellipse at center bottom, rgba(240, 180, 80, 0.3) 0%, rgba(200, 120, 40, 0.1) 40%, transparent 100%);
+  border-radius: 50% 50% 50% 50% / 70% 70% 25% 25%;
+  filter: blur(4px);
+  animation: lanternFlameWisp 4.2s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
 .lantern-glow {
   position: absolute;
   top: 53%;
@@ -372,6 +392,11 @@
   .lantern-flame-outer {
     animation: none;
     opacity: 0.35;
+  }
+
+  .lantern-flame-wisp {
+    animation: none;
+    opacity: 0.15;
   }
 
   .lantern-glow {
