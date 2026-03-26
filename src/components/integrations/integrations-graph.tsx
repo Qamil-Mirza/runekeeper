@@ -7,7 +7,9 @@ import { CenterFlameNode } from "./center-flame-node";
 import { IntegrationNode } from "./integration-node";
 import { FieryEdge } from "./fiery-edge";
 import { GmailConfigPanel } from "./gmail-config-panel";
+import { CanvasConfigPanel } from "./canvas-config-panel";
 import type { IntegrationNodeDef, IntegrationConfig } from "./integration-types";
+import type { CanvasIntegrationConfig } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
 // Inline icon components
@@ -59,14 +61,26 @@ function GitHubIcon() {
   );
 }
 
-function LinearIcon() {
+function CanvasIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
       <path
-        d="M12 3l9 9-9 9-9-9z"
-        stroke="currentColor"
+        d="M12 3L2 9l10 6 10-6-10-6z"
+        stroke="#fff"
         strokeWidth={1.5}
         strokeLinejoin="round"
+      />
+      <path
+        d="M2 9v8l10 6 10-6V9"
+        stroke="#fff"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 15v8"
+        stroke="#fff"
+        strokeWidth={1.5}
+        strokeLinecap="round"
       />
     </svg>
   );
@@ -88,6 +102,7 @@ const CENTER_NODE_RADIUS = 60; // half of the 120px flame node
 export default function IntegrationsGraph() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [gmailConfig, setGmailConfig] = useState<IntegrationConfig | null>(null);
+  const [canvasConfig, setCanvasConfig] = useState<CanvasIntegrationConfig | null>(null);
   const [expandedNode, setExpandedNode] = useState<string | null>(null);
   const [graphRadius, setGraphRadius] = useState(DESKTOP_RADIUS);
   const [containerSize, setContainerSize] = useState({ w: 0, h: 0 });
@@ -111,16 +126,23 @@ export default function IntegrationsGraph() {
     return () => window.removeEventListener("resize", updateDimensions);
   }, [updateDimensions]);
 
-  // Fetch Gmail config on mount
+  // Fetch integration configs on mount
   useEffect(() => {
     api
       .fetchGmailIntegration()
       .then((c) => setGmailConfig(c as IntegrationConfig))
       .catch(() => {});
+    api
+      .fetchCanvasIntegration()
+      .then((c) => setCanvasConfig(c))
+      .catch(() => {});
   }, []);
 
-  // Derive Gmail status
+  // Derive statuses
   const gmailStatus: IntegrationNodeDef["status"] = gmailConfig?.enabled
+    ? "active"
+    : "setup-required";
+  const canvasStatus: IntegrationNodeDef["status"] = canvasConfig?.enabled
     ? "active"
     : "setup-required";
 
@@ -129,7 +151,7 @@ export default function IntegrationsGraph() {
     { id: "gmail", label: "Gmail", icon: <GmailIcon />, status: gmailStatus, color: "#EA4335", angle: 0 },
     { id: "slack", label: "Slack", icon: <SlackIcon />, status: "coming-soon", color: "#4A154B", angle: 90 },
     { id: "github", label: "GitHub", icon: <GitHubIcon />, status: "coming-soon", color: "#6e5494", angle: 180 },
-    { id: "linear", label: "Linear", icon: <LinearIcon />, status: "coming-soon", color: "#5E6AD2", angle: 270 },
+    { id: "canvas", label: "Canvas", icon: <CanvasIcon />, status: canvasStatus, color: "#E13F29", angle: 270 },
   ];
 
   // Helpers
@@ -229,6 +251,23 @@ export default function IntegrationsGraph() {
                       </div>
                     </motion.div>
                   )}
+                  {isExpanded && node.id === "canvas" && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="pt-3">
+                        <CanvasConfigPanel
+                          config={canvasConfig}
+                          onClose={() => setExpandedNode(null)}
+                          onUpdate={setCanvasConfig}
+                        />
+                      </div>
+                    </motion.div>
+                  )}
                 </AnimatePresence>
               </div>
             );
@@ -254,21 +293,8 @@ export default function IntegrationsGraph() {
         >
           {integrationNodes.map((node) => {
             const pos = nodePosition(node.angle);
-
-            if (node.id === "gmail" && (node.status === "active" || node.status === "setup-required")) {
-              return (
-                <FieryEdge
-                  key={node.id}
-                  startX={centerX}
-                  startY={centerY}
-                  endX={pos.x}
-                  endY={pos.y}
-                  color={node.color}
-                  active={node.status === "active"}
-                  nodeRadius={CENTER_NODE_RADIUS}
-                />
-              );
-            }
+            const isConfigurable = node.id === "gmail" || node.id === "canvas";
+            const isActive = isConfigurable && (node.status === "active" || node.status === "setup-required");
 
             return (
               <FieryEdge
@@ -278,7 +304,7 @@ export default function IntegrationsGraph() {
                 endX={pos.x}
                 endY={pos.y}
                 color={node.color}
-                active={false}
+                active={isActive ? node.status === "active" : false}
                 nodeRadius={CENTER_NODE_RADIUS}
               />
             );
@@ -328,6 +354,30 @@ export default function IntegrationsGraph() {
               config={gmailConfig}
               onClose={() => setExpandedNode(null)}
               onUpdate={setGmailConfig}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Canvas config panel — beside node (270° = left side) */}
+      <AnimatePresence>
+        {expandedNode === "canvas" && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="absolute z-10"
+            style={{
+              left: `calc(50% + ${Math.cos(((270 - 90) * Math.PI) / 180) * graphRadius - 380}px)`,
+              top: `calc(50% + ${Math.sin(((270 - 90) * Math.PI) / 180) * graphRadius}px)`,
+              transform: "translateY(-50%)",
+            }}
+          >
+            <CanvasConfigPanel
+              config={canvasConfig}
+              onClose={() => setExpandedNode(null)}
+              onUpdate={setCanvasConfig}
             />
           </motion.div>
         )}
