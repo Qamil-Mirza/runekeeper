@@ -7,7 +7,6 @@ import {
   errorResponse,
 } from "@/lib/api-helpers";
 import { rateLimit } from "@/lib/rate-limit";
-import { decrypt } from "@/lib/crypto";
 import { syncGradescopeForUser } from "@/lib/gradescope/gradescope-sync";
 import { createLogger } from "@/lib/logger";
 
@@ -51,11 +50,10 @@ export async function POST() {
   }
 
   try {
-    const password = decrypt(encryptedPassword);
     const result = await syncGradescopeForUser(
       user.id,
       email,
-      password,
+      encryptedPassword,
       integration.id,
       user.timezone
     );

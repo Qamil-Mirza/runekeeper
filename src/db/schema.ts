@@ -174,7 +174,7 @@ export const integrations = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    provider: text("provider").notNull(), // "gmail" | "canvas" | "slack" | "github"
+    provider: text("provider").notNull(), // "gmail" | "canvas" | "gradescope" | "slack"
     enabled: boolean("enabled").default(false).notNull(),
     config: jsonb("config").$type<{
       monitoredSenders?: string[];

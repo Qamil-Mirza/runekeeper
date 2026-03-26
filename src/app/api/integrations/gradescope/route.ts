@@ -7,10 +7,17 @@ import {
   errorResponse,
 } from "@/lib/api-helpers";
 import { encrypt } from "@/lib/crypto";
+import { rateLimit } from "@/lib/rate-limit";
 import { validateCredentials } from "@/lib/gradescope/gradescope-client";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("api:integrations:gradescope");
+
+const putLimiter = rateLimit({
+  key: "gradescope-put",
+  limit: 5,
+  windowMs: 60_000,
+});
 
 export async function GET() {
   const user = await getAuthenticatedUser();
@@ -52,12 +59,35 @@ export async function PUT(req: Request) {
   const user = await getAuthenticatedUser();
   if (!user) return errorResponse("Unauthorized", 401);
 
-  const body = await req.json();
+  const { success: withinLimit } = putLimiter.check(user.id);
+  if (!withinLimit) {
+    return errorResponse("Rate limit exceeded. Try again shortly.", 429);
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return errorResponse("Invalid request body", 400);
+  }
+
   const { enabled, gradescopeEmail, gradescopePassword } = body as {
     enabled?: boolean;
     gradescopeEmail?: string;
     gradescopePassword?: string;
   };
+
+  // Input validation
+  if (gradescopeEmail !== undefined) {
+    if (typeof gradescopeEmail !== "string" || gradescopeEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(gradescopeEmail)) {
+      return errorResponse("Invalid email address", 400);
+    }
+  }
+  if (gradescopePassword !== undefined) {
+    if (typeof gradescopePassword !== "string" || gradescopePassword.length === 0 || gradescopePassword.length > 256) {
+      return errorResponse("Invalid password", 400);
+    }
+  }
 
   // Validate credentials if both provided
   if (gradescopeEmail && gradescopePassword) {

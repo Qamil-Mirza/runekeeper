@@ -206,6 +206,10 @@ export async function fetchAssignments(
   courseName: string,
   courseShortName: string
 ): Promise<GradescopeAssignment[]> {
+  if (!/^\d+$/.test(courseId)) {
+    throw new Error(`Invalid courseId: ${courseId}`);
+  }
+
   const res = await fetch(`${GRADESCOPE_BASE}/courses/${courseId}`, {
     headers: { Cookie: sessionCookie },
   });

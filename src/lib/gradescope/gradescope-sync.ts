@@ -9,6 +9,7 @@ import {
   GradescopeRateLimitError,
 } from "./gradescope-client";
 import type { GradescopeAssignment, GradescopeCourse } from "./gradescope-client";
+import { decrypt } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("gradescope-sync");
@@ -112,7 +113,7 @@ const POLITE_DELAY_MS = 500;
 export async function syncGradescopeForUser(
   userId: string,
   email: string,
-  password: string,
+  encryptedPassword: string,
   integrationId: string,
   timezone: string = "America/Los_Angeles"
 ): Promise<GradescopeSyncResult> {
@@ -123,7 +124,8 @@ export async function syncGradescopeForUser(
   };
 
   try {
-    // 1. Authenticate
+    // 1. Decrypt and authenticate (minimize plaintext password lifetime)
+    const password = decrypt(encryptedPassword);
     const sessionCookie = await authenticate(email, password);
 
     // 2. Fetch and filter courses
