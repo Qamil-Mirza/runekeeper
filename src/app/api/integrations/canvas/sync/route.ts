@@ -49,7 +49,8 @@ export async function POST() {
       user.id,
       decryptedToken,
       baseUrl,
-      integration.id
+      integration.id,
+      user.timezone
     );
 
     log.info(

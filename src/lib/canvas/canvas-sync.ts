@@ -52,9 +52,26 @@ function isUnsubmitted(assignment: CanvasAssignment): boolean {
   return state === "unsubmitted" || !assignment.submission.submitted_at;
 }
 
-function toDueDate(dueAt: string): string {
-  // Extract date portion (YYYY-MM-DD) from ISO datetime
-  return dueAt.split("T")[0];
+function toDueDate(dueAt: string, timezone: string): string {
+  // Convert UTC datetime to user's local timezone, then extract date
+  const date = new Date(dueAt);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date); // en-CA gives YYYY-MM-DD format
+  return parts;
+}
+
+function formatDueTime(dueAt: string, timezone: string): string {
+  const date = new Date(dueAt);
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(date);
 }
 
 // ─── Main Sync Function ────────────────────────────────────────────────────
@@ -63,7 +80,8 @@ export async function syncCanvasForUser(
   userId: string,
   apiToken: string,
   baseUrl: string,
-  integrationId: string
+  integrationId: string,
+  timezone: string = "America/Los_Angeles"
 ): Promise<CanvasSyncResult> {
   const result: CanvasSyncResult = { processed: 0, tasksCreated: 0, errors: [] };
 
@@ -75,7 +93,7 @@ export async function syncCanvasForUser(
     // 2. Process each course
     for (const course of courses) {
       try {
-        await processCourse(userId, apiToken, baseUrl, course, result);
+        await processCourse(userId, apiToken, baseUrl, course, result, timezone);
       } catch (error) {
         if (error instanceof CanvasRateLimitError) {
           result.errors.push("Canvas rate limit reached — partial sync completed");
@@ -135,7 +153,8 @@ async function processCourse(
   apiToken: string,
   baseUrl: string,
   course: CanvasCourse,
-  result: CanvasSyncResult
+  result: CanvasSyncResult,
+  timezone: string
 ): Promise<void> {
   const assignments = await fetchCourseAssignments(
     baseUrl,
@@ -176,8 +195,10 @@ async function processCourse(
 
     // Create task
     const description = stripHtml(assignment.description);
+    const dueTime = formatDueTime(assignment.due_at, timezone);
     const notes = [
       `Course: ${course.name}`,
+      `\nDue: ${toDueDate(assignment.due_at, timezone)} at ${dueTime}`,
       description ? `\n${description}` : "",
       `\nCanvas: ${assignment.html_url}`,
     ].join("");
@@ -188,7 +209,7 @@ async function processCourse(
       notes,
       priority: computePriority(assignment.due_at),
       estimateMinutes: 60,
-      dueDate: toDueDate(assignment.due_at),
+      dueDate: toDueDate(assignment.due_at, timezone),
       status: "unscheduled",
       canvasAssignmentId: String(assignment.id),
     });
