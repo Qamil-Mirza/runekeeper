@@ -7,7 +7,7 @@ import {
   CanvasAuthError,
   CanvasRateLimitError,
 } from "./canvas-client";
-import type { CanvasAssignment, CanvasCourse } from "./canvas-client";
+import type { CanvasAssignment, CanvasCourse, CanvasTerm } from "./canvas-client";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("canvas-sync");
@@ -74,6 +74,43 @@ function formatDueTime(dueAt: string, timezone: string): string {
   }).format(date);
 }
 
+function filterToCurrentTerm(courses: CanvasCourse[]): CanvasCourse[] {
+  // Collect all unique terms that have a start_at date
+  const termMap = new Map<number, CanvasTerm>();
+  for (const course of courses) {
+    if (course.term && course.term.start_at) {
+      termMap.set(course.term.id, course.term);
+    }
+  }
+
+  if (termMap.size === 0) {
+    // No term info available — return all courses
+    return courses;
+  }
+
+  // Find the most recent term by start_at
+  let mostRecentTerm: CanvasTerm | null = null;
+  for (const term of termMap.values()) {
+    if (!mostRecentTerm || new Date(term.start_at!) > new Date(mostRecentTerm.start_at!)) {
+      mostRecentTerm = term;
+    }
+  }
+
+  if (!mostRecentTerm) return courses;
+
+  // Filter to only courses in the most recent term
+  const filtered = courses.filter(
+    (c) => c.enrollment_term_id === mostRecentTerm!.id
+  );
+
+  log.info(
+    { termId: mostRecentTerm.id, termName: mostRecentTerm.name, courseCount: filtered.length },
+    "filtered to most recent term"
+  );
+
+  return filtered;
+}
+
 // ─── Main Sync Function ────────────────────────────────────────────────────
 
 export async function syncCanvasForUser(
@@ -86,9 +123,13 @@ export async function syncCanvasForUser(
   const result: CanvasSyncResult = { processed: 0, tasksCreated: 0, errors: [] };
 
   try {
-    // 1. Fetch active courses
-    const courses = await fetchActiveCourses(baseUrl, apiToken);
-    log.info({ userId, courseCount: courses.length }, "fetched active courses");
+    // 1. Fetch active courses and filter to most recent term
+    const allCourses = await fetchActiveCourses(baseUrl, apiToken);
+    const courses = filterToCurrentTerm(allCourses);
+    log.info(
+      { userId, totalCourses: allCourses.length, filteredCourses: courses.length },
+      "fetched and filtered courses to current term"
+    );
 
     // 2. Process each course
     for (const course of courses) {

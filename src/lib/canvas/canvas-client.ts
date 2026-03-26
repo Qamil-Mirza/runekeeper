@@ -4,10 +4,19 @@ const log = createLogger("canvas-client");
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
+export interface CanvasTerm {
+  id: number;
+  name: string;
+  start_at: string | null; // ISO datetime
+  end_at: string | null; // ISO datetime
+}
+
 export interface CanvasCourse {
   id: number;
   name: string;
   course_code: string;
+  enrollment_term_id: number;
+  term?: CanvasTerm;
 }
 
 export interface CanvasSubmission {
@@ -120,6 +129,7 @@ export async function fetchActiveCourses(
 ): Promise<CanvasCourse[]> {
   return canvasFetch<CanvasCourse>(baseUrl, token, "/courses", {
     enrollment_state: "active",
+    "include[]": "term",
   });
 }
 
