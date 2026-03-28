@@ -34,7 +34,8 @@ const DURATION_PATTERNS: Array<{ pattern: RegExp; minutes: (match: RegExpMatchAr
 // Extract a quoted title from the assistant message
 function extractTitleFromMessage(message: string): string | null {
   // Match 'Single Quoted' or "Double Quoted" titles
-  const quoted = message.match(/['"\u2018\u2019\u201C\u201D]([^'"\u2018\u2019\u201C\u201D]{3,60})['"\u2018\u2019\u201C\u201D]/);
+  // Use a non-word-char lookbehind to avoid matching contractions like "I've"
+  const quoted = message.match(/(?<!\w)['"\u2018\u2019\u201C\u201D]([^'"\u2018\u2019\u201C\u201D]{3,60})['"\u2018\u2019\u201C\u201D]/);
   if (quoted) return quoted[1];
   return null;
 }

@@ -78,6 +78,7 @@ export interface SchedulerInput {
     meetingBuffer: number;
   };
   weekRange: WeekRange;
+  startAfter?: string; // ISO datetime — only schedule blocks at or after this time
 }
 
 export interface SchedulerOutput {

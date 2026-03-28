@@ -22,6 +22,7 @@ export function TodayQuests() {
       .slice(0, 3);
   }, [tasks]);
 
+  const doneCount = tasks.filter((t) => t.status === "done").length;
   const allCompleted = tasks.length > 0 && topQuests.length === 0;
 
   return (
@@ -31,9 +32,9 @@ export function TodayQuests() {
         <h3 className="font-display text-headline-md text-on-surface">
           Today&apos;s Quests
         </h3>
-        {topQuests.length > 0 && (
+        {tasks.length > 0 && (
           <span className="font-label text-label-sm uppercase tracking-wide text-on-surface-variant">
-            0/{topQuests.length} completed
+            {doneCount}/{tasks.length} completed
           </span>
         )}
       </div>

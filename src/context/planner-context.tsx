@@ -142,6 +142,21 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     loadData();
   }, [loadData]);
 
+  // Lightweight refresh — re-fetches tasks and blocks without triggering syncs
+  const reloadTasksAndBlocks = useCallback(async () => {
+    if (status !== "authenticated") return;
+    try {
+      const [tasksData, blocksData] = await Promise.all([
+        api.fetchTasks(),
+        api.fetchBlocks(),
+      ]);
+      setTasks(tasksData.map(dbTaskToTask));
+      setBlocks(blocksData.map(dbBlockToTimeBlock));
+    } catch {
+      // silent — best-effort refresh
+    }
+  }, [status]);
+
   // ─── Actions ─────────────────────────────────────────────────────────────
 
   const sendMessage = useCallback(
@@ -221,7 +236,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         }
 
         // Refresh data — the server may have created tasks or blocks
-        await loadData();
+        await reloadTasksAndBlocks();
       } catch (err) {
 
         const errorMsg: ChatMessage = {
@@ -241,7 +256,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
         setIsTyping(false);
       }
     },
-    [loadData]
+    [reloadTasksAndBlocks]
   );
 
   const toggleTaskDone = useCallback(async (taskId: string) => {
