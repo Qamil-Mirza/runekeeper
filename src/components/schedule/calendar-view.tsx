@@ -120,7 +120,7 @@ function EventCard({ block, isDone, linkedTask, onEdit }: { block: TimeBlock; is
       variants={fadeIn}
       onClick={() => linkedTask && onEdit?.(linkedTask)}
       className={cn(
-        "absolute left-10 right-4 overflow-hidden",
+        "absolute left-10 right-4 overflow-hidden border-b border-b-[rgba(58,36,16,0.12)]",
         isExternal
           ? "bg-surface-container/50 border-l-2 border-l-[#4285F4]/60 pointer-events-none"
           : accent.bg,
@@ -585,7 +585,7 @@ function WeekMiniView({
                         key={block.id}
                         onClick={() => linkedTask && onEdit(linkedTask)}
                         className={cn(
-                          "absolute left-0.5 right-0.5 px-1 py-0.5 overflow-hidden border-l-2",
+                          "absolute left-0.5 right-0.5 px-1 py-0.5 overflow-hidden border-l-2 border-b border-b-[rgba(58,36,16,0.12)]",
                           isExt ? "bg-surface-container/40" : accent.bg,
                           linkedTask && "cursor-pointer hover:brightness-95 transition-all"
                         )}

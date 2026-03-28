@@ -114,7 +114,7 @@ export async function handleAction(
     case "create_tasks":
       return handleCreateTasks(action.tasks, userId, timezone);
     case "generate_schedule":
-      return handleGenerateSchedule(userId, weekStart, weekEnd, pinnedBlockIds, action.startAfter);
+      return handleGenerateSchedule(userId, weekStart, weekEnd, pinnedBlockIds, action.startAfter, timezone);
     case "confirm_plan":
       return handleConfirmPlan(userId);
     case "adjust_block":
@@ -278,7 +278,8 @@ async function handleGenerateSchedule(
   weekStart: string,
   weekEnd: string,
   pinnedBlockIds?: Set<string>,
-  startAfter?: string
+  startAfter?: string,
+  timezone?: string
 ): Promise<ActionResult> {
   const preferences = { maxBlockMinutes: 120, meetingBuffer: 10 };
 
@@ -342,6 +343,7 @@ async function handleGenerateSchedule(
     preferences,
     weekRange: { start: weekStart, end: weekEnd },
     ...(startAfter ? { startAfter } : {}),
+    timezone,
   });
 
   // Combine pinned blocks + scheduler output for the full proposal
@@ -419,7 +421,7 @@ async function handleAdjustBlock(
       : undefined;
 
   if (!blockTitle) {
-    return handleGenerateSchedule(userId, weekStart, weekEnd);
+    return handleGenerateSchedule(userId, weekStart, weekEnd, undefined, undefined, timezone);
   }
 
   // Find the block to adjust
@@ -472,7 +474,7 @@ async function handleAdjustBlock(
           .returning();
 
         const pinnedBlockIds = new Set<string>([blockRow.id]);
-        const result = await handleGenerateSchedule(userId, weekStart, weekEnd, pinnedBlockIds);
+        const result = await handleGenerateSchedule(userId, weekStart, weekEnd, pinnedBlockIds, undefined, timezone);
         return {
           ...result,
           proposedBlocks: [
@@ -483,7 +485,7 @@ async function handleAdjustBlock(
       }
     }
 
-    return handleGenerateSchedule(userId, weekStart, weekEnd);
+    return handleGenerateSchedule(userId, weekStart, weekEnd, undefined, undefined, timezone);
   }
 
   // Update the task's estimateMinutes if a new duration was provided
@@ -531,7 +533,7 @@ async function handleAdjustBlock(
     const pinnedBlockIds = new Set<string>([blockRow.id]);
 
     // Regenerate remaining unscheduled tasks around this pinned block
-    const result = await handleGenerateSchedule(userId, weekStart, weekEnd, pinnedBlockIds);
+    const result = await handleGenerateSchedule(userId, weekStart, weekEnd, pinnedBlockIds, undefined, timezone);
     return {
       ...result,
       proposedBlocks: [
@@ -549,5 +551,5 @@ async function handleAdjustBlock(
       .where(eq(tasks.id, targetBlock.taskId));
   }
 
-  return handleGenerateSchedule(userId, weekStart, weekEnd);
+  return handleGenerateSchedule(userId, weekStart, weekEnd, undefined, undefined, timezone);
 }

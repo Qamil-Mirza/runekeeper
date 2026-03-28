@@ -34,7 +34,7 @@ export function TimeBlockComponent({ block, hourHeight, startHour }: TimeBlockPr
     <Tooltip content={`${block.title} · ${timeStr}`}>
       <div
         className={cn(
-          "absolute left-0.5 right-0.5 px-1.5 py-1 overflow-hidden cursor-default",
+          "absolute left-0.5 right-0.5 px-1.5 py-1 overflow-hidden cursor-default border-b border-b-[rgba(58,36,16,0.12)]",
           typeColors[block.type] || typeColors.focus,
           !block.committed && "opacity-60 border-dashed"
         )}
