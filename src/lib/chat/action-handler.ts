@@ -114,7 +114,7 @@ export async function handleAction(
     case "create_tasks":
       return handleCreateTasks(action.tasks, userId, timezone);
     case "generate_schedule":
-      return handleGenerateSchedule(userId, weekStart, weekEnd, pinnedBlockIds);
+      return handleGenerateSchedule(userId, weekStart, weekEnd, pinnedBlockIds, action.startAfter);
     case "confirm_plan":
       return handleConfirmPlan(userId);
     case "adjust_block":
@@ -277,7 +277,8 @@ async function handleGenerateSchedule(
   userId: string,
   weekStart: string,
   weekEnd: string,
-  pinnedBlockIds?: Set<string>
+  pinnedBlockIds?: Set<string>,
+  startAfter?: string
 ): Promise<ActionResult> {
   const preferences = { maxBlockMinutes: 120, meetingBuffer: 10 };
 
@@ -340,6 +341,7 @@ async function handleGenerateSchedule(
     busyWindows,
     preferences,
     weekRange: { start: weekStart, end: weekEnd },
+    ...(startAfter ? { startAfter } : {}),
   });
 
   // Combine pinned blocks + scheduler output for the full proposal

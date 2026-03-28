@@ -744,7 +744,7 @@ function resolveSpecificTime(
   let minutes = 0;
 
   const timeMatch = lower.match(
-    /(?:at|for|@)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/
+    /(?:at|for|@|after|from|starting)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/
   );
   if (timeMatch) {
     hours = parseInt(timeMatch[1], 10);

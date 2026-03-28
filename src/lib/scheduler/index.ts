@@ -8,10 +8,22 @@ import type {
 import { buildFreeTimeMap, type FreeSlot } from "./free-time";
 
 export function schedule(input: SchedulerInput): SchedulerOutput {
-  const { tasks, busyWindows, preferences, weekRange } = input;
+  const { tasks, busyWindows, preferences, weekRange, startAfter } = input;
 
   // Build free time map
   const freeSlots = buildFreeTimeMap(weekRange, busyWindows, preferences);
+
+  // If startAfter is set, clamp all free slots so nothing starts before that time
+  const startAfterDate = startAfter ? new Date(startAfter) : null;
+  if (startAfterDate) {
+    for (const slot of freeSlots) {
+      if (slot.start < startAfterDate) {
+        slot.start = new Date(Math.max(slot.start.getTime(), startAfterDate.getTime()));
+      }
+    }
+    // Remove slots that are now empty (start >= end)
+    freeSlots.splice(0, freeSlots.length, ...freeSlots.filter(s => s.start < s.end));
+  }
 
   // Sort tasks by priority (high first), then by due date (earliest first)
   const sortedTasks = [...tasks]

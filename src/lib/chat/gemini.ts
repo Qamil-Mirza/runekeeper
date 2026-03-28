@@ -30,6 +30,7 @@ export interface StructuredAction {
   change?: string;
   newEstimateMinutes?: number;
   newStartTime?: string;
+  startAfter?: string;
 }
 
 export interface StructuredResponse {
@@ -117,6 +118,11 @@ const RESPONSE_SCHEMA: Schema = {
             type: SchemaType.STRING,
             description:
               "For adjust_block: new start time as ISO datetime (e.g. 2026-03-24T08:30:00). Include when the user changes when a task should start.",
+          },
+          startAfter: {
+            type: SchemaType.STRING,
+            description:
+              "For generate_schedule: earliest allowed start time as ISO datetime (e.g. 2026-03-24T14:00:00). Include when the user says 'after 2pm', 'starting from 5pm', etc.",
           },
         },
         required: ["type"],

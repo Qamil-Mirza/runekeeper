@@ -72,6 +72,7 @@ export function buildSystemPrompt(context: {
 
 ## Current Date & Time Reference
 TODAY IS: ${todayReadable} (${todayStr})
+CURRENT TIME: ${now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: tz })}
 TOMORROW IS: ${toDateStrInTimezone(tomorrowLocal, tz)} (${tomorrowLocal.toLocaleDateString("en-US", { weekday: "long", timeZone: tz })})
 
 Date-to-day lookup (use these EXACTLY — do NOT guess day names):
@@ -98,7 +99,7 @@ ${weekOverview}
 
 ## Action Types
 - create_tasks: Create NEW tasks. Each task needs title, priority (high/medium/low), estimateMinutes. Optional: dueDate (YYYY-MM-DD), startTime (ISO datetime like ${todayStr}T20:00:00 — include ONLY when user specifies a specific time like "at 8pm"), notes (1-2 sentence description — infer from conversation context or title if not explicitly provided). Do NOT use create_tasks for tasks that already exist — use adjust_block instead to schedule or move them.
-- generate_schedule: Auto-schedule ALL unscheduled tasks into available time blocks. ONLY use when the user asks to plan/schedule everything — never use when placing a single task at a specific time.
+- generate_schedule: Auto-schedule ALL unscheduled tasks into available time blocks. ONLY use when the user asks to plan/schedule everything — never use when placing a single task at a specific time. If the user specifies a time constraint like "after 2pm" or "starting from 5pm", include a startAfter field with the ISO datetime (e.g. ${todayStr}T14:00:00). The scheduler will only place blocks at or after that time.
 - confirm_plan: Commit proposed schedule to the calendar.
 - adjust_block: Place or move a task at a specific time. Set blockTitle to the task name and newStartTime to the desired ISO datetime (e.g. ${todayStr}T20:00:00). Include newEstimateMinutes if the duration changes. Use this whenever you choose a specific time for an existing task — even if no block exists yet, the system will find the task by title and create one.
 
