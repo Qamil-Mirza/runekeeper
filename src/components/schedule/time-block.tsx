@@ -8,6 +8,8 @@ interface TimeBlockProps {
   block: TimeBlockType;
   hourHeight: number;
   startHour: number;
+  column?: number;
+  totalColumns?: number;
 }
 
 const typeColors: Record<string, string> = {
@@ -18,7 +20,7 @@ const typeColors: Record<string, string> = {
   admin: "bg-surface-container-lowest border-l-3 border-[#6b5030] text-[#3a2410] shadow-[0_2px_8px_rgba(58,36,16,0.08)]",
 };
 
-export function TimeBlockComponent({ block, hourHeight, startHour }: TimeBlockProps) {
+export function TimeBlockComponent({ block, hourHeight, startHour, column = 0, totalColumns = 1 }: TimeBlockProps) {
   const start = new Date(block.start);
   const end = new Date(block.end);
   const startMinutes = start.getHours() * 60 + start.getMinutes();
@@ -34,11 +36,21 @@ export function TimeBlockComponent({ block, hourHeight, startHour }: TimeBlockPr
     <Tooltip content={`${block.title} · ${timeStr}`}>
       <div
         className={cn(
-          "absolute left-0.5 right-0.5 px-1.5 py-1 overflow-hidden cursor-default border-b border-b-[rgba(58,36,16,0.12)]",
+          "absolute px-1.5 py-1 overflow-hidden cursor-default border-b border-b-[rgba(58,36,16,0.12)]",
           typeColors[block.type] || typeColors.focus,
           !block.committed && "opacity-60 border-dashed"
         )}
-        style={{ top: `${top}px`, height: `${height}px`, minHeight: "18px" }}
+        style={{
+          top: `${top}px`,
+          height: `${height}px`,
+          minHeight: "18px",
+          left: totalColumns > 1
+            ? `calc(${(column / totalColumns) * 100}% + 2px)`
+            : "2px",
+          width: totalColumns > 1
+            ? `calc(${(1 / totalColumns) * 100}% - ${column > 0 ? 3 : 4}px)`
+            : "calc(100% - 4px)",
+        }}
       >
         <span className="font-label text-label-sm font-medium leading-tight block truncate">
           {block.title}
