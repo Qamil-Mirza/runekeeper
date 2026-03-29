@@ -615,8 +615,8 @@ function WeekMiniView({
                             "absolute px-1 py-0.5 overflow-hidden border-l-2",
                             isExt ? "bg-surface-container/40" : accent.bg,
                             linkedTask && "cursor-pointer hover:brightness-95 transition-all",
-                            seg?.isContinuationFromPreviousDay && "border-t-2 border-dashed border-t-[rgba(200,120,40,0.35)]",
-                            seg?.continuesToNextDay && "border-b-2 border-dashed border-b-[rgba(200,120,40,0.35)]",
+                            seg?.isContinuationFromPreviousDay && "border-t-2 border-dashed border-t-[rgba(200,120,40,0.4)]",
+                            seg?.continuesToNextDay && "border-b-2 border-dashed border-b-[rgba(200,120,40,0.4)]",
                             !seg?.continuesToNextDay && "border-b border-b-[rgba(58,36,16,0.12)]"
                           )}
                           style={{

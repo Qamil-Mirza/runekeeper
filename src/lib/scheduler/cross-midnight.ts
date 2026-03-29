@@ -97,10 +97,3 @@ export function segmentsToTimeBlocks(segments: DisplaySegment[]): TimeBlock[] {
     end: seg.displayEnd,
   }));
 }
-
-/**
- * Check if a block spans midnight.
- */
-export function isCrossMidnight(block: TimeBlock): boolean {
-  return isoToLocalDate(block.start) !== isoToLocalDate(block.end);
-}
