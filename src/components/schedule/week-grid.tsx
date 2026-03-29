@@ -5,6 +5,7 @@ import type { TimeBlock } from "@/lib/types";
 import { usePlanner } from "@/context/planner-context";
 import { ScheduleHeader } from "./schedule-header";
 import { DayColumn } from "./day-column";
+import { splitCrossMidnightBlocks } from "@/lib/scheduler/cross-midnight";
 
 const START_HOUR = 8;
 const END_HOUR = 20;
@@ -42,18 +43,13 @@ export function WeekGrid() {
     });
   }, [blocks, weekRange]);
 
-  const blocksByDay = useMemo(() => {
-    const map: Record<string, TimeBlock[]> = {};
-    for (const dd of dayDates) {
-      map[dd.fullDate] = [];
-    }
-    for (const block of weekBlocks) {
-      const day = block.start.split("T")[0];
-      if (map[day]) {
-        map[day].push(block);
-      }
-    }
-    return map;
+  const segmentsByDay = useMemo(() => {
+    return Object.fromEntries(
+      dayDates.map((dd) => [
+        dd.fullDate,
+        splitCrossMidnightBlocks(weekBlocks, dd.fullDate),
+      ])
+    );
   }, [weekBlocks, dayDates]);
 
   const today = new Date().toISOString().split("T")[0];
@@ -79,7 +75,7 @@ export function WeekGrid() {
               key={dd.fullDate}
               dayLabel={dd.label}
               dateLabel={dd.date}
-              blocks={blocksByDay[dd.fullDate] || []}
+              segments={segmentsByDay[dd.fullDate] || []}
               hours={hours}
               hourHeight={HOUR_HEIGHT}
               startHour={START_HOUR}

@@ -49,7 +49,7 @@ export function findAlternativeSlot(
 
   // Try slots after the conflicting block on the same day
   const dayBlocks = existingBlocks
-    .filter((b) => b.start.startsWith(day))
+    .filter((b) => b.start.split("T")[0] === day || b.end.split("T")[0] === day)
     .sort((a, b) => a.start.localeCompare(b.start));
 
   const dayEnd = new Date(day + "T23:59:59");

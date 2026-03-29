@@ -20,6 +20,7 @@ import type {
 } from "@/lib/types";
 import { dbTaskToTask, dbBlockToTimeBlock } from "@/lib/types";
 import * as api from "@/lib/api-client";
+import { toLocalDateStr } from "@/lib/utils";
 
 // ─── Fallback for unauthenticated / loading ──────────────────────────────────
 
@@ -34,12 +35,13 @@ function getWeekRange(date: Date): WeekRange {
   const d = new Date(date);
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(d.setDate(diff));
-  const sunday = new Date(monday);
+  d.setDate(diff);
+  const monday = new Date(d);
+  const sunday = new Date(d);
   sunday.setDate(monday.getDate() + 6);
   return {
-    start: monday.toISOString().split("T")[0],
-    end: sunday.toISOString().split("T")[0],
+    start: toLocalDateStr(monday),
+    end: toLocalDateStr(sunday),
   };
 }
 
@@ -67,6 +69,7 @@ interface PlannerActions {
   addTask: (title: string) => void;
   updateTask: (taskId: string, updates: Partial<Task>, startTime?: string) => void;
   deleteTask: (taskId: string) => void;
+  updateBlockType: (blockId: string, blockType: string) => void;
   setCurrentView: (view: ViewId) => void;
   setTransitionMode: (mode: TransitionMode) => void;
   toggleDrawer: () => void;
@@ -390,6 +393,17 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     [loadData, blocks]
   );
 
+  const updateBlockType = useCallback(
+    (blockId: string, blockType: string) => {
+      setBlocks((prev) =>
+        prev.map((b) =>
+          b.id === blockId ? { ...b, type: blockType as any } : b
+        )
+      );
+    },
+    []
+  );
+
   const toggleDrawer = useCallback(() => setDrawerOpen((o) => !o), []);
 
   const commitProposedBlocks = useCallback(async () => {
@@ -406,7 +420,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
 
   const navigateWeek = useCallback((direction: -1 | 1) => {
     setWeekRange((prev) => {
-      const current = new Date(prev.start);
+      const current = new Date(prev.start + "T00:00:00");
       current.setDate(current.getDate() + direction * 7);
       return getWeekRange(current);
     });
@@ -435,6 +449,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       addTask,
       updateTask,
       deleteTask,
+      updateBlockType,
       setCurrentView,
       setTransitionMode,
       toggleDrawer,
@@ -458,6 +473,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       addTask,
       updateTask,
       deleteTask,
+      updateBlockType,
       setTransitionMode,
       toggleDrawer,
       commitProposedBlocks,
