@@ -1,4 +1,5 @@
 import type { TimeBlock, WeekRange } from "@/lib/types";
+import { toDateStrInTimezone } from "@/lib/utils";
 
 export interface FreeSlot {
   start: Date;
@@ -12,7 +13,8 @@ export function buildFreeTimeMap(
   preferences: {
     maxBlockMinutes: number;
     meetingBuffer: number;
-  }
+  },
+  timezone?: string
 ): FreeSlot[] {
   const freeSlots: FreeSlot[] = [];
   const now = new Date();
@@ -49,10 +51,15 @@ export function buildFreeTimeMap(
     }
 
     // Subtract busy windows (with meeting buffer)
-    const dayStr = day.toISOString().split("T")[0];
+    const dayStr = timezone
+      ? toDateStrInTimezone(day, timezone)
+      : day.toISOString().split("T")[0];
     const dayBusy = busyWindows.filter((b) => {
       const bStart = new Date(b.start);
-      return bStart.toISOString().split("T")[0] === dayStr;
+      const bStartDay = timezone
+        ? toDateStrInTimezone(bStart, timezone)
+        : bStart.toISOString().split("T")[0];
+      return bStartDay === dayStr;
     });
 
     for (const busy of dayBusy) {

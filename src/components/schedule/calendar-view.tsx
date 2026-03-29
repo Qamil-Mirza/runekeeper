@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn, toLocalDateStr, isoToLocalDate } from "@/lib/utils";
+import { assignOverlapColumns } from "@/lib/scheduler/overlap-layout";
 import { staggerChildren, slideUp, fadeIn } from "@/lib/animations";
 import { usePlanner } from "@/context/planner-context";
 import { QuestEditModal } from "@/components/inventory/quest-edit-modal";
@@ -98,7 +99,7 @@ function NowMarker({ startHour }: { startHour: number }) {
 
 // ─── Event Card ──────────────────────────────────────────────────────────────
 
-function EventCard({ block, isDone, linkedTask, onEdit }: { block: TimeBlock; isDone?: boolean; linkedTask?: Task; onEdit?: (task: Task) => void }) {
+function EventCard({ block, isDone, linkedTask, onEdit, column = 0, totalColumns = 1 }: { block: TimeBlock; isDone?: boolean; linkedTask?: Task; onEdit?: (task: Task) => void; column?: number; totalColumns?: number }) {
   const start = new Date(block.start);
   const end = new Date(block.end);
 
@@ -120,7 +121,7 @@ function EventCard({ block, isDone, linkedTask, onEdit }: { block: TimeBlock; is
       variants={fadeIn}
       onClick={() => linkedTask && onEdit?.(linkedTask)}
       className={cn(
-        "absolute left-10 right-4 overflow-hidden",
+        "absolute overflow-hidden border-b border-b-[rgba(58,36,16,0.12)]",
         isExternal
           ? "bg-surface-container/50 border-l-2 border-l-[#4285F4]/60 pointer-events-none"
           : accent.bg,
@@ -132,6 +133,13 @@ function EventCard({ block, isDone, linkedTask, onEdit }: { block: TimeBlock; is
         top: `${top}px`,
         minHeight: `${Math.max(height, 40)}px`,
         borderRadius: "2px",
+        left: totalColumns > 1
+          ? `calc(40px + ${(column / totalColumns) * 100}% - ${(column / totalColumns) * 56}px + ${column > 0 ? 0.5 : 0}px)`
+          : "40px",
+        width: totalColumns > 1
+          ? `calc(${(1 / totalColumns) * 100}% - ${(1 / totalColumns) * 56}px - 1px)`
+          : undefined,
+        right: totalColumns > 1 ? undefined : "16px",
       }}
     >
       <div className="px-3.5 py-2.5 h-full flex flex-col">
@@ -371,10 +379,10 @@ export function CalendarView() {
                 initial="hidden"
                 animate="visible"
               >
-                {dayBlocks.map((block) => {
+                {assignOverlapColumns(dayBlocks).map(({ block, column, totalColumns }) => {
                   const linkedTask = block.taskId ? tasks.find((t) => t.id === block.taskId) : undefined;
                   return (
-                    <EventCard key={block.id} block={block} isDone={linkedTask?.status === "done"} linkedTask={linkedTask} onEdit={setEditingTask} />
+                    <EventCard key={block.id} block={block} isDone={linkedTask?.status === "done"} linkedTask={linkedTask} onEdit={setEditingTask} column={column} totalColumns={totalColumns} />
                   );
                 })}
               </motion.div>
@@ -570,7 +578,7 @@ function WeekMiniView({
                       style={{ top: `${i * MINI_HOUR_HEIGHT}px`, height: `${MINI_HOUR_HEIGHT}px` }}
                     />
                   ))}
-                  {dayBlocks.map((block) => {
+                  {assignOverlapColumns(dayBlocks).map(({ block, column, totalColumns }) => {
                     const s = new Date(block.start);
                     const e = new Date(block.end);
                     const sMin = s.getHours() * 60 + s.getMinutes();
@@ -585,11 +593,21 @@ function WeekMiniView({
                         key={block.id}
                         onClick={() => linkedTask && onEdit(linkedTask)}
                         className={cn(
-                          "absolute left-0.5 right-0.5 px-1 py-0.5 overflow-hidden border-l-2",
+                          "absolute px-1 py-0.5 overflow-hidden border-l-2 border-b border-b-[rgba(58,36,16,0.12)]",
                           isExt ? "bg-surface-container/40" : accent.bg,
                           linkedTask && "cursor-pointer hover:brightness-95 transition-all"
                         )}
-                        style={{ top: `${top}px`, height: `${Math.max(h, 14)}px`, borderLeftColor: isExt ? "#4285F4" : "var(--color-tertiary)" }}
+                        style={{
+                          top: `${top}px`,
+                          height: `${Math.max(h, 14)}px`,
+                          borderLeftColor: isExt ? "#4285F4" : "var(--color-tertiary)",
+                          left: totalColumns > 1
+                            ? `calc(${(column / totalColumns) * 100}% + 2px)`
+                            : "2px",
+                          width: totalColumns > 1
+                            ? `calc(${(1 / totalColumns) * 100}% - 3px)`
+                            : "calc(100% - 4px)",
+                        }}
                       >
                         <span className={cn("font-label text-[9px] font-medium leading-tight block truncate", isExt ? "text-[#6b5030]" : "text-[#3a2410]")}>
                           {block.title}

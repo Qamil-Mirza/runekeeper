@@ -79,6 +79,7 @@ export interface SchedulerInput {
   };
   weekRange: WeekRange;
   startAfter?: string; // ISO datetime — only schedule blocks at or after this time
+  timezone?: string; // IANA timezone string, e.g. "America/Los_Angeles"
 }
 
 export interface SchedulerOutput {

@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils";
 import type { TimeBlock } from "@/lib/types";
 import { TimeBlockComponent } from "./time-block";
+import { assignOverlapColumns } from "@/lib/scheduler/overlap-layout";
 
 interface DayColumnProps {
   dayLabel: string;
@@ -50,12 +51,14 @@ export function DayColumn({
         ))}
 
         {/* Time blocks */}
-        {blocks.map((block) => (
+        {assignOverlapColumns(blocks).map(({ block, column, totalColumns }) => (
           <TimeBlockComponent
             key={block.id}
             block={block}
             hourHeight={hourHeight}
             startHour={startHour}
+            column={column}
+            totalColumns={totalColumns}
           />
         ))}
       </div>
