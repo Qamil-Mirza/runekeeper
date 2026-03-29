@@ -578,7 +578,7 @@ function WeekMiniView({
                       style={{ top: `${i * MINI_HOUR_HEIGHT}px`, height: `${MINI_HOUR_HEIGHT}px` }}
                     />
                   ))}
-                  {dayBlocks.map((block) => {
+                  {assignOverlapColumns(dayBlocks).map(({ block, column, totalColumns }) => {
                     const s = new Date(block.start);
                     const e = new Date(block.end);
                     const sMin = s.getHours() * 60 + s.getMinutes();
@@ -593,11 +593,21 @@ function WeekMiniView({
                         key={block.id}
                         onClick={() => linkedTask && onEdit(linkedTask)}
                         className={cn(
-                          "absolute left-0.5 right-0.5 px-1 py-0.5 overflow-hidden border-l-2 border-b border-b-[rgba(58,36,16,0.12)]",
+                          "absolute px-1 py-0.5 overflow-hidden border-l-2 border-b border-b-[rgba(58,36,16,0.12)]",
                           isExt ? "bg-surface-container/40" : accent.bg,
                           linkedTask && "cursor-pointer hover:brightness-95 transition-all"
                         )}
-                        style={{ top: `${top}px`, height: `${Math.max(h, 14)}px`, borderLeftColor: isExt ? "#4285F4" : "var(--color-tertiary)" }}
+                        style={{
+                          top: `${top}px`,
+                          height: `${Math.max(h, 14)}px`,
+                          borderLeftColor: isExt ? "#4285F4" : "var(--color-tertiary)",
+                          left: totalColumns > 1
+                            ? `calc(${(column / totalColumns) * 100}% + 2px)`
+                            : "2px",
+                          width: totalColumns > 1
+                            ? `calc(${(1 / totalColumns) * 100}% - 3px)`
+                            : "calc(100% - 4px)",
+                        }}
                       >
                         <span className={cn("font-label text-[9px] font-medium leading-tight block truncate", isExt ? "text-[#6b5030]" : "text-[#3a2410]")}>
                           {block.title}
