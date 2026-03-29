@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn, toLocalDateStr, isoToLocalDate } from "@/lib/utils";
 import { assignOverlapColumns } from "@/lib/scheduler/overlap-layout";
+import { splitCrossMidnightBlocks, segmentsToTimeBlocks, type DisplaySegment } from "@/lib/scheduler/cross-midnight";
 import { staggerChildren, slideUp, fadeIn } from "@/lib/animations";
 import { usePlanner } from "@/context/planner-context";
 import { QuestEditModal } from "@/components/inventory/quest-edit-modal";
@@ -99,13 +100,15 @@ function NowMarker({ startHour }: { startHour: number }) {
 
 // ─── Event Card ──────────────────────────────────────────────────────────────
 
-function EventCard({ block, isDone, linkedTask, onEdit, column = 0, totalColumns = 1 }: { block: TimeBlock; isDone?: boolean; linkedTask?: Task; onEdit?: (task: Task) => void; column?: number; totalColumns?: number }) {
-  const start = new Date(block.start);
-  const end = new Date(block.end);
+function EventCard({ block, isDone, linkedTask, onEdit, column = 0, totalColumns = 1, displayStart, displayEnd, isContinuationFromPreviousDay = false, continuesToNextDay = false }: { block: TimeBlock; isDone?: boolean; linkedTask?: Task; onEdit?: (task: Task) => void; column?: number; totalColumns?: number; displayStart?: string; displayEnd?: string; isContinuationFromPreviousDay?: boolean; continuesToNextDay?: boolean }) {
+  const effectiveStart = displayStart ? new Date(displayStart) : new Date(block.start);
+  const effectiveEnd = displayEnd ? new Date(displayEnd) : new Date(block.end);
 
   // Clamp to visible range
-  const startMin = Math.max(start.getHours() * 60 + start.getMinutes(), START_HOUR * 60);
-  const endMin = Math.min(end.getHours() * 60 + end.getMinutes(), END_HOUR * 60);
+  const startMin = Math.max(effectiveStart.getHours() * 60 + effectiveStart.getMinutes(), START_HOUR * 60);
+  const endMin = continuesToNextDay
+    ? END_HOUR * 60
+    : Math.min(effectiveEnd.getHours() * 60 + effectiveEnd.getMinutes(), END_HOUR * 60);
   const durationMinutes = endMin - startMin;
   if (durationMinutes <= 0) return null;
 
@@ -121,13 +124,16 @@ function EventCard({ block, isDone, linkedTask, onEdit, column = 0, totalColumns
       variants={fadeIn}
       onClick={() => linkedTask && onEdit?.(linkedTask)}
       className={cn(
-        "absolute overflow-hidden border-b border-b-[rgba(58,36,16,0.12)]",
+        "absolute overflow-hidden",
         isExternal
           ? "bg-surface-container/50 border-l-2 border-l-[#4285F4]/60 pointer-events-none"
           : accent.bg,
         isDone && "opacity-50",
         !block.committed && !isExternal && "opacity-70 border-dashed border border-outline-variant/40",
-        linkedTask && onEdit && "cursor-pointer"
+        linkedTask && onEdit && "cursor-pointer",
+        isContinuationFromPreviousDay && "border-t-2 border-dashed border-t-[rgba(200,120,40,0.4)]",
+        continuesToNextDay && "border-b-2 border-dashed border-b-[rgba(200,120,40,0.4)]",
+        !continuesToNextDay && "border-b border-b-[rgba(58,36,16,0.12)]"
       )}
       style={{
         top: `${top}px`,
@@ -150,7 +156,7 @@ function EventCard({ block, isDone, linkedTask, onEdit, column = 0, totalColumns
             isExternal ? "text-[#6b5030]" : "text-[#3a2410]",
             isDone && "line-through text-[#6b5030]/50"
           )}>
-            {block.title}
+            {isContinuationFromPreviousDay ? `↓ ${block.title}` : block.title}
           </h4>
           {/* Done checkmark or Google badge */}
           {isDone ? (
@@ -255,19 +261,9 @@ export function CalendarView() {
     }
   };
 
-  // Blocks for selected day (exclude blocks entirely outside visible hours)
-  const dayBlocks = useMemo(
-    () =>
-      blocks
-        .filter((b) => {
-          if (isoToLocalDate(b.start) !== selectedDateStr) return false;
-          const startHour = new Date(b.start).getHours();
-          const endHour = new Date(b.end).getHours() + (new Date(b.end).getMinutes() > 0 ? 1 : 0);
-          // Skip if entirely outside the visible range
-          if (endHour <= START_HOUR || startHour >= END_HOUR) return false;
-          return true;
-        })
-        .sort((a, b) => a.start.localeCompare(b.start)),
+  // Blocks for selected day — split cross-midnight blocks into day-scoped segments
+  const daySegments = useMemo(
+    () => splitCrossMidnightBlocks(blocks, selectedDateStr),
     [blocks, selectedDateStr]
   );
 
@@ -379,12 +375,31 @@ export function CalendarView() {
                 initial="hidden"
                 animate="visible"
               >
-                {assignOverlapColumns(dayBlocks).map(({ block, column, totalColumns }) => {
-                  const linkedTask = block.taskId ? tasks.find((t) => t.id === block.taskId) : undefined;
-                  return (
-                    <EventCard key={block.id} block={block} isDone={linkedTask?.status === "done"} linkedTask={linkedTask} onEdit={setEditingTask} column={column} totalColumns={totalColumns} />
-                  );
-                })}
+                {(() => {
+                  const pseudoBlocks = segmentsToTimeBlocks(daySegments);
+                  const layouts = assignOverlapColumns(pseudoBlocks);
+                  const segmentMap = new Map(daySegments.map((s) => [s.segmentId, s]));
+                  return layouts.map(({ block: pseudoBlock, column, totalColumns }) => {
+                    const seg = segmentMap.get(pseudoBlock.id);
+                    const origBlock = seg?.block ?? pseudoBlock;
+                    const linkedTask = origBlock.taskId ? tasks.find((t) => t.id === origBlock.taskId) : undefined;
+                    return (
+                      <EventCard
+                        key={pseudoBlock.id}
+                        block={origBlock}
+                        isDone={linkedTask?.status === "done"}
+                        linkedTask={linkedTask}
+                        onEdit={setEditingTask}
+                        column={column}
+                        totalColumns={totalColumns}
+                        displayStart={seg?.displayStart}
+                        displayEnd={seg?.displayEnd}
+                        isContinuationFromPreviousDay={seg?.isContinuationFromPreviousDay}
+                        continuesToNextDay={seg?.continuesToNextDay}
+                      />
+                    );
+                  });
+                })()}
               </motion.div>
             </div>
 
@@ -507,12 +522,10 @@ function WeekMiniView({
   const todayStr = toLocalDateStr(new Date());
   const selStr = toLocalDateStr(selectedDate);
 
-  const blocksByDay = useMemo(() => {
-    const map: Record<string, TimeBlock[]> = {};
-    for (const dd of dayDates) map[dd.fullDate] = [];
-    for (const block of blocks) {
-      const day = isoToLocalDate(block.start);
-      if (map[day]) map[day].push(block);
+  const segmentsByDay = useMemo(() => {
+    const map: Record<string, DisplaySegment[]> = {};
+    for (const dd of dayDates) {
+      map[dd.fullDate] = splitCrossMidnightBlocks(blocks, dd.fullDate);
     }
     return map;
   }, [blocks, dayDates]);
@@ -552,7 +565,7 @@ function WeekMiniView({
           </div>
           {/* Day columns */}
           {dayDates.map((dd) => {
-            const dayBlocks = blocksByDay[dd.fullDate] || [];
+            const daySegments = segmentsByDay[dd.fullDate] || [];
             const isToday = dd.fullDate === todayStr;
             const isSelected = dd.fullDate === selStr;
             return (
@@ -578,43 +591,53 @@ function WeekMiniView({
                       style={{ top: `${i * MINI_HOUR_HEIGHT}px`, height: `${MINI_HOUR_HEIGHT}px` }}
                     />
                   ))}
-                  {assignOverlapColumns(dayBlocks).map(({ block, column, totalColumns }) => {
-                    const s = new Date(block.start);
-                    const e = new Date(block.end);
-                    const sMin = s.getHours() * 60 + s.getMinutes();
-                    const eMin = e.getHours() * 60 + e.getMinutes();
-                    const top = ((sMin - MINI_START_HOUR * 60) / 60) * MINI_HOUR_HEIGHT;
-                    const h = ((eMin - sMin) / 60) * MINI_HOUR_HEIGHT;
-                    const isExt = block.source === "google_calendar";
-                    const accent = blockAccent[block.type] || blockAccent.focus;
-                    const linkedTask = block.taskId ? tasks.find((t) => t.id === block.taskId) : undefined;
-                    return (
-                      <div
-                        key={block.id}
-                        onClick={() => linkedTask && onEdit(linkedTask)}
-                        className={cn(
-                          "absolute px-1 py-0.5 overflow-hidden border-l-2 border-b border-b-[rgba(58,36,16,0.12)]",
-                          isExt ? "bg-surface-container/40" : accent.bg,
-                          linkedTask && "cursor-pointer hover:brightness-95 transition-all"
-                        )}
-                        style={{
-                          top: `${top}px`,
-                          height: `${Math.max(h, 14)}px`,
-                          borderLeftColor: isExt ? "#4285F4" : "var(--color-tertiary)",
-                          left: totalColumns > 1
-                            ? `calc(${(column / totalColumns) * 100}% + 2px)`
-                            : "2px",
-                          width: totalColumns > 1
-                            ? `calc(${(1 / totalColumns) * 100}% - 3px)`
-                            : "calc(100% - 4px)",
-                        }}
-                      >
-                        <span className={cn("font-label text-[9px] font-medium leading-tight block truncate", isExt ? "text-[#6b5030]" : "text-[#3a2410]")}>
-                          {block.title}
-                        </span>
-                      </div>
-                    );
-                  })}
+                  {(() => {
+                    const pseudoBlocks = segmentsToTimeBlocks(daySegments);
+                    const layouts = assignOverlapColumns(pseudoBlocks);
+                    const segMap = new Map(daySegments.map((s) => [s.segmentId, s]));
+                    return layouts.map(({ block: pseudoBlock, column, totalColumns }) => {
+                      const seg = segMap.get(pseudoBlock.id);
+                      const origBlock = seg?.block ?? pseudoBlock;
+                      const s = new Date(seg?.displayStart ?? origBlock.start);
+                      const e = new Date(seg?.displayEnd ?? origBlock.end);
+                      const sMin = s.getHours() * 60 + s.getMinutes();
+                      const eMin = seg?.continuesToNextDay ? 24 * 60 : e.getHours() * 60 + e.getMinutes();
+                      const top = ((sMin - MINI_START_HOUR * 60) / 60) * MINI_HOUR_HEIGHT;
+                      const h = ((eMin - sMin) / 60) * MINI_HOUR_HEIGHT;
+                      const isExt = origBlock.source === "google_calendar";
+                      const accent = blockAccent[origBlock.type] || blockAccent.focus;
+                      const linkedTask = origBlock.taskId ? tasks.find((t) => t.id === origBlock.taskId) : undefined;
+                      return (
+                        <div
+                          key={pseudoBlock.id}
+                          onClick={() => linkedTask && onEdit(linkedTask)}
+                          className={cn(
+                            "absolute px-1 py-0.5 overflow-hidden border-l-2",
+                            isExt ? "bg-surface-container/40" : accent.bg,
+                            linkedTask && "cursor-pointer hover:brightness-95 transition-all",
+                            seg?.isContinuationFromPreviousDay && "border-t-2 border-dashed border-t-[rgba(200,120,40,0.35)]",
+                            seg?.continuesToNextDay && "border-b-2 border-dashed border-b-[rgba(200,120,40,0.35)]",
+                            !seg?.continuesToNextDay && "border-b border-b-[rgba(58,36,16,0.12)]"
+                          )}
+                          style={{
+                            top: `${top}px`,
+                            height: `${Math.max(h, 14)}px`,
+                            borderLeftColor: isExt ? "#4285F4" : "var(--color-tertiary)",
+                            left: totalColumns > 1
+                              ? `calc(${(column / totalColumns) * 100}% + 2px)`
+                              : "2px",
+                            width: totalColumns > 1
+                              ? `calc(${(1 / totalColumns) * 100}% - 3px)`
+                              : "calc(100% - 4px)",
+                          }}
+                        >
+                          <span className={cn("font-label text-[9px] font-medium leading-tight block truncate", isExt ? "text-[#6b5030]" : "text-[#3a2410]")}>
+                            {origBlock.title}
+                          </span>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
             );
@@ -646,12 +669,16 @@ function MonthMiniView({
   const todayStr = toLocalDateStr(new Date());
   const selStr = toLocalDateStr(selectedDate);
 
-  // Count blocks per day
+  // Count blocks per day (cross-midnight blocks count on both days)
   const blockCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const b of blocks) {
-      const day = isoToLocalDate(b.start);
-      counts[day] = (counts[day] || 0) + 1;
+      const startDay = isoToLocalDate(b.start);
+      const endDay = isoToLocalDate(b.end);
+      counts[startDay] = (counts[startDay] || 0) + 1;
+      if (endDay !== startDay) {
+        counts[endDay] = (counts[endDay] || 0) + 1;
+      }
     }
     return counts;
   }, [blocks]);
