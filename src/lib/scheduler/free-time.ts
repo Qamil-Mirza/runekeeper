@@ -56,10 +56,14 @@ export function buildFreeTimeMap(
       : day.toISOString().split("T")[0];
     const dayBusy = busyWindows.filter((b) => {
       const bStart = new Date(b.start);
+      const bEnd = new Date(b.end);
       const bStartDay = timezone
         ? toDateStrInTimezone(bStart, timezone)
         : bStart.toISOString().split("T")[0];
-      return bStartDay === dayStr;
+      const bEndDay = timezone
+        ? toDateStrInTimezone(bEnd, timezone)
+        : bEnd.toISOString().split("T")[0];
+      return bStartDay === dayStr || bEndDay === dayStr;
     });
 
     for (const busy of dayBusy) {
@@ -93,6 +97,37 @@ export function buildFreeTimeMap(
   }
 
   return freeSlots;
+}
+
+/**
+ * Merge free slots that are adjacent across midnight boundaries.
+ * If day N's last slot ends at 23:59:59.999 and day N+1's first slot
+ * starts at 00:00:00.000, merge them into one continuous slot.
+ */
+export function mergeCrossDaySlots(slots: FreeSlot[]): FreeSlot[] {
+  if (slots.length <= 1) return slots;
+
+  const sorted = [...slots].sort(
+    (a, b) => a.start.getTime() - b.start.getTime()
+  );
+
+  const merged: FreeSlot[] = [sorted[0]];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = merged[merged.length - 1];
+    const curr = sorted[i];
+
+    // Check if slots are adjacent (within 1 second gap at midnight boundary)
+    const gap = curr.start.getTime() - prev.end.getTime();
+    if (gap <= 1000) {
+      // Merge: extend the previous slot's end
+      prev.end = curr.end;
+    } else {
+      merged.push({ ...curr });
+    }
+  }
+
+  return merged;
 }
 
 function subtractInterval(
