@@ -6,7 +6,8 @@ import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import type { Task, TimeBlock, Priority } from "@/lib/types";
+import type { Task, TimeBlock, Priority, BlockType } from "@/lib/types";
+import * as api from "@/lib/api-client";
 
 interface QuestEditModalProps {
   task: Task | null;
@@ -14,6 +15,7 @@ interface QuestEditModalProps {
   onClose: () => void;
   onSave: (taskId: string, updates: Partial<Task>, startTime?: string) => void;
   onDelete: (taskId: string) => void;
+  onBlockTypeChange?: (blockId: string, blockType: BlockType) => void;
 }
 
 const priorities: { value: Priority; label: string; style: string; activeStyle: string }[] = [
@@ -37,13 +39,22 @@ const priorities: { value: Priority; label: string; style: string; activeStyle: 
   },
 ];
 
-export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: QuestEditModalProps) {
+const blockTypes: { value: BlockType; label: string; emoji: string }[] = [
+  { value: "focus", label: "Deep Work", emoji: "📖" },
+  { value: "meeting", label: "Meeting", emoji: "🤝" },
+  { value: "class", label: "Class", emoji: "🏛" },
+  { value: "personal", label: "Personal", emoji: "🌿" },
+  { value: "admin", label: "Admin", emoji: "📋" },
+];
+
+export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete, onBlockTypeChange }: QuestEditModalProps) {
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [priority, setPriority] = useState<Priority>("medium");
   const [dueDate, setDueDate] = useState("");
   const [estimateMinutes, setEstimateMinutes] = useState(30);
   const [startTime, setStartTime] = useState("");
+  const [blockType, setBlockType] = useState<BlockType>("focus");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -56,12 +67,13 @@ export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: Q
       setEstimateMinutes(task.estimateMinutes);
       setConfirmingDelete(false);
 
-      // Extract time from linked block
+      // Extract time and type from linked block
       if (timeBlock) {
         const d = new Date(timeBlock.start);
         const hh = String(d.getHours()).padStart(2, "0");
         const mm = String(d.getMinutes()).padStart(2, "0");
         setStartTime(`${hh}:${mm}`);
+        setBlockType(timeBlock.type);
       } else {
         setStartTime("");
       }
@@ -106,8 +118,15 @@ export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: Q
     if (Object.keys(updates).length > 0 || startTimeISO !== undefined) {
       onSave(task.id, updates, startTimeISO);
     }
+
+    // Update block type if changed
+    if (timeBlock && blockType !== timeBlock.type) {
+      api.updateBlock(timeBlock.id, { blockType } as any);
+      onBlockTypeChange?.(timeBlock.id, blockType);
+    }
+
     onClose();
-  }, [task, title, notes, priority, dueDate, estimateMinutes, startTime, timeBlock, onSave, onClose]);
+  }, [task, title, notes, priority, dueDate, estimateMinutes, startTime, timeBlock, blockType, onSave, onClose]);
 
   const handleDelete = useCallback(() => {
     if (!task) return;
@@ -233,6 +252,32 @@ export function QuestEditModal({ task, timeBlock, onClose, onSave, onDelete }: Q
                   ))}
                 </div>
               </div>
+
+              {/* Block Type (only for scheduled quests) */}
+              {timeBlock && (
+                <div className="flex flex-col gap-micro">
+                  <span className="font-label text-label-sm font-medium tracking-wide uppercase text-on-surface-variant">
+                    Type
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {blockTypes.map((bt) => (
+                      <button
+                        key={bt.value}
+                        onClick={() => setBlockType(bt.value)}
+                        className={cn(
+                          "px-3 py-1.5 font-label text-label-sm font-medium tracking-wide rounded-none transition-all duration-200 flex items-center gap-1.5",
+                          blockType === bt.value
+                            ? "bg-tertiary/15 text-tertiary border-b border-tertiary/30"
+                            : "text-on-surface-variant border-b border-transparent hover:opacity-80"
+                        )}
+                      >
+                        <span>{bt.emoji}</span>
+                        {bt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Due Date & Start Time row */}
               <div className="grid grid-cols-2 gap-3">

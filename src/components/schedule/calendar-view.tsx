@@ -228,7 +228,7 @@ function UnmappedQuestRow({ task, even, onEdit }: { task: Task; even: boolean; o
 // ─── Main Calendar View ──────────────────────────────────────────────────────
 
 export function CalendarView() {
-  const { blocks, tasks, navigateWeek, weekRange, updateTask, deleteTask } = usePlanner();
+  const { blocks, tasks, navigateWeek, weekRange, updateTask, deleteTask, updateBlockType } = usePlanner();
   const [selectedDateStr, setSelectedDateStr] = useState(() => toLocalDateStr(new Date()));
   const [mode, setMode] = useState<CalendarMode>("day");
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -477,6 +477,7 @@ export function CalendarView() {
         onClose={() => setEditingTask(null)}
         onSave={updateTask}
         onDelete={deleteTask}
+        onBlockTypeChange={updateBlockType}
       />
     </div>
   );

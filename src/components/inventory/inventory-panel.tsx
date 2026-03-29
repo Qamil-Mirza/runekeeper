@@ -8,7 +8,7 @@ import { AddTaskInput } from "./add-task-input";
 import { QuestEditModal } from "./quest-edit-modal";
 
 export function InventoryPanel() {
-  const { tasks, blocks, toggleTaskDone, addTask, updateTask, deleteTask } = usePlanner();
+  const { tasks, blocks, toggleTaskDone, addTask, updateTask, deleteTask, updateBlockType } = usePlanner();
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const editingBlock = editingTask
@@ -51,6 +51,7 @@ export function InventoryPanel() {
         onClose={() => setEditingTask(null)}
         onSave={updateTask}
         onDelete={deleteTask}
+        onBlockTypeChange={updateBlockType}
       />
     </div>
   );

@@ -69,6 +69,7 @@ interface PlannerActions {
   addTask: (title: string) => void;
   updateTask: (taskId: string, updates: Partial<Task>, startTime?: string) => void;
   deleteTask: (taskId: string) => void;
+  updateBlockType: (blockId: string, blockType: string) => void;
   setCurrentView: (view: ViewId) => void;
   setTransitionMode: (mode: TransitionMode) => void;
   toggleDrawer: () => void;
@@ -392,6 +393,17 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     [loadData, blocks]
   );
 
+  const updateBlockType = useCallback(
+    (blockId: string, blockType: string) => {
+      setBlocks((prev) =>
+        prev.map((b) =>
+          b.id === blockId ? { ...b, type: blockType as any } : b
+        )
+      );
+    },
+    []
+  );
+
   const toggleDrawer = useCallback(() => setDrawerOpen((o) => !o), []);
 
   const commitProposedBlocks = useCallback(async () => {
@@ -437,6 +449,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       addTask,
       updateTask,
       deleteTask,
+      updateBlockType,
       setCurrentView,
       setTransitionMode,
       toggleDrawer,
@@ -460,6 +473,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       addTask,
       updateTask,
       deleteTask,
+      updateBlockType,
       setTransitionMode,
       toggleDrawer,
       commitProposedBlocks,
