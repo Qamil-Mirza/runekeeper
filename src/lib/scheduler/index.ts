@@ -5,13 +5,14 @@ import type {
   SchedulerOutput,
   BlockType,
 } from "@/lib/types";
-import { buildFreeTimeMap, type FreeSlot } from "./free-time";
+import { buildFreeTimeMap, mergeCrossDaySlots, type FreeSlot } from "./free-time";
 
 export function schedule(input: SchedulerInput): SchedulerOutput {
   const { tasks, busyWindows, preferences, weekRange, startAfter, timezone } = input;
 
   // Build free time map
-  const freeSlots = buildFreeTimeMap(weekRange, busyWindows, preferences, timezone);
+  const rawSlots = buildFreeTimeMap(weekRange, busyWindows, preferences, timezone);
+  const freeSlots = mergeCrossDaySlots(rawSlots);
 
   // If startAfter is set, clamp all free slots so nothing starts before that time
   const startAfterDate = startAfter ? new Date(startAfter) : null;
