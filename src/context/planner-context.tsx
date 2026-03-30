@@ -47,7 +47,7 @@ function getWeekRange(date: Date): WeekRange {
 
 // ─── Context Types ───────────────────────────────────────────────────────────
 
-export type ViewId = "home" | "chat" | "quest-log" | "calendar" | "integrations";
+export type ViewId = "home" | "chat" | "quest-log" | "calendar" | "integrations" | "profile";
 export type TransitionMode = "none" | "ink-spread";
 
 interface PlannerState {
@@ -76,6 +76,7 @@ interface PlannerActions {
   commitProposedBlocks: () => void;
   navigateWeek: (direction: -1 | 1) => void;
   refreshData: () => void;
+  clearRunekeeperData: () => Promise<{ deletedTasks: number; deletedBlocks: number }>;
 }
 
 const PlannerContext = createContext<(PlannerState & PlannerActions) | null>(
@@ -129,6 +130,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
             .toUpperCase()
             .slice(0, 2),
           timezone: userPrefs.timezone,
+          email: userPrefs.email,
+          image: userPrefs.image ?? undefined,
         });
       }
 
@@ -393,6 +396,17 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     [loadData, blocks]
   );
 
+  const clearRunekeeperData = useCallback(async () => {
+    try {
+      const result = await api.clearUserData();
+      await reloadTasksAndBlocks();
+      return result;
+    } catch (err) {
+      await reloadTasksAndBlocks();
+      throw err;
+    }
+  }, [reloadTasksAndBlocks]);
+
   const updateBlockType = useCallback(
     (blockId: string, blockType: string) => {
       setBlocks((prev) =>
@@ -456,6 +470,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       commitProposedBlocks,
       navigateWeek,
       refreshData,
+      clearRunekeeperData,
     }),
     [
       user,
@@ -479,6 +494,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       commitProposedBlocks,
       navigateWeek,
       refreshData,
+      clearRunekeeperData,
     ]
   );
 

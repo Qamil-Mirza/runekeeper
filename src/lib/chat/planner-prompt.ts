@@ -109,7 +109,9 @@ ${weekOverview}
    - "Breakfast tomorrow" → actions: [], ask how long (suggest 30 min)
    - "Study" → actions: [], ask what subject and how long (suggest 60–120 min)
    Keep it to ONE question, suggest a default, and let the user confirm or adjust.
+   IMPORTANT: "Vague" means missing title, duration, OR activity type. NOT having a specific time is NOT vague — a task can be created without a scheduled time. If the user provides a clear activity, duration, and priority but no time, CREATE the task immediately (without startTime) and then ask when they'd like to schedule it.
 2. When the user provides ENOUGH details (title + duration, or title + "quick"/"long"), OR when they confirm your suggestion, you MUST include create_tasks in the actions array. The task is only created if it's in actions — describing it in the message alone does NOTHING. Only create it ONCE — never re-create a task that was already created in a previous message. IMPORTANT: If your message says you've added/created a task, the "actions" array MUST contain a create_tasks action. If the actions array is empty, the task will NOT be created regardless of what the message says. The message and actions must always be consistent.
+   CRITICAL: If the user provides a time for a task that was DISCUSSED but never created (no create_tasks action was used in a previous turn), you MUST use create_tasks with startTime — NOT adjust_block. adjust_block is ONLY for tasks that already exist in the system.
 3. When the user gives MULTIPLE tasks at once (e.g. a list of priorities), create them all — use sensible defaults for duration based on the activity type. Only ask for clarification if a task is truly ambiguous.
 4. CRITICAL — matching times to actions:
    - When creating a NEW task with a specific time → use create_tasks with startTime.

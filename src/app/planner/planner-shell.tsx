@@ -12,6 +12,7 @@ import { InventoryPanel } from "@/components/inventory/inventory-panel";
 import { ChatContainer } from "@/components/chat/chat-container";
 import { HomeDashboard } from "@/components/home/home-dashboard";
 import IntegrationsGraph from "@/components/integrations/integrations-graph";
+import { ProfileView } from "@/components/profile/profile-view";
 import { useOnboarding } from "@/components/onboarding/use-onboarding";
 import { OnboardingOverlay } from "@/components/onboarding/onboarding-overlay";
 const viewTitles: Record<ViewId, string> = {
@@ -20,6 +21,7 @@ const viewTitles: Record<ViewId, string> = {
   "quest-log": "Quest Log",
   calendar: "Calendar",
   integrations: "Nexus",
+  profile: "Profile",
 };
 
 const viewSubtitles: Partial<Record<ViewId, string>> = {
@@ -173,6 +175,7 @@ function PlannerShell() {
               {currentView === "quest-log" && <InventoryPanel />}
               {currentView === "calendar" && <CalendarView />}
               {currentView === "integrations" && <IntegrationsGraph />}
+              {currentView === "profile" && <ProfileView />}
             </motion.div>
           </AnimatePresence>
         </div>

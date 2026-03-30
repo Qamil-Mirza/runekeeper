@@ -388,3 +388,12 @@ export function syncGradescope() {
     method: "POST",
   });
 }
+
+// ─── User Data ───────────────────────────────────────────────────────────────
+
+export function clearUserData() {
+  return apiFetch<{ deletedTasks: number; deletedBlocks: number }>(
+    "/api/user/data",
+    { method: "DELETE" }
+  );
+}

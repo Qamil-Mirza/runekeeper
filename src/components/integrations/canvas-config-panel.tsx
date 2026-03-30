@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import * as api from "@/lib/api-client";
+import { usePlanner } from "@/context/planner-context";
 
 interface CanvasConfigPanelProps {
   config: api.CanvasIntegrationConfig | null;
@@ -15,6 +16,7 @@ export function CanvasConfigPanel({
   onClose,
   onUpdate,
 }: CanvasConfigPanelProps) {
+  const { refreshData } = usePlanner();
   const [baseUrl, setBaseUrl] = useState(
     config?.config?.canvasBaseUrl ?? "https://bcourses.berkeley.edu"
   );
@@ -64,6 +66,7 @@ export function CanvasConfigPanel({
       // Refresh config for lastSyncAt
       const updated = await api.fetchCanvasIntegration();
       onUpdate(updated);
+      refreshData();
     } catch {
       setSyncResult({ processed: 0, tasksCreated: 0, errors: ["Sync failed"] });
     } finally {

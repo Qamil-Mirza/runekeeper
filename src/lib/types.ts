@@ -8,6 +8,8 @@ export interface User {
   name: string;
   initials: string;
   timezone: string;
+  email?: string;
+  image?: string;
 }
 
 export interface Task {

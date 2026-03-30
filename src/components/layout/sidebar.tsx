@@ -68,21 +68,33 @@ export function Sidebar({ currentView, onNavigate, collapsed }: SidebarProps) {
       {/* User */}
       <div className={cn("pb-6", collapsed ? "px-2" : "px-5")}>
         <div className="flex items-center gap-3">
-          <Avatar initials={user.initials} size="sm" />
-          {!collapsed && (
-            <>
-              <span className="font-label text-label-md text-on-surface-variant flex-1">
+          <button
+            onClick={() => onNavigate("profile")}
+            className={cn(
+              "flex items-center gap-3 flex-1 transition-colors duration-200 cursor-pointer",
+              currentView === "profile"
+                ? "text-[#d4a860]"
+                : "text-on-surface-variant hover:text-on-surface"
+            )}
+            aria-current={currentView === "profile" ? "page" : undefined}
+            title="Profile"
+          >
+            <Avatar initials={user.initials} size="sm" />
+            {!collapsed && (
+              <span className="font-label text-label-md">
                 {user.name.split(" ")[0]}
               </span>
-              <button
-                onClick={() => signOut({ callbackUrl: "/" })}
-                className="text-on-surface-variant hover:text-on-surface transition-colors p-1"
-                title="Sign out"
-                aria-label="Sign out"
-              >
-                <SignOutIcon className="w-4 h-4" />
-              </button>
-            </>
+            )}
+          </button>
+          {!collapsed && (
+            <button
+              onClick={() => signOut({ callbackUrl: "/" })}
+              className="text-on-surface-variant hover:text-on-surface transition-colors p-1"
+              title="Sign out"
+              aria-label="Sign out"
+            >
+              <SignOutIcon className="w-4 h-4" />
+            </button>
           )}
         </div>
       </div>
