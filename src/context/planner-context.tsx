@@ -129,6 +129,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
             .toUpperCase()
             .slice(0, 2),
           timezone: userPrefs.timezone,
+          email: userPrefs.email,
+          image: userPrefs.image ?? undefined,
         });
       }
 
