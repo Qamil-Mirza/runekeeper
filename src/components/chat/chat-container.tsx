@@ -7,7 +7,7 @@ import { ChatTypingIndicator } from "./chat-typing-indicator";
 import { ChatInput } from "./chat-input";
 
 export function ChatContainer() {
-  const { messages, isTyping, sendMessage, user } = usePlanner();
+  const { messages, isTyping, sendMessage, user, isVoiceMode, setVoiceMode } = usePlanner();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -40,7 +40,7 @@ export function ChatContainer() {
           {isTyping && <ChatTypingIndicator />}
         </div>
       </div>
-      <ChatInput onSend={sendMessage} disabled={isTyping} />
+      <ChatInput onSend={sendMessage} disabled={isTyping} onVoiceMode={() => setVoiceMode(true)} />
     </div>
   );
 }
