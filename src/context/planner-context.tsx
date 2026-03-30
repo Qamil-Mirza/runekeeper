@@ -76,6 +76,7 @@ interface PlannerActions {
   commitProposedBlocks: () => void;
   navigateWeek: (direction: -1 | 1) => void;
   refreshData: () => void;
+  clearRunekeeperData: () => Promise<{ deletedTasks: number; deletedBlocks: number }>;
 }
 
 const PlannerContext = createContext<(PlannerState & PlannerActions) | null>(
@@ -395,6 +396,17 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     [loadData, blocks]
   );
 
+  const clearRunekeeperData = useCallback(async () => {
+    try {
+      const result = await api.clearUserData();
+      await reloadTasksAndBlocks();
+      return result;
+    } catch (err) {
+      await reloadTasksAndBlocks();
+      return { deletedTasks: 0, deletedBlocks: 0 };
+    }
+  }, [reloadTasksAndBlocks]);
+
   const updateBlockType = useCallback(
     (blockId: string, blockType: string) => {
       setBlocks((prev) =>
@@ -458,6 +470,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       commitProposedBlocks,
       navigateWeek,
       refreshData,
+      clearRunekeeperData,
     }),
     [
       user,
@@ -481,6 +494,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       commitProposedBlocks,
       navigateWeek,
       refreshData,
+      clearRunekeeperData,
     ]
   );
 
