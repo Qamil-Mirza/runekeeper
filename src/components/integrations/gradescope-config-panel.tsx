@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import * as api from "@/lib/api-client";
+import { usePlanner } from "@/context/planner-context";
 
 interface GradescopeConfigPanelProps {
   config: api.GradescopeIntegrationConfig | null;
@@ -15,6 +16,7 @@ export function GradescopeConfigPanel({
   onClose,
   onUpdate,
 }: GradescopeConfigPanelProps) {
+  const { refreshData } = usePlanner();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isConnecting, setIsConnecting] = useState(false);
@@ -62,6 +64,7 @@ export function GradescopeConfigPanel({
       setSyncResult(result);
       const updated = await api.fetchGradescopeIntegration();
       onUpdate(updated);
+      refreshData();
     } catch {
       setSyncResult({
         processed: 0,

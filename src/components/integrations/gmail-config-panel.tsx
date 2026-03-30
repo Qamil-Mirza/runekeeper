@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { signIn } from "next-auth/react";
 import * as api from "@/lib/api-client";
+import { usePlanner } from "@/context/planner-context";
 import type { IntegrationConfig } from "./integration-types";
 
 interface GmailConfigPanelProps {
@@ -27,6 +28,7 @@ export function GmailConfigPanel({
     tasksCreated: number;
   } | null>(null);
   const [history, setHistory] = useState<api.ProcessedEmail[]>([]);
+  const { refreshData } = usePlanner();
   const [isEnabling, setIsEnabling] = useState(false);
   const [isSettingUpPush, setIsSettingUpPush] = useState(false);
   const [pushResult, setPushResult] = useState<string | null>(null);
@@ -112,6 +114,7 @@ export function GmailConfigPanel({
       // Refresh history
       const h = await api.fetchGmailHistory();
       setHistory(h);
+      refreshData();
     } catch {
       // ignore
     } finally {
