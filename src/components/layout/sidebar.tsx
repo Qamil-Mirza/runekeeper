@@ -14,7 +14,7 @@ interface SidebarProps {
 
 const navItems: { id: ViewId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "home", label: "Hearth", icon: HearthIcon },
-  { id: "chat", label: "Chronicle", icon: QuillIcon },
+  { id: "chat", label: "Oracle", icon: OracleIcon },
   { id: "quest-log", label: "Quest Log", icon: ScrollIcon },
   { id: "calendar", label: "Calendar", icon: CalendarIcon },
   { id: "integrations", label: "Nexus", icon: NexusIcon },
@@ -169,6 +169,16 @@ function SignOutIcon({ className }: { className?: string }) {
       <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
       <polyline points="16 17 21 12 16 7" />
       <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  );
+}
+
+function OracleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="5" />
+      <circle cx="12" cy="12" r="9" opacity="0.4" />
+      <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
     </svg>
   );
 }

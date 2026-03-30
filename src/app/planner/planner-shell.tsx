@@ -17,7 +17,7 @@ import { useOnboarding } from "@/components/onboarding/use-onboarding";
 import { OnboardingOverlay } from "@/components/onboarding/onboarding-overlay";
 const viewTitles: Record<ViewId, string> = {
   home: "Hearth",
-  chat: "Chronicle",
+  chat: "Oracle",
   "quest-log": "Quest Log",
   calendar: "Calendar",
   integrations: "Nexus",
@@ -40,11 +40,12 @@ const bottomNavItems: { id: ViewId; label: string; icon: (active: boolean) => Re
   },
   {
     id: "chat",
-    label: "Chat",
+    label: "Oracle",
     icon: () => (
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20 2L4 22" />
-        <path d="M20 2c-2 2-6 3-9 3s-5 2-5 5c0 2 1 4 3 5l7-9" />
+        <circle cx="12" cy="12" r="5" />
+        <circle cx="12" cy="12" r="9" opacity="0.4" />
+        <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
       </svg>
     ),
   },

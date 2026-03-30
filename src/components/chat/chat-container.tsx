@@ -47,13 +47,13 @@ export function ChatContainer() {
 
 const greetings = [
   (name: string) =>
-    `Hail, ${name}. The chronicle lies open and the week ahead is unwritten — speak your quests, and we shall chart the path together.`,
+    `Hail, ${name}. The Oracle awaits your voice — speak your quests, and we shall chart the path together.`,
   (name: string) =>
-    `Welcome back, ${name}. The ink is fresh and the pages await — tell me of the tasks that weigh upon your mind, and I'll help map your week.`,
+    `Welcome back, ${name}. The Oracle stirs at your presence — tell me of the tasks that weigh upon your mind, and I'll help map your week.`,
   (name: string) =>
-    `Ah, ${name} — the hearth is warm and the quill is ready. What adventures does this week hold? Let us plan your journey.`,
+    `Ah, ${name} — the Oracle glows warmly in greeting. What adventures does this week hold? Let us plan your journey.`,
   (name: string) =>
-    `The tome stirs at your presence, ${name}. Share your quests for the days ahead, and together we'll forge a worthy schedule.`,
+    `The Oracle pulses at your presence, ${name}. Share your quests for the days ahead, and together we'll forge a worthy schedule.`,
 ];
 
 function WelcomeMessage({ name, onSend }: { name: string; onSend: (msg: string) => void }) {
@@ -66,9 +66,9 @@ function WelcomeMessage({ name, onSend }: { name: string; onSend: (msg: string) 
     <div className="flex flex-col items-center justify-center text-center py-16 px-4 gap-6">
       <div className="text-tertiary opacity-70">
         <svg className="w-12 h-12 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 2L4 22" />
-          <path d="M20 2c-2 2-6 3-9 3s-5 2-5 5c0 2 1 4 3 5l7-9" />
-          <path d="M6 18l2-2" />
+          <circle cx="12" cy="12" r="5" />
+          <circle cx="12" cy="12" r="9" opacity="0.4" />
+          <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
         </svg>
       </div>
       <p className="font-body text-body-lg text-on-surface max-w-md leading-relaxed">
