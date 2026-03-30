@@ -47,7 +47,7 @@ function getWeekRange(date: Date): WeekRange {
 
 // ─── Context Types ───────────────────────────────────────────────────────────
 
-export type ViewId = "home" | "chat" | "quest-log" | "calendar" | "integrations";
+export type ViewId = "home" | "chat" | "quest-log" | "calendar" | "integrations" | "profile";
 export type TransitionMode = "none" | "ink-spread";
 
 interface PlannerState {
