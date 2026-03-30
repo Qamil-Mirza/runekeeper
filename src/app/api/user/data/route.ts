@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { tasks, timeBlocks } from "@/db/schema";
-import { eq, and, isNull, ne } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import {
   getAuthenticatedUser,
   jsonResponse,
@@ -20,7 +20,7 @@ export async function DELETE() {
   // Delete Runekeeper-created time blocks (not synced from Google Calendar)
   const deletedBlocks = await db
     .delete(timeBlocks)
-    .where(and(eq(timeBlocks.userId, user.id), ne(timeBlocks.source, "google_calendar")))
+    .where(and(eq(timeBlocks.userId, user.id), eq(timeBlocks.source, "runekeeper")))
     .returning();
 
   return jsonResponse({

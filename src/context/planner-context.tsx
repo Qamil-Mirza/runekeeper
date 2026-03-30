@@ -403,7 +403,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       return result;
     } catch (err) {
       await reloadTasksAndBlocks();
-      return { deletedTasks: 0, deletedBlocks: 0 };
+      throw err;
     }
   }, [reloadTasksAndBlocks]);
 
