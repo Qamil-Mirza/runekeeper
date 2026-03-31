@@ -113,10 +113,6 @@ export class GeminiLiveSession {
         realtimeInputConfig: {
           automaticActivityDetection: {
             disabled: false,
-            startOfSpeechSensitivity: "MEDIUM",
-            endOfSpeechSensitivity: "MEDIUM",
-            prefixPaddingMs: 200,
-            silenceDurationMs: 700,
           },
         },
         contextWindowCompression: {
