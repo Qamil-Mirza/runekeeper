@@ -20,6 +20,7 @@ interface OracleOrbProps {
 }
 
 import { ORB_VERTEX_SHADER, ORB_FRAGMENT_SHADER } from "./orb-shaders";
+import { OracleOrbFallback } from "./oracle-orb-fallback";
 
 function compileShader(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader | null {
   const shader = gl.createShader(type);
@@ -53,6 +54,7 @@ function createProgram(gl: WebGL2RenderingContext): WebGLProgram | null {
 }
 
 export function OracleOrb({ state, amplitude, size = 240, className }: OracleOrbProps) {
+  const [webglSupported, setWebglSupported] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const glRef = useRef<WebGL2RenderingContext | null>(null);
   const programRef = useRef<WebGLProgram | null>(null);
@@ -75,7 +77,10 @@ export function OracleOrb({ state, amplitude, size = 240, className }: OracleOrb
     canvas.height = size * dpr;
 
     const gl = canvas.getContext("webgl2", { alpha: true, premultipliedAlpha: false });
-    if (!gl) return false;
+    if (!gl) {
+      setWebglSupported(false);
+      return false;
+    }
 
     glRef.current = gl;
     const program = createProgram(gl);
@@ -137,6 +142,10 @@ export function OracleOrb({ state, amplitude, size = 240, className }: OracleOrb
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, [initGL, animate]);
+
+  if (!webglSupported) {
+    return <OracleOrbFallback state={state} amplitude={amplitude} size={size} className={className} />;
+  }
 
   return (
     <canvas
