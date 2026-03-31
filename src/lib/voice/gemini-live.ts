@@ -4,7 +4,7 @@ import { createLogger } from "@/lib/logger";
 const log = createLogger("gemini-live");
 
 const GEMINI_LIVE_MODEL =
-  process.env.GEMINI_LIVE_MODEL || "gemini-2.0-flash-live-001";
+  process.env.GEMINI_LIVE_MODEL || "gemini-3.1-flash-live-preview";
 
 export interface GeminiLiveCallbacks {
   /** Raw PCM 24kHz audio chunk from Gemini to forward to browser */
