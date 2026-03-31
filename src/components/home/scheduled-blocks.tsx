@@ -52,7 +52,7 @@ export function ScheduledBlocks() {
       {todayBlocks.length === 0 ? (
         <div className="px-6">
           <p className="font-body text-body-lg text-on-surface-variant/60 italic">
-            No quests mapped for today. Open the Chronicle to plan your day.
+            No quests mapped for today. Open the Oracle to plan your day.
           </p>
         </div>
       ) : (

@@ -98,7 +98,7 @@ function getViewVariants(mode: TransitionMode) {
 }
 
 function PlannerShell() {
-  const { currentView, setCurrentView, transitionMode, setTransitionMode } = usePlanner();
+  const { currentView, setCurrentView, transitionMode, setTransitionMode, isVoiceMode } = usePlanner();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { showOnboarding, completeOnboarding } = useOnboarding();
 
@@ -109,8 +109,8 @@ function PlannerShell() {
 
   return (
     <div className="flex h-dvh overflow-hidden">
-      {/* Sidebar — desktop */}
-      <div className="hidden lg:flex">
+      {/* Sidebar — desktop (hidden during voice mode) */}
+      <div className={`hidden lg:flex ${isVoiceMode ? "!hidden" : ""}`}>
         <Sidebar
           currentView={currentView}
           onNavigate={handleNavigate}
@@ -150,11 +150,13 @@ function PlannerShell() {
 
       {/* Main content area */}
       <main className="flex-1 flex flex-col min-w-0 wood-grain bg-surface pb-16 lg:pb-0">
-        <AppHeader
-          title={viewTitles[currentView]}
-          subtitle={viewSubtitles[currentView]}
-          onOpenMenu={() => setSidebarOpen(true)}
-        />
+        {!isVoiceMode && (
+          <AppHeader
+            title={viewTitles[currentView]}
+            subtitle={viewSubtitles[currentView]}
+            onOpenMenu={() => setSidebarOpen(true)}
+          />
+        )}
         <div className="flex-1 overflow-hidden min-h-0">
           <AnimatePresence
             mode={transitionMode === "ink-spread" ? "wait" : "sync"}
@@ -182,9 +184,9 @@ function PlannerShell() {
         </div>
       </main>
 
-      {/* Mobile bottom nav */}
+      {/* Mobile bottom nav (hidden during voice mode) */}
       <nav
-        className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-surface-dim flex py-1.5 border-t border-[rgba(212,168,96,0.12)]"
+        className={`fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-surface-dim flex py-1.5 border-t border-[rgba(212,168,96,0.12)] ${isVoiceMode ? "hidden" : ""}`}
         role="navigation"
         aria-label="Main navigation"
       >

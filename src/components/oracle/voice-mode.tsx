@@ -24,10 +24,12 @@ export function VoiceMode({ onExit }: VoiceModeProps) {
   const [orbState, setOrbState] = useState<OrbState>("idle");
   const [amplitude, setAmplitude] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
+  const isMutedRef = useRef(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const workletNodeRef = useRef<ScriptProcessorNode | null>(null);
-  const sendAudioContextRef = useRef<AudioContext | null>(null);
+
+  useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
 
   const audioPipeline = useAudioPipeline({
     onStateChange: setOrbState,
@@ -76,15 +78,15 @@ export function VoiceMode({ onExit }: VoiceModeProps) {
 
         await voiceSession.connect();
 
-        // Set up audio chunk sending via ScriptProcessor
-        const audioCtx = new AudioContext({ sampleRate: 16000 });
-        sendAudioContextRef.current = audioCtx;
+        // Set up audio chunk sending via ScriptProcessor using the pipeline's AudioContext
+        const audioCtx = audioPipeline.getAudioContext();
+        if (!audioCtx) return;
         const source = audioCtx.createMediaStreamSource(stream);
         const processor = audioCtx.createScriptProcessor(4096, 1, 1);
         workletNodeRef.current = processor;
 
         processor.onaudioprocess = (e) => {
-          if (isMuted) return;
+          if (isMutedRef.current) return;
           const input = e.inputBuffer.getChannelData(0);
           const int16 = new Int16Array(input.length);
           for (let i = 0; i < input.length; i++) {
@@ -112,7 +114,6 @@ export function VoiceMode({ onExit }: VoiceModeProps) {
     return () => {
       cancelled = true;
       workletNodeRef.current?.disconnect();
-      sendAudioContextRef.current?.close();
       voiceSession.disconnect();
       audioPipeline.stop();
     };
@@ -124,13 +125,19 @@ export function VoiceMode({ onExit }: VoiceModeProps) {
 
   const handleEndSession = useCallback(() => {
     workletNodeRef.current?.disconnect();
-    sendAudioContextRef.current?.close();
     voiceSession.disconnect();
     audioPipeline.stop();
     onExit();
   }, [voiceSession, audioPipeline, onExit]);
 
-  const orbSize = typeof window !== "undefined" && window.innerWidth < 1024 ? 180 : 240;
+  const [orbSize, setOrbSize] = useState(240); // default for SSR
+
+  useEffect(() => {
+    const updateSize = () => setOrbSize(window.innerWidth < 1024 ? 180 : 240);
+    updateSize();
+    window.addEventListener("resize", updateSize);
+    return () => window.removeEventListener("resize", updateSize);
+  }, []);
 
   return (
     <motion.div

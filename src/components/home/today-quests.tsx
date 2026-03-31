@@ -60,7 +60,7 @@ export function TodayQuests() {
           </p>
         ) : (
           <p className="px-6 py-4 font-body text-body-md text-on-surface-variant italic">
-            No quests yet. Use the Chronicle to plan your week.
+            No quests yet. Use the Oracle to plan your week.
           </p>
         )}
       </motion.div>

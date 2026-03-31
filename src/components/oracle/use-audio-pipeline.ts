@@ -13,6 +13,7 @@ interface AudioPipeline {
   start: () => Promise<MediaStream>;
   stop: () => void;
   getAnalyser: () => AnalyserNode | null;
+  getAudioContext: () => AudioContext | null;
   playAudio: (pcmData: ArrayBuffer, sampleRate?: number) => void;
   isPlayingRef: React.RefObject<boolean>;
 }
@@ -145,6 +146,7 @@ export function useAudioPipeline({ onStateChange, onAmplitudeChange, isMuted }: 
     start,
     stop,
     getAnalyser: () => inputAnalyserRef.current,
+    getAudioContext: () => audioContextRef.current,
     playAudio,
     isPlayingRef,
   };

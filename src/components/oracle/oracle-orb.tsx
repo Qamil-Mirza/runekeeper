@@ -65,8 +65,10 @@ export function OracleOrb({ state, amplitude, size = 240, className }: OracleOrb
   const targetStateRef = useRef(0);
   const currentAmplitudeRef = useRef(0);
 
+  const targetAmplitudeRef = useRef(0);
+
   targetStateRef.current = STATE_VALUES[state];
-  const targetAmplitude = amplitude;
+  targetAmplitudeRef.current = amplitude;
 
   const initGL = useCallback(() => {
     const canvas = canvasRef.current;
@@ -119,7 +121,7 @@ export function OracleOrb({ state, amplitude, size = 240, className }: OracleOrb
     if (!gl || !programRef.current) return;
 
     currentStateRef.current += (targetStateRef.current - currentStateRef.current) * 0.05;
-    currentAmplitudeRef.current += (targetAmplitude - currentAmplitudeRef.current) * 0.15;
+    currentAmplitudeRef.current += (targetAmplitudeRef.current - currentAmplitudeRef.current) * 0.15;
 
     const elapsed = (Date.now() - startTimeRef.current) / 1000;
     gl.uniform1f(uniforms.u_time, elapsed);
@@ -131,7 +133,7 @@ export function OracleOrb({ state, amplitude, size = 240, className }: OracleOrb
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
     rafRef.current = requestAnimationFrame(animate);
-  }, [targetAmplitude]);
+  }, []);
 
   useEffect(() => {
     const success = initGL();
