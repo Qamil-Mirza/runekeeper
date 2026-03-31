@@ -183,10 +183,11 @@ async function handleVoiceSession(
   }
 
   // Browser → Gemini: relay audio chunks
-  clientWs.on("message", (data: Buffer | string) => {
-    if (Buffer.isBuffer(data) || data instanceof ArrayBuffer) {
-      const buffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
-      gemini.sendAudioChunk(buffer);
+  clientWs.on("message", (data) => {
+    if (Buffer.isBuffer(data)) {
+      gemini.sendAudioChunk(data);
+    } else if (Array.isArray(data)) {
+      gemini.sendAudioChunk(Buffer.concat(data));
     }
   });
 
