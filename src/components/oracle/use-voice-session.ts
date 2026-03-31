@@ -37,8 +37,10 @@ export function useVoiceSession({
       const ws = new WebSocket(url);
       ws.binaryType = "arraybuffer";
       wsRef.current = ws;
+      let opened = false;
 
       ws.onopen = () => {
+        opened = true;
         setIsConnected(true);
         resolve();
       };
@@ -75,10 +77,10 @@ export function useVoiceSession({
 
       ws.onclose = () => {
         setIsConnected(false);
+        if (!opened) reject(new Error("WebSocket closed before open"));
       };
 
       ws.onerror = () => {
-        onError("Couldn't reach the Oracle — try again");
         reject(new Error("WebSocket connection failed"));
       };
     });
