@@ -85,12 +85,17 @@ export function VoiceMode({ onExit }: VoiceModeProps) {
         const processor = audioCtx.createScriptProcessor(4096, 1, 1);
         workletNodeRef.current = processor;
 
+        let chunkCount = 0;
         processor.onaudioprocess = (e) => {
           if (isMutedRef.current) return;
           const input = e.inputBuffer.getChannelData(0);
           const int16 = new Int16Array(input.length);
           for (let i = 0; i < input.length; i++) {
             int16[i] = Math.max(-32768, Math.min(32767, Math.round(input[i] * 32768)));
+          }
+          chunkCount++;
+          if (chunkCount <= 3) {
+            console.log(`[voice] sending audio chunk #${chunkCount}, samples=${int16.length}`);
           }
           voiceSession.sendAudio(int16.buffer);
         };

@@ -29,55 +29,59 @@ export function useVoiceSession({
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
-  const connect = useCallback(async () => {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const url = `${protocol}//${window.location.host}/api/voice`;
+  const connect = useCallback(() => {
+    return new Promise<void>((resolve, reject) => {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const url = `${protocol}//${window.location.host}/api/voice`;
 
-    const ws = new WebSocket(url);
-    ws.binaryType = "arraybuffer";
-    wsRef.current = ws;
+      const ws = new WebSocket(url);
+      ws.binaryType = "arraybuffer";
+      wsRef.current = ws;
 
-    ws.onopen = () => {
-      setIsConnected(true);
-    };
+      ws.onopen = () => {
+        setIsConnected(true);
+        resolve();
+      };
 
-    ws.onmessage = (event) => {
-      if (event.data instanceof ArrayBuffer) {
-        onAudioReceived(event.data);
-        return;
-      }
-
-      try {
-        const msg = JSON.parse(event.data);
-        switch (msg.type) {
-          case "action":
-            onActionToast(msg.summary);
-            break;
-          case "thinking":
-            onThinkingStart();
-            break;
-          case "thinking_end":
-            onThinkingEnd();
-            break;
-          case "session_end":
-            onSessionEnd(msg.summary);
-            break;
-          case "error":
-            onError(msg.message || "An error occurred");
-            break;
+      ws.onmessage = (event) => {
+        if (event.data instanceof ArrayBuffer) {
+          onAudioReceived(event.data);
+          return;
         }
-      } catch {
-        // Ignore malformed messages
-      }
-    };
 
-    ws.onclose = () => {
-      setIsConnected(false);
-    };
+        try {
+          const msg = JSON.parse(event.data);
+          switch (msg.type) {
+            case "action":
+              onActionToast(msg.summary);
+              break;
+            case "thinking":
+              onThinkingStart();
+              break;
+            case "thinking_end":
+              onThinkingEnd();
+              break;
+            case "session_end":
+              onSessionEnd(msg.summary);
+              break;
+            case "error":
+              onError(msg.message || "An error occurred");
+              break;
+          }
+        } catch {
+          // Ignore malformed messages
+        }
+      };
 
-    ws.onerror = () => {
-      onError("Couldn't reach the Oracle — try again");
-    };
+      ws.onclose = () => {
+        setIsConnected(false);
+      };
+
+      ws.onerror = () => {
+        onError("Couldn't reach the Oracle — try again");
+        reject(new Error("WebSocket connection failed"));
+      };
+    });
   }, [onAudioReceived, onActionToast, onSessionEnd, onThinkingStart, onThinkingEnd, onError]);
 
   const disconnect = useCallback(() => {
