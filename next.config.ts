@@ -25,7 +25,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https://lh3.googleusercontent.com",
               "font-src 'self'",
-              "connect-src 'self'",
+              "connect-src 'self' ws: wss:",
               "frame-ancestors 'none'",
             ].join("; "),
           },
