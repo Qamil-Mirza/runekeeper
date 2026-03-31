@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "dev:server": "npx tsx server.ts",
+    "build": "next build && npx esbuild server.ts --bundle --platform=node --target=node20 --outfile=.next/standalone/server-custom.js --packages=external",
     "start": "next start",
     "lint": "next lint",
     "db:generate": "drizzle-kit generate",
@@ -26,7 +27,8 @@
     "pino": "^10.3.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "tailwind-merge": "^3.3.0"
+    "tailwind-merge": "^3.3.0",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.0",
@@ -35,7 +37,9 @@
     "@types/pino": "^7.0.4",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "@types/ws": "^8.18.1",
     "drizzle-kit": "^0.31.10",
+    "esbuild": "^0.27.4",
     "pino-pretty": "^13.1.3",
     "tailwindcss": "^4.1.0",
     "typescript": "^5.8.0"
