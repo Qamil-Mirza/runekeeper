@@ -180,11 +180,21 @@ async function handleVoiceSession(
   }
 
   // Browser → Gemini: relay audio chunks
+  let audioChunkCount = 0;
   clientWs.on("message", (data) => {
     if (Buffer.isBuffer(data)) {
+      audioChunkCount++;
+      if (audioChunkCount <= 3 || audioChunkCount % 50 === 0) {
+        console.log(`[voice] audio chunk #${audioChunkCount}, size=${data.length}, gemini connected=${gemini.connected}`);
+      }
       gemini.sendAudioChunk(data);
     } else if (Array.isArray(data)) {
-      gemini.sendAudioChunk(Buffer.concat(data));
+      const buf = Buffer.concat(data);
+      audioChunkCount++;
+      console.log(`[voice] audio chunk (array) #${audioChunkCount}, size=${buf.length}`);
+      gemini.sendAudioChunk(buf);
+    } else {
+      console.log(`[voice] non-binary message received: type=${typeof data}, length=${String(data).length}`);
     }
   });
 

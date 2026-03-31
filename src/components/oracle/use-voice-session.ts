@@ -39,7 +39,6 @@ export function useVoiceSession({
 
     ws.onopen = () => {
       setIsConnected(true);
-      reconnectAttemptsRef.current = 0;
     };
 
     ws.onmessage = (event) => {

@@ -132,6 +132,9 @@ export class GeminiLiveSession {
   }
 
   private handleMessage(msg: any, onReady?: (value: void) => void) {
+    const keys = Object.keys(msg);
+    log.debug({ keys }, "Gemini message received");
+
     if (msg.setupComplete) {
       log.info("Gemini setup complete");
       this.isSetupComplete = true;
