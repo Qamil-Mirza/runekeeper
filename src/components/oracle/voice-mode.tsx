@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { OracleOrb, type OrbState } from "./oracle-orb";
 import { VoiceModeControls } from "./voice-mode-controls";
 import { VoiceToast } from "./voice-toast";
+import { useAudioPipeline } from "./use-audio-pipeline";
+import { useVoiceSession } from "./use-voice-session";
 
 interface VoiceModeProps {
   onExit: () => void;
@@ -23,18 +25,110 @@ export function VoiceMode({ onExit }: VoiceModeProps) {
   const [amplitude, setAmplitude] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const workletNodeRef = useRef<ScriptProcessorNode | null>(null);
+  const sendAudioContextRef = useRef<AudioContext | null>(null);
+
+  const audioPipeline = useAudioPipeline({
+    onStateChange: setOrbState,
+    onAmplitudeChange: setAmplitude,
+    isMuted,
+  });
+
+  const voiceSession = useVoiceSession({
+    onAudioReceived: (pcmData) => {
+      audioPipeline.playAudio(pcmData);
+    },
+    onActionToast: (msg) => {
+      setToastMessage(msg);
+    },
+    onSessionEnd: () => {
+      audioPipeline.stop();
+      onExit();
+    },
+    onThinkingStart: () => {
+      setOrbState("thinking");
+    },
+    onThinkingEnd: () => {
+      // State will be set by audio pipeline based on playback
+    },
+    onError: (msg) => {
+      setError(msg);
+      setTimeout(() => {
+        audioPipeline.stop();
+        onExit();
+      }, 2000);
+    },
+  });
+
+  // Start session on mount
+  useEffect(() => {
+    let cancelled = false;
+
+    async function init() {
+      try {
+        const stream = await audioPipeline.start();
+
+        if (cancelled) {
+          audioPipeline.stop();
+          return;
+        }
+
+        await voiceSession.connect();
+
+        // Set up audio chunk sending via ScriptProcessor
+        const audioCtx = new AudioContext({ sampleRate: 16000 });
+        sendAudioContextRef.current = audioCtx;
+        const source = audioCtx.createMediaStreamSource(stream);
+        const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+        workletNodeRef.current = processor;
+
+        processor.onaudioprocess = (e) => {
+          if (isMuted) return;
+          const input = e.inputBuffer.getChannelData(0);
+          const int16 = new Int16Array(input.length);
+          for (let i = 0; i < input.length; i++) {
+            int16[i] = Math.max(-32768, Math.min(32767, Math.round(input[i] * 32768)));
+          }
+          voiceSession.sendAudio(int16.buffer);
+        };
+
+        source.connect(processor);
+        processor.connect(audioCtx.destination);
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof DOMException && err.name === "NotAllowedError"
+              ? "Microphone access is required to speak with the Oracle"
+              : "Couldn't reach the Oracle — try again"
+          );
+          setTimeout(onExit, 2000);
+        }
+      }
+    }
+
+    init();
+
+    return () => {
+      cancelled = true;
+      workletNodeRef.current?.disconnect();
+      sendAudioContextRef.current?.close();
+      voiceSession.disconnect();
+      audioPipeline.stop();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleToggleMute = useCallback(() => {
-    setIsMuted((prev) => {
-      const next = !prev;
-      setOrbState(next ? "muted" : "idle");
-      return next;
-    });
+    setIsMuted((prev) => !prev);
   }, []);
 
   const handleEndSession = useCallback(() => {
+    workletNodeRef.current?.disconnect();
+    sendAudioContextRef.current?.close();
+    voiceSession.disconnect();
+    audioPipeline.stop();
     onExit();
-  }, [onExit]);
+  }, [voiceSession, audioPipeline, onExit]);
 
   const orbSize = typeof window !== "undefined" && window.innerWidth < 1024 ? 180 : 240;
 
@@ -52,7 +146,7 @@ export function VoiceMode({ onExit }: VoiceModeProps) {
           The Oracle
         </div>
         <div className="text-[13px] text-[rgba(140,100,220,0.5)] mt-1 font-body">
-          {STATE_LABELS[orbState]}
+          {error || STATE_LABELS[orbState]}
         </div>
       </div>
 
