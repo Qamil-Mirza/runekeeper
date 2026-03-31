@@ -28,8 +28,6 @@ export function useVoiceSession({
 }: VoiceSessionOptions): VoiceSession {
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const reconnectAttemptsRef = useRef(0);
-  const maxReconnectAttempts = 3;
 
   const connect = useCallback(async () => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -74,13 +72,8 @@ export function useVoiceSession({
       }
     };
 
-    ws.onclose = (event) => {
+    ws.onclose = () => {
       setIsConnected(false);
-
-      if (!event.wasClean && reconnectAttemptsRef.current < maxReconnectAttempts) {
-        reconnectAttemptsRef.current++;
-        setTimeout(() => connect(), 1000 * reconnectAttemptsRef.current);
-      }
     };
 
     ws.onerror = () => {
@@ -89,7 +82,6 @@ export function useVoiceSession({
   }, [onAudioReceived, onActionToast, onSessionEnd, onThinkingStart, onThinkingEnd, onError]);
 
   const disconnect = useCallback(() => {
-    reconnectAttemptsRef.current = maxReconnectAttempts;
     wsRef.current?.close(1000, "user_exit");
     wsRef.current = null;
     setIsConnected(false);

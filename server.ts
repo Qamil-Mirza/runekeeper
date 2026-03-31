@@ -159,12 +159,9 @@ async function handleVoiceSession(
       onOutputTranscript: (text) => {
         sendJson(clientWs, { type: "transcript_out", text });
       },
-      onClose: (reason) => {
+      onClose: () => {
         const summary = tracker.buildSummary();
         sendJson(clientWs, { type: "session_end", summary });
-        if (clientWs.readyState === WebSocket.OPEN) {
-          clientWs.close(1000, reason);
-        }
       },
     },
     systemPrompt,
