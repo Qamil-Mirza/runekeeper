@@ -11,6 +11,8 @@ RUN npm ci --omit=dev
 FROM node:20-alpine AS builder
 WORKDIR /app
 ENV NODE_ENV=production
+ARG NEXT_PUBLIC_WS_PORT=3001
+ENV NEXT_PUBLIC_WS_PORT=$NEXT_PUBLIC_WS_PORT
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
