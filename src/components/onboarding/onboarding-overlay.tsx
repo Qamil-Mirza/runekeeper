@@ -36,7 +36,7 @@ const STEPS = [
   },
   {
     accentLabel: "III",
-    title: "The Chronicle",
+    title: "The Oracle",
     description:
       "Speak with the Warden \u2014 your AI planning companion. Describe your week in plain words and watch your schedule take shape.",
     icon: (

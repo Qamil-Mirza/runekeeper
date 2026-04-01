@@ -61,6 +61,7 @@ interface PlannerState {
   transitionMode: TransitionMode;
   drawerOpen: boolean;
   weekRange: WeekRange;
+  isVoiceMode: boolean;
 }
 
 interface PlannerActions {
@@ -77,6 +78,7 @@ interface PlannerActions {
   navigateWeek: (direction: -1 | 1) => void;
   refreshData: () => void;
   clearRunekeeperData: () => Promise<{ deletedTasks: number; deletedBlocks: number }>;
+  setVoiceMode: (active: boolean) => void;
 }
 
 const PlannerContext = createContext<(PlannerState & PlannerActions) | null>(
@@ -100,6 +102,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
   const [weekRange, setWeekRange] = useState<WeekRange>(
     getWeekRange(new Date())
   );
+  const [isVoiceMode, setIsVoiceMode] = useState(false);
 
   // ─── Load data from API on auth ──────────────────────────────────────────
 
@@ -432,6 +435,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const setVoiceMode = useCallback((active: boolean) => setIsVoiceMode(active), []);
+
   const navigateWeek = useCallback((direction: -1 | 1) => {
     setWeekRange((prev) => {
       const current = new Date(prev.start + "T00:00:00");
@@ -471,6 +476,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       navigateWeek,
       refreshData,
       clearRunekeeperData,
+      isVoiceMode,
+      setVoiceMode,
     }),
     [
       user,
@@ -495,6 +502,8 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       navigateWeek,
       refreshData,
       clearRunekeeperData,
+      isVoiceMode,
+      setVoiceMode,
     ]
   );
 

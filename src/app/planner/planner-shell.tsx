@@ -17,7 +17,7 @@ import { useOnboarding } from "@/components/onboarding/use-onboarding";
 import { OnboardingOverlay } from "@/components/onboarding/onboarding-overlay";
 const viewTitles: Record<ViewId, string> = {
   home: "Hearth",
-  chat: "Chronicle",
+  chat: "Oracle",
   "quest-log": "Quest Log",
   calendar: "Calendar",
   integrations: "Nexus",
@@ -40,11 +40,12 @@ const bottomNavItems: { id: ViewId; label: string; icon: (active: boolean) => Re
   },
   {
     id: "chat",
-    label: "Chat",
+    label: "Oracle",
     icon: () => (
       <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20 2L4 22" />
-        <path d="M20 2c-2 2-6 3-9 3s-5 2-5 5c0 2 1 4 3 5l7-9" />
+        <circle cx="12" cy="12" r="5" />
+        <circle cx="12" cy="12" r="9" opacity="0.4" />
+        <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
       </svg>
     ),
   },
@@ -97,7 +98,7 @@ function getViewVariants(mode: TransitionMode) {
 }
 
 function PlannerShell() {
-  const { currentView, setCurrentView, transitionMode, setTransitionMode } = usePlanner();
+  const { currentView, setCurrentView, transitionMode, setTransitionMode, isVoiceMode } = usePlanner();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { showOnboarding, completeOnboarding } = useOnboarding();
 
@@ -108,8 +109,8 @@ function PlannerShell() {
 
   return (
     <div className="flex h-dvh overflow-hidden">
-      {/* Sidebar — desktop */}
-      <div className="hidden lg:flex">
+      {/* Sidebar — desktop (hidden during voice mode) */}
+      <div className={`hidden lg:flex ${isVoiceMode ? "!hidden" : ""}`}>
         <Sidebar
           currentView={currentView}
           onNavigate={handleNavigate}
@@ -149,11 +150,13 @@ function PlannerShell() {
 
       {/* Main content area */}
       <main className="flex-1 flex flex-col min-w-0 wood-grain bg-surface pb-16 lg:pb-0">
-        <AppHeader
-          title={viewTitles[currentView]}
-          subtitle={viewSubtitles[currentView]}
-          onOpenMenu={() => setSidebarOpen(true)}
-        />
+        {!isVoiceMode && (
+          <AppHeader
+            title={viewTitles[currentView]}
+            subtitle={viewSubtitles[currentView]}
+            onOpenMenu={() => setSidebarOpen(true)}
+          />
+        )}
         <div className="flex-1 overflow-hidden min-h-0">
           <AnimatePresence
             mode={transitionMode === "ink-spread" ? "wait" : "sync"}
@@ -181,9 +184,9 @@ function PlannerShell() {
         </div>
       </main>
 
-      {/* Mobile bottom nav */}
+      {/* Mobile bottom nav (hidden during voice mode) */}
       <nav
-        className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-surface-dim flex py-1.5 border-t border-[rgba(212,168,96,0.12)]"
+        className={`fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-surface-dim flex py-1.5 border-t border-[rgba(212,168,96,0.12)] ${isVoiceMode ? "hidden" : ""}`}
         role="navigation"
         aria-label="Main navigation"
       >
