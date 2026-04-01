@@ -64,38 +64,40 @@ void main() {
 
   // Idle (0)
   float idleWeight = 1.0 - min(u_state, 1.0);
-  // Listening (1)
+  // Listening (1) — contracted, focused, golden
   float listenWeight = max(0.0, 1.0 - abs(u_state - 1.0));
-  coreScale -= 0.05 * listenWeight;
-  goldMix += 0.3 * listenWeight;
-  glowIntensity -= 0.3 * listenWeight;
-  // Thinking (2)
+  coreScale -= 0.1 * listenWeight;
+  goldMix += 0.5 * listenWeight;
+  glowIntensity -= 0.2 * listenWeight;
+  // Thinking (2) — fast spinning rings, rapid pulse
   float thinkWeight = max(0.0, 1.0 - abs(u_state - 2.0));
-  ringSpeed += 2.0 * thinkWeight;
-  breathRate += 3.0 * thinkWeight;
-  // Speaking (3)
+  ringSpeed += 4.0 * thinkWeight;
+  breathRate += 5.0 * thinkWeight;
+  glowIntensity += 0.3 * thinkWeight;
+  // Speaking (3) — expanded, bright, purple-dominant
   float speakWeight = max(0.0, 1.0 - abs(u_state - 3.0));
-  coreScale += 0.1 * speakWeight;
-  goldMix -= 0.3 * speakWeight;
-  glowIntensity += 0.5 * speakWeight;
-  ringSpeed += 1.0 * speakWeight;
-  // Muted (4)
+  coreScale += 0.25 * speakWeight;
+  goldMix -= 0.4 * speakWeight;
+  glowIntensity += 1.0 * speakWeight;
+  ringSpeed += 2.0 * speakWeight;
+  // Muted (4) — dimmed, slow
   float muteWeight = max(0.0, 1.0 - abs(u_state - 4.0));
-  glowIntensity -= 0.6 * muteWeight;
+  glowIntensity -= 0.7 * muteWeight;
   ringSpeed -= 0.8 * muteWeight;
+  coreScale -= 0.08 * muteWeight;
 
-  // Audio amplitude modulation
+  // Audio amplitude modulation — exaggerated for visual punch
   float amp = u_amplitude;
-  coreScale += amp * 0.12;
-  glowIntensity += amp * 0.4;
-  ringSpeed += amp * 0.5;
+  coreScale += amp * 0.35;
+  glowIntensity += amp * 1.2;
+  ringSpeed += amp * 1.5;
 
-  // Breathing animation
-  float breath = sin(u_time * breathRate) * 0.02 + 1.0;
+  // Breathing animation — more visible pulse
+  float breath = sin(u_time * breathRate) * 0.06 + 1.0;
   coreScale *= breath;
 
-  // Noise distortion on sphere surface
-  float noise = snoise(pos * 3.0 + u_time * 0.3) * 0.04;
+  // Noise distortion on sphere surface — stronger warping
+  float noise = snoise(pos * 3.0 + u_time * 0.3) * (0.06 + amp * 0.08);
   float coreDist = dist / (0.18 * coreScale) + noise;
 
   // Core sphere gradient: gold center -> purple edge
@@ -118,13 +120,13 @@ void main() {
   vec3 ringColor1 = gold * ring1;
   vec3 ringColor2 = purple * ring2;
 
-  // Glow / bloom
-  float glow = exp(-dist * 4.0 / (0.25 * coreScale)) * 0.3 * glowIntensity;
+  // Glow / bloom — larger, brighter
+  float glow = exp(-dist * 3.0 / (0.3 * coreScale)) * 0.5 * glowIntensity;
   vec3 glowColor = mix(gold, purple, 0.5) * glow;
 
-  // Particles (simple noise-based sparkles)
-  float particleNoise = snoise(pos * 20.0 + u_time * 0.5);
-  float particles = smoothstep(0.85, 0.95, particleNoise) * smoothstep(0.35, 0.2, dist) * 0.5;
+  // Particles (noise-based sparkles) — more visible, wider spread
+  float particleNoise = snoise(pos * 15.0 + u_time * 0.7);
+  float particles = smoothstep(0.78, 0.92, particleNoise) * smoothstep(0.45, 0.15, dist) * 0.7;
   vec3 particleColor = mix(gold, purple, step(0.5, fract(particleNoise * 10.0))) * particles;
 
   // Composite

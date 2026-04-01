@@ -29,10 +29,27 @@ export function useVoiceSession({
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
+  const connectIdRef = useRef(0);
+
   const connect = useCallback(() => {
+    const id = ++connectIdRef.current;
+    console.log(`[ws-${id}] connect() called, existing ws state:`, wsRef.current?.readyState);
+
+    // Close any lingering connection
+    if (wsRef.current) {
+      console.log(`[ws-${id}] closing previous ws`);
+      wsRef.current.onclose = null;
+      wsRef.current.onerror = null;
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
     return new Promise<void>((resolve, reject) => {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const url = `${protocol}//${window.location.host}/api/voice`;
+      const wsHost = window.location.hostname;
+      const wsPort = process.env.NEXT_PUBLIC_WS_PORT || "3001";
+      const url = `${protocol}//${wsHost}:${wsPort}/api/voice`;
+      console.log(`[ws-${id}] creating WebSocket to ${url}`);
 
       const ws = new WebSocket(url);
       ws.binaryType = "arraybuffer";
@@ -40,6 +57,7 @@ export function useVoiceSession({
       let opened = false;
 
       ws.onopen = () => {
+        console.log(`[ws-${id}] onopen`);
         opened = true;
         setIsConnected(true);
         resolve();
@@ -75,13 +93,15 @@ export function useVoiceSession({
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (e) => {
+        console.log(`[ws-${id}] onclose code=${e.code} reason=${e.reason} opened=${opened}`);
         setIsConnected(false);
         if (!opened) reject(new Error("WebSocket closed before open"));
       };
 
-      ws.onerror = () => {
-        reject(new Error("WebSocket connection failed"));
+      ws.onerror = (e) => {
+        console.error(`[ws-${id}] onerror opened=${opened}`, e);
+        if (!opened) reject(new Error("WebSocket connection failed"));
       };
     });
   }, [onAudioReceived, onActionToast, onSessionEnd, onThinkingStart, onThinkingEnd, onError]);

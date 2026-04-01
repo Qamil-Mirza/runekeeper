@@ -29,43 +29,46 @@ const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
+  // Main HTTP server for Next.js
   const server = createServer((req, res) => {
     const parsedUrl = parse(req.url || "/", true);
     handle(req, res, parsedUrl);
   });
 
-  // WebSocket server — no auto-accept, we handle upgrades manually
+  server.listen(port, hostname, () => {
+    console.log(`> Ready on http://${hostname}:${port}`);
+  });
+
+  // Separate WebSocket server on its own port — avoids Next.js 15 upgrade interception
+  const wsPort = parseInt(process.env.WS_PORT || "3001", 10);
+  const wsServer = createServer();
   const wss = new WebSocketServer({ noServer: true });
 
-  server.on("upgrade", async (req: IncomingMessage, socket, head) => {
+  wsServer.on("upgrade", async (req: IncomingMessage, socket, head) => {
     const { pathname } = parse(req.url || "/", true);
+    console.log(`[ws] upgrade request: ${pathname}`);
 
     if (pathname !== "/api/voice") {
-      // Let Next.js HMR WebSocket through in development
-      if (dev) return;
       socket.destroy();
       return;
     }
 
-    // Authenticate via NextAuth JWT cookie
     const user = await authenticateUpgrade(req);
+    console.log(`[ws] auth result: ${user ? user.name : "FAILED"}`);
+
     if (!user) {
       socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
       socket.destroy();
       return;
     }
 
-    // Accept the WebSocket connection
     wss.handleUpgrade(req, socket, head, (clientWs) => {
       handleVoiceSession(clientWs, user);
     });
   });
 
-  server.listen(port, hostname, () => {
-    console.log(`> Ready on http://${hostname}:${port}`);
-    console.log(
-      `> Voice WebSocket available at ws://${hostname}:${port}/api/voice`
-    );
+  wsServer.listen(wsPort, hostname, () => {
+    console.log(`> Voice WebSocket available at ws://${hostname}:${wsPort}/api/voice`);
   });
 });
 
