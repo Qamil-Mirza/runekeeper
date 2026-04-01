@@ -97,7 +97,7 @@ export class GeminiLiveSession {
           speechConfig: {
             voiceConfig: {
               prebuiltVoiceConfig: {
-                voiceName: "Kore",
+                voiceName: "Charon",
               },
             },
           },

@@ -167,10 +167,10 @@ export function VoiceMode({ onExit }: VoiceModeProps) {
     onExit();
   }, [voiceSession, audioPipeline, onExit]);
 
-  const [orbSize, setOrbSize] = useState(240); // default for SSR
+  const [orbSize, setOrbSize] = useState(520); // default for SSR
 
   useEffect(() => {
-    const updateSize = () => setOrbSize(window.innerWidth < 1024 ? 180 : 240);
+    const updateSize = () => setOrbSize(window.innerWidth < 1024 ? 480 : 520);
     updateSize();
     window.addEventListener("resize", updateSize);
     return () => window.removeEventListener("resize", updateSize);

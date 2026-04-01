@@ -132,7 +132,24 @@ async function handleVoiceSession(
         sendJson(clientWs, { type: "action", summary });
         sendJson(clientWs, { type: "thinking_end" });
 
-        // Return result to Gemini so it can speak about it
+        // Re-fetch current state so Gemini has up-to-date context
+        const [freshTasks, freshBlocks] = await Promise.all([
+          db
+            .select()
+            .from(tasks)
+            .where(eq(tasks.userId, user.id))
+            .then((rows) => rows.map(dbTaskToTask)),
+          db
+            .select()
+            .from(timeBlocks)
+            .where(eq(timeBlocks.userId, user.id))
+            .then((rows) => rows.map(dbBlockToTimeBlock)),
+        ]);
+
+        const currentSchedule = buildTodaySchedule(freshBlocks, user.timezone);
+        const currentQuests = buildQuestSummary(freshTasks, freshBlocks, user.timezone);
+
+        // Return result + fresh context to Gemini so it can speak about it
         return {
           success: !result.error,
           ...(result.error ? { error: result.error } : {}),
@@ -148,6 +165,8 @@ async function handleVoiceSession(
             ? { blocksScheduled: result.proposedBlocks.length }
             : {}),
           ...(result.committed ? { committed: true } : {}),
+          currentSchedule,
+          currentQuests,
         };
       },
       onTurnStart: () => {
