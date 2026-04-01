@@ -20,9 +20,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_WS_PORT: "8443"
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3001:3001"
     environment:
       DATABASE_URL: postgresql://runekeeper:${POSTGRES_PASSWORD}@db:5432/runekeeper
       AUTH_SECRET: ${AUTH_SECRET}
@@ -38,7 +41,7 @@ services:
       LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
       GCP_PROJECT_ID: ${GCP_PROJECT_ID:-}
       GMAIL_PUBSUB_TOPIC: ${GMAIL_PUBSUB_TOPIC:-runekeeper-gmail}
-      GEMINI_LIVE_MODEL: ${GEMINI_LIVE_MODEL:-gemini-2.0-flash-live-001}
+      GEMINI_LIVE_MODEL: ${GEMINI_LIVE_MODEL:-gemini-3.1-flash-live-preview}
     depends_on:
       db:
         condition: service_healthy

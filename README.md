@@ -29,7 +29,7 @@ Runekeeper builds a realistic week schedule, checks for conflicts against your G
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - PostgreSQL database (local or [Neon](https://neon.tech))
 - Google Gemini API key (from [Google AI Studio](https://aistudio.google.com/apikey))
 - Google Cloud project with Calendar and Tasks APIs enabled

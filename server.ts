@@ -79,33 +79,7 @@ async function handleVoiceSession(
   const tracker = new VoiceSessionTracker();
   const { weekStart, weekEnd } = getCurrentWeekRange(user.timezone);
 
-  // Load user context for the system prompt
-  const [userTasks, userBlocks, memoryDigest] = await Promise.all([
-    db
-      .select()
-      .from(tasks)
-      .where(eq(tasks.userId, user.id))
-      .then((rows) => rows.map(dbTaskToTask)),
-    db
-      .select()
-      .from(timeBlocks)
-      .where(eq(timeBlocks.userId, user.id))
-      .then((rows) => rows.map(dbBlockToTimeBlock)),
-    getMemoryDigest(user.id),
-  ]);
-
-  const todaySchedule = buildTodaySchedule(userBlocks, user.timezone);
-  const questSummary = buildQuestSummary(userTasks, userBlocks, user.timezone);
-
-  const systemPrompt = buildVoiceSystemPrompt({
-    userName: user.name,
-    timezone: user.timezone,
-    todaySchedule,
-    questSummary,
-    memoryDigest: memoryDigest || undefined,
-  });
-
-  // Create Gemini Live session
+  // Start Gemini TCP+TLS handshake in parallel with DB queries
   const gemini = new GeminiLiveSession(
     {
       onAudio: (pcmBuffer) => {
@@ -186,12 +160,40 @@ async function handleVoiceSession(
         sendJson(clientWs, { type: "session_end", summary });
       },
     },
-    systemPrompt,
+    "",
     VOICE_TOOL_DECLARATIONS
   );
 
   try {
-    await gemini.connect();
+    // Open Gemini socket and load DB context in parallel
+    const [, userTasks, userBlocks, memoryDigest] = await Promise.all([
+      gemini.openSocket(),
+      db
+        .select()
+        .from(tasks)
+        .where(eq(tasks.userId, user.id))
+        .then((rows) => rows.map(dbTaskToTask)),
+      db
+        .select()
+        .from(timeBlocks)
+        .where(eq(timeBlocks.userId, user.id))
+        .then((rows) => rows.map(dbBlockToTimeBlock)),
+      getMemoryDigest(user.id),
+    ]);
+
+    const todaySchedule = buildTodaySchedule(userBlocks, user.timezone);
+    const questSummary = buildQuestSummary(userTasks, userBlocks, user.timezone);
+
+    const systemPrompt = buildVoiceSystemPrompt({
+      userName: user.name,
+      timezone: user.timezone,
+      todaySchedule,
+      questSummary,
+      memoryDigest: memoryDigest || undefined,
+    });
+
+    gemini.updateSystemPrompt(systemPrompt);
+    await gemini.sendSetupAndWait();
   } catch {
     sendJson(clientWs, {
       type: "error",
