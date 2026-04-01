@@ -19,7 +19,6 @@ interface AudioPipeline {
 }
 
 const SILENCE_THRESHOLD = 0.02;
-const SAMPLE_RATE = 16000;
 
 export function useAudioPipeline({ onStateChange, onAmplitudeChange, isMuted }: AudioPipelineOptions): AudioPipeline {
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -34,14 +33,15 @@ export function useAudioPipeline({ onStateChange, onAmplitudeChange, isMuted }: 
   const start = useCallback(async (): Promise<MediaStream> => {
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
-        sampleRate: SAMPLE_RATE,
         channelCount: 1,
         echoCancellation: true,
         noiseSuppression: true,
       },
     });
 
-    const ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
+    // Use browser's default sample rate (typically 48kHz) for clean playback
+    // of Gemini's 24kHz audio. Capture audio is downsampled to 16kHz in voice-mode.
+    const ctx = new AudioContext();
     audioContextRef.current = ctx;
     streamRef.current = stream;
 
@@ -71,8 +71,13 @@ export function useAudioPipeline({ onStateChange, onAmplitudeChange, isMuted }: 
     sourceRef.current = null;
     inputAnalyserRef.current = null;
     outputAnalyserRef.current = null;
+    nextPlayTimeRef.current = 0;
+    isPlayingRef.current = false;
     setStarted(false);
   }, []);
+
+  // Schedule audio chunks sequentially so they don't overlap
+  const nextPlayTimeRef = useRef(0);
 
   const playAudio = useCallback((pcmData: ArrayBuffer, sampleRate = 24000) => {
     const ctx = audioContextRef.current;
@@ -93,11 +98,19 @@ export function useAudioPipeline({ onStateChange, onAmplitudeChange, isMuted }: 
     source.connect(outputAnalyser);
     outputAnalyser.connect(ctx.destination);
 
+    // Schedule this chunk right after the previous one ends
+    const now = ctx.currentTime;
+    const startTime = Math.max(now, nextPlayTimeRef.current);
+    nextPlayTimeRef.current = startTime + buffer.duration;
+
     isPlayingRef.current = true;
     source.onended = () => {
-      isPlayingRef.current = false;
+      // Only clear playing state if no more audio is scheduled
+      if (ctx.currentTime >= nextPlayTimeRef.current - 0.01) {
+        isPlayingRef.current = false;
+      }
     };
-    source.start();
+    source.start(startTime);
   }, []);
 
   // Amplitude monitoring loop

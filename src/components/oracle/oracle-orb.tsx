@@ -120,8 +120,8 @@ export function OracleOrb({ state, amplitude, size = 240, className }: OracleOrb
     const uniforms = uniformsRef.current;
     if (!gl || !programRef.current) return;
 
-    currentStateRef.current += (targetStateRef.current - currentStateRef.current) * 0.05;
-    currentAmplitudeRef.current += (targetAmplitudeRef.current - currentAmplitudeRef.current) * 0.15;
+    currentStateRef.current += (targetStateRef.current - currentStateRef.current) * 0.12;
+    currentAmplitudeRef.current += (targetAmplitudeRef.current - currentAmplitudeRef.current) * 0.3;
 
     const elapsed = (Date.now() - startTimeRef.current) / 1000;
     gl.uniform1f(uniforms.u_time, elapsed);

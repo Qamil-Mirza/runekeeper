@@ -69,35 +69,72 @@ export function VoiceMode({ onExit }: VoiceModeProps) {
 
     async function init() {
       try {
+        console.log("[voice-init] starting audio pipeline...");
         const stream = await audioPipeline.start();
+        console.log("[voice-init] audio pipeline started, cancelled=", cancelled);
 
         if (cancelled) {
           audioPipeline.stop();
           return;
         }
 
+        console.log("[voice-init] connecting voiceSession...");
         await voiceSession.connect();
+        console.log("[voice-init] voiceSession connected, cancelled=", cancelled);
 
         // Set up audio chunk sending via ScriptProcessor using the pipeline's AudioContext
         const audioCtx = audioPipeline.getAudioContext();
-        if (!audioCtx) return;
+        if (!audioCtx) {
+          console.error("[voice] no AudioContext available");
+          return;
+        }
+
+        // Ensure AudioContext is running (browsers may suspend it)
+        if (audioCtx.state !== "running") {
+          console.log(`[voice] AudioContext state: ${audioCtx.state}, resuming...`);
+          await audioCtx.resume();
+        }
+
+        const activeTracks = stream.getAudioTracks().filter(t => t.readyState === "live");
+        console.log(`[voice] AudioContext state: ${audioCtx.state}, sampleRate: ${audioCtx.sampleRate}, active tracks: ${activeTracks.length}`);
+
+        if (activeTracks.length === 0) {
+          console.error("[voice] no live audio tracks on stream");
+          return;
+        }
+
         const source = audioCtx.createMediaStreamSource(stream);
         const processor = audioCtx.createScriptProcessor(4096, 1, 1);
         workletNodeRef.current = processor;
 
+        const nativeRate = audioCtx.sampleRate;
+        const targetRate = 16000;
+        const ratio = nativeRate / targetRate;
+
+        let chunkCount = 0;
         processor.onaudioprocess = (e) => {
           if (isMutedRef.current) return;
           const input = e.inputBuffer.getChannelData(0);
-          const int16 = new Int16Array(input.length);
-          for (let i = 0; i < input.length; i++) {
-            int16[i] = Math.max(-32768, Math.min(32767, Math.round(input[i] * 32768)));
+
+          // Downsample from native rate (e.g. 48kHz) to 16kHz for Gemini
+          const outputLen = Math.floor(input.length / ratio);
+          const int16 = new Int16Array(outputLen);
+          for (let i = 0; i < outputLen; i++) {
+            const sample = input[Math.floor(i * ratio)];
+            int16[i] = Math.max(-32768, Math.min(32767, Math.round(sample * 32768)));
+          }
+          chunkCount++;
+          if (chunkCount <= 5) {
+            console.log(`[voice] sending chunk #${chunkCount}, native=${nativeRate}Hz, samples=${int16.length}`);
           }
           voiceSession.sendAudio(int16.buffer);
         };
 
         source.connect(processor);
         processor.connect(audioCtx.destination);
+        console.log("[voice] ScriptProcessor connected and ready");
       } catch (err) {
+        console.error("[voice-init] error:", err, "cancelled=", cancelled);
         if (!cancelled) {
           setError(
             err instanceof DOMException && err.name === "NotAllowedError"
@@ -130,10 +167,10 @@ export function VoiceMode({ onExit }: VoiceModeProps) {
     onExit();
   }, [voiceSession, audioPipeline, onExit]);
 
-  const [orbSize, setOrbSize] = useState(240); // default for SSR
+  const [orbSize, setOrbSize] = useState(520); // default for SSR
 
   useEffect(() => {
-    const updateSize = () => setOrbSize(window.innerWidth < 1024 ? 180 : 240);
+    const updateSize = () => setOrbSize(window.innerWidth < 1024 ? 480 : 520);
     updateSize();
     window.addEventListener("resize", updateSize);
     return () => window.removeEventListener("resize", updateSize);

@@ -28,68 +28,85 @@ export function useVoiceSession({
 }: VoiceSessionOptions): VoiceSession {
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const reconnectAttemptsRef = useRef(0);
-  const maxReconnectAttempts = 3;
 
-  const connect = useCallback(async () => {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const url = `${protocol}//${window.location.host}/api/voice`;
+  const connectIdRef = useRef(0);
 
-    const ws = new WebSocket(url);
-    ws.binaryType = "arraybuffer";
-    wsRef.current = ws;
+  const connect = useCallback(() => {
+    const id = ++connectIdRef.current;
+    console.log(`[ws-${id}] connect() called, existing ws state:`, wsRef.current?.readyState);
 
-    ws.onopen = () => {
-      setIsConnected(true);
-      reconnectAttemptsRef.current = 0;
-    };
+    // Close any lingering connection
+    if (wsRef.current) {
+      console.log(`[ws-${id}] closing previous ws`);
+      wsRef.current.onclose = null;
+      wsRef.current.onerror = null;
+      wsRef.current.close();
+      wsRef.current = null;
+    }
 
-    ws.onmessage = (event) => {
-      if (event.data instanceof ArrayBuffer) {
-        onAudioReceived(event.data);
-        return;
-      }
+    return new Promise<void>((resolve, reject) => {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      const wsHost = window.location.hostname;
+      const wsPort = process.env.NEXT_PUBLIC_WS_PORT || "3001";
+      const url = `${protocol}//${wsHost}:${wsPort}/api/voice`;
+      console.log(`[ws-${id}] creating WebSocket to ${url}`);
 
-      try {
-        const msg = JSON.parse(event.data);
-        switch (msg.type) {
-          case "action":
-            onActionToast(msg.summary);
-            break;
-          case "thinking":
-            onThinkingStart();
-            break;
-          case "thinking_end":
-            onThinkingEnd();
-            break;
-          case "session_end":
-            onSessionEnd(msg.summary);
-            break;
-          case "error":
-            onError(msg.message || "An error occurred");
-            break;
+      const ws = new WebSocket(url);
+      ws.binaryType = "arraybuffer";
+      wsRef.current = ws;
+      let opened = false;
+
+      ws.onopen = () => {
+        console.log(`[ws-${id}] onopen`);
+        opened = true;
+        setIsConnected(true);
+        resolve();
+      };
+
+      ws.onmessage = (event) => {
+        if (event.data instanceof ArrayBuffer) {
+          onAudioReceived(event.data);
+          return;
         }
-      } catch {
-        // Ignore malformed messages
-      }
-    };
 
-    ws.onclose = (event) => {
-      setIsConnected(false);
+        try {
+          const msg = JSON.parse(event.data);
+          switch (msg.type) {
+            case "action":
+              onActionToast(msg.summary);
+              break;
+            case "thinking":
+              onThinkingStart();
+              break;
+            case "thinking_end":
+              onThinkingEnd();
+              break;
+            case "session_end":
+              onSessionEnd(msg.summary);
+              break;
+            case "error":
+              onError(msg.message || "An error occurred");
+              break;
+          }
+        } catch {
+          // Ignore malformed messages
+        }
+      };
 
-      if (!event.wasClean && reconnectAttemptsRef.current < maxReconnectAttempts) {
-        reconnectAttemptsRef.current++;
-        setTimeout(() => connect(), 1000 * reconnectAttemptsRef.current);
-      }
-    };
+      ws.onclose = (e) => {
+        console.log(`[ws-${id}] onclose code=${e.code} reason=${e.reason} opened=${opened}`);
+        setIsConnected(false);
+        if (!opened) reject(new Error("WebSocket closed before open"));
+      };
 
-    ws.onerror = () => {
-      onError("Couldn't reach the Oracle — try again");
-    };
+      ws.onerror = (e) => {
+        console.error(`[ws-${id}] onerror opened=${opened}`, e);
+        if (!opened) reject(new Error("WebSocket connection failed"));
+      };
+    });
   }, [onAudioReceived, onActionToast, onSessionEnd, onThinkingStart, onThinkingEnd, onError]);
 
   const disconnect = useCallback(() => {
-    reconnectAttemptsRef.current = maxReconnectAttempts;
     wsRef.current?.close(1000, "user_exit");
     wsRef.current = null;
     setIsConnected(false);
