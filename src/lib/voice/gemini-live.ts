@@ -36,6 +36,7 @@ export class GeminiLiveSession {
   private isSetupComplete = false;
   private pendingAudio: Buffer[] = [];
   private turnActive = false;
+  private onSetupComplete: (() => void) | null = null;
 
   constructor(
     callbacks: GeminiLiveCallbacks,
@@ -47,7 +48,15 @@ export class GeminiLiveSession {
     this.toolDeclarations = toolDeclarations;
   }
 
-  async connect(): Promise<void> {
+  updateSystemPrompt(prompt: string) {
+    this.systemPrompt = prompt;
+  }
+
+  /**
+   * Open the WebSocket to Gemini (TCP + TLS handshake only).
+   * Call sendSetupAndWait() after to send config and wait for setupComplete.
+   */
+  async openSocket(): Promise<void> {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) throw new Error("GEMINI_API_KEY not set");
 
@@ -58,13 +67,13 @@ export class GeminiLiveSession {
 
       this.ws.on("open", () => {
         log.info("connected to Gemini Live API");
-        this.sendSetup();
+        resolve();
       });
 
       this.ws.on("message", (data: WebSocket.Data) => {
         try {
           const msg = JSON.parse(data.toString());
-          this.handleMessage(msg, resolve);
+          this.handleMessage(msg);
         } catch (err) {
           log.error({ err }, "failed to parse Gemini message");
         }
@@ -86,6 +95,25 @@ export class GeminiLiveSession {
         this.callbacks.onClose("connection_error");
       });
     });
+  }
+
+  /**
+   * Send the setup config and wait for Gemini to confirm setupComplete.
+   * Must be called after openSocket() resolves.
+   */
+  async sendSetupAndWait(): Promise<void> {
+    return new Promise((resolve) => {
+      this.onSetupComplete = resolve;
+      this.sendSetup();
+    });
+  }
+
+  /**
+   * Convenience method: open socket + send setup in one call.
+   */
+  async connect(): Promise<void> {
+    await this.openSocket();
+    await this.sendSetupAndWait();
   }
 
   private sendSetup() {
@@ -131,7 +159,7 @@ export class GeminiLiveSession {
     this.send(setup);
   }
 
-  private handleMessage(msg: any, onReady?: (value: void) => void) {
+  private handleMessage(msg: any) {
     const keys = Object.keys(msg);
     log.debug({ keys }, "Gemini message received");
 
@@ -143,7 +171,8 @@ export class GeminiLiveSession {
         this.sendAudioChunk(buf);
       }
       this.pendingAudio = [];
-      onReady?.();
+      this.onSetupComplete?.();
+      this.onSetupComplete = null;
       return;
     }
 
