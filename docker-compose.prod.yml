@@ -41,7 +41,7 @@ services:
       LANGFUSE_BASE_URL: ${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}
       GCP_PROJECT_ID: ${GCP_PROJECT_ID:-}
       GMAIL_PUBSUB_TOPIC: ${GMAIL_PUBSUB_TOPIC:-runekeeper-gmail}
-      GEMINI_LIVE_MODEL: ${GEMINI_LIVE_MODEL:-gemini-2.0-flash-live-001}
+      GEMINI_LIVE_MODEL: ${GEMINI_LIVE_MODEL:-gemini-3.1-flash-live-preview}
     depends_on:
       db:
         condition: service_healthy
