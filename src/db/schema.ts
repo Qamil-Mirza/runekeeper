@@ -178,6 +178,10 @@ export const integrations = pgTable(
     enabled: boolean("enabled").default(false).notNull(),
     config: jsonb("config").$type<{
       monitoredSenders?: string[];
+      monitoredDomains?: string[];
+      blockedSenders?: string[];
+      blockedDomains?: string[];
+      unmatchedBehavior?: "analyze" | "skip";
       autoCreateTasks?: boolean;
       pubsubSubscriptionActive?: boolean;
       canvasApiToken?: string;

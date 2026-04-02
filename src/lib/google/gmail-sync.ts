@@ -30,6 +30,64 @@ function parseSenderEmail(fromHeader: string): string {
   return fromHeader.trim().toLowerCase();
 }
 
+function extractDomain(email: string): string {
+  const atIndex = email.lastIndexOf("@");
+  return atIndex >= 0 ? email.slice(atIndex + 1) : email;
+}
+
+function matchesDomainPattern(senderEmail: string, pattern: string): boolean {
+  const domain = extractDomain(senderEmail);
+  const p = pattern.toLowerCase();
+
+  // Subdomain glob: "*.company.com" matches "sub.company.com"
+  if (p.startsWith("*.")) {
+    const suffix = p.slice(2);
+    return domain === suffix || domain.endsWith("." + suffix);
+  }
+
+  // Exact domain: "company.com" matches "company.com"
+  if (p.includes(".")) {
+    return domain === p;
+  }
+
+  // TLD wildcard: "edu" matches "anything.edu"
+  return domain === p || domain.endsWith("." + p);
+}
+
+type FilterConfig = {
+  monitoredSenders?: string[];
+  monitoredDomains?: string[];
+  blockedSenders?: string[];
+  blockedDomains?: string[];
+  unmatchedBehavior?: "analyze" | "skip";
+};
+
+function evaluateEmail(
+  senderEmail: string,
+  config: FilterConfig
+): "analyze" | "skip" {
+  const email = senderEmail.toLowerCase();
+
+  // Tier 1: Blocklist (highest priority)
+  if (config.blockedSenders?.some((s) => s.toLowerCase() === email)) {
+    return "skip";
+  }
+  if (config.blockedDomains?.some((d) => matchesDomainPattern(email, d))) {
+    return "skip";
+  }
+
+  // Tier 2: Allowlist
+  if (config.monitoredSenders?.some((s) => s.toLowerCase() === email)) {
+    return "analyze";
+  }
+  if (config.monitoredDomains?.some((d) => matchesDomainPattern(email, d))) {
+    return "analyze";
+  }
+
+  // Tier 3: Default behavior
+  return config.unmatchedBehavior ?? "skip";
+}
+
 // ─── Main Sync Function ────────────────────────────────────────────────────
 
 export async function syncGmailForUser(
@@ -54,11 +112,13 @@ export async function syncGmailForUser(
     return result;
   }
 
-  const monitoredSenders = integration.config?.monitoredSenders ?? [];
-  if (monitoredSenders.length === 0) {
-    log.info({ userId }, "no monitored senders configured, skipping sync");
-    return result;
-  }
+  const filterConfig: FilterConfig = {
+    monitoredSenders: integration.config?.monitoredSenders,
+    monitoredDomains: integration.config?.monitoredDomains,
+    blockedSenders: integration.config?.blockedSenders,
+    blockedDomains: integration.config?.blockedDomains,
+    unmatchedBehavior: integration.config?.unmatchedBehavior,
+  };
 
   // 2. Fetch message IDs
   let messageIds: string[] = [];
@@ -128,12 +188,10 @@ export async function syncGmailForUser(
       const fromHeader = extractHeader(message, "From") ?? "";
       const senderEmail = parseSenderEmail(fromHeader);
 
-      // Check if sender is monitored
-      const isMonitored = monitoredSenders.some(
-        (s) => s.toLowerCase() === senderEmail
-      );
+      // Evaluate sender against tiered filter rules
+      const filterDecision = evaluateEmail(senderEmail, filterConfig);
 
-      if (!isMonitored) {
+      if (filterDecision === "skip") {
         await db.insert(processedEmails).values({
           userId,
           integrationId,
