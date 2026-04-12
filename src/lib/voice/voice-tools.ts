@@ -65,6 +65,11 @@ export const VOICE_TOOL_DECLARATIONS = [
       required: ["blockTitle", "change"],
     },
   },
+  {
+    name: "refresh_context",
+    description: "Fetch the latest tasks and schedule from the database. Use when the user asks about their current tasks, disputes a task's existence, or says something was deleted/completed.",
+    parameters: { type: "OBJECT", properties: {} },
+  },
 ];
 
 export async function executeToolCall(
@@ -76,10 +81,16 @@ export async function executeToolCall(
   timezone: string,
   tracker: VoiceSessionTracker
 ): Promise<{ result: ActionResult; summary: string }> {
-  const action = { type: functionName, ...args };
-
   log.info({ functionName, userId }, "executing voice tool call");
 
+  // refresh_context is a no-op — the caller in server.ts always appends fresh
+  // currentQuests/currentSchedule after every tool call, so we just need to
+  // trigger that pipeline without doing anything else.
+  if (functionName === "refresh_context") {
+    return { result: {} as ActionResult, summary: "Refreshed task list" };
+  }
+
+  const action = { type: functionName, ...args };
   const result = await handleAction(action, userId, weekStart, weekEnd, undefined, timezone);
 
   let summary = "";
@@ -107,6 +118,9 @@ export async function executeToolCall(
       tracker.trackAction("adjust_block", title);
       break;
     }
+    case "refresh_context":
+      summary = "Refreshed task list";
+      break;
     default:
       summary = `Action: ${functionName}`;
   }

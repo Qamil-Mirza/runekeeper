@@ -72,5 +72,6 @@ ${questSummary}
 7. When the user says "today", "tomorrow", etc., use the EXACT date from the lookup table.
 8. Default to today (${todayStr}) when no date is specified.
 9. Always include notes for tasks — infer from context if not stated.
-10. Never mention raw dates, field names, or technical details. Use natural language.`;
+10. Never mention raw dates, field names, or technical details. Use natural language.
+11. If the user says a task doesn't exist, was deleted, or asks what their current tasks are, call refresh_context first to get the latest data before responding.`;
 }
