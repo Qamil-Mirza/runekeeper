@@ -42,19 +42,24 @@ function sanitizeTaskDef(def: any): {
  * in the given IANA timezone. Without this, new Date() treats it as UTC.
  */
 function parseNaiveDateTime(isoString: string, timezone?: string): Date {
-  // If already has timezone info (Z or +/-offset), parse directly
-  if (/[Zz]$/.test(isoString) || /[+-]\d{2}:\d{2}$/.test(isoString)) {
-    return new Date(isoString);
+  // Strip trailing Z — LLM tool calls often append Z even when they mean local
+  // time.  We always interpret datetimes in the user's timezone so the Z would
+  // incorrectly shift the result to UTC.
+  const cleaned = isoString.replace(/[Zz]$/, "");
+
+  // If the string has an explicit UTC offset like +05:30 / -07:00 keep it.
+  if (/[+-]\d{2}:\d{2}$/.test(cleaned)) {
+    return new Date(cleaned);
   }
 
   if (!timezone) {
     // No timezone available — fall back to treating as UTC (legacy behavior)
-    return new Date(isoString);
+    return new Date(cleaned);
   }
 
   // Use Intl to find the UTC offset for this timezone at the given date/time.
   // Parse the naive string parts, construct a date in the target timezone.
-  const [datePart, timePart] = isoString.split("T");
+  const [datePart, timePart] = cleaned.split("T");
   const [year, month, day] = datePart.split("-").map(Number);
   const [hour, minute, second] = (timePart || "00:00:00").split(":").map(Number);
 
@@ -423,6 +428,8 @@ async function handleAdjustBlock(
     typeof action.newStartTime === "string" && !isNaN(Date.parse(action.newStartTime))
       ? action.newStartTime
       : undefined;
+  const startAfter =
+    typeof action.startAfter === "string" ? action.startAfter : undefined;
 
   if (!blockTitle) {
     return handleGenerateSchedule(userId, weekStart, weekEnd, undefined, undefined, timezone);
@@ -475,14 +482,9 @@ async function handleAdjustBlock(
           })
           .returning();
 
-        const pinnedBlockIds = new Set<string>([blockRow.id]);
-        const result = await handleGenerateSchedule(userId, weekStart, weekEnd, pinnedBlockIds, undefined, timezone);
+        // Return the placed block directly — no full reschedule.
         return {
-          ...result,
-          proposedBlocks: [
-            dbBlockToTimeBlock(blockRow),
-            ...(result.proposedBlocks ?? []),
-          ],
+          proposedBlocks: [dbBlockToTimeBlock(blockRow)],
         };
       }
     }
@@ -541,7 +543,8 @@ async function handleAdjustBlock(
     };
   }
 
-  // No specific time — reset task and regenerate the full schedule
+  // No specific time — reset only the target task and reschedule it.
+  // Pin all remaining blocks so other adjustments aren't wiped out.
   if (targetBlock.taskId) {
     await db
       .update(tasks)
@@ -549,5 +552,11 @@ async function handleAdjustBlock(
       .where(eq(tasks.id, targetBlock.taskId));
   }
 
-  return handleGenerateSchedule(userId, weekStart, weekEnd, undefined, undefined, timezone);
+  const remainingBlocks = await db
+    .select({ id: timeBlocks.id })
+    .from(timeBlocks)
+    .where(eq(timeBlocks.userId, userId));
+  const pinnedIds = new Set(remainingBlocks.map((b) => b.id));
+
+  return handleGenerateSchedule(userId, weekStart, weekEnd, pinnedIds, startAfter, timezone);
 }
