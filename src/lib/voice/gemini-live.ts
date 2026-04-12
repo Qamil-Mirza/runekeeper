@@ -23,6 +23,8 @@ export interface GeminiLiveCallbacks {
   onInputTranscript: (text: string) => void;
   /** Output transcription of model speech */
   onOutputTranscript: (text: string) => void;
+  /** Model turn was interrupted by user speech */
+  onInterrupted: () => void;
   /** Session ended or error */
   onClose: (reason: string) => void;
 }
@@ -238,7 +240,7 @@ export class GeminiLiveSession {
     if (content.interrupted) {
       log.debug("model turn interrupted by user");
       this.turnActive = false;
-      this.callbacks.onTurnEnd();
+      this.callbacks.onInterrupted();
     }
   }
 

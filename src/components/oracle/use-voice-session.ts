@@ -2,12 +2,19 @@
 
 import { useRef, useCallback, useState, useEffect } from "react";
 
+export interface VoiceToastData {
+  summary: string;
+  action?: string;
+  details?: Array<{ title: string; time?: string }>;
+}
+
 interface VoiceSessionOptions {
   onAudioReceived: (pcmData: ArrayBuffer) => void;
-  onActionToast: (message: string) => void;
+  onActionToast: (data: VoiceToastData) => void;
   onSessionEnd: (summary: string) => void;
   onThinkingStart: () => void;
   onThinkingEnd: () => void;
+  onInterrupted: () => void;
   onError: (error: string) => void;
 }
 
@@ -24,6 +31,7 @@ export function useVoiceSession({
   onSessionEnd,
   onThinkingStart,
   onThinkingEnd,
+  onInterrupted,
   onError,
 }: VoiceSessionOptions): VoiceSession {
   const wsRef = useRef<WebSocket | null>(null);
@@ -73,7 +81,11 @@ export function useVoiceSession({
           const msg = JSON.parse(event.data);
           switch (msg.type) {
             case "action":
-              onActionToast(msg.summary);
+              onActionToast({
+                summary: msg.summary,
+                action: msg.action,
+                details: msg.details,
+              });
               break;
             case "thinking":
               onThinkingStart();
@@ -83,6 +95,9 @@ export function useVoiceSession({
               break;
             case "session_end":
               onSessionEnd(msg.summary);
+              break;
+            case "interrupted":
+              onInterrupted();
               break;
             case "error":
               onError(msg.message || "An error occurred");
@@ -104,7 +119,7 @@ export function useVoiceSession({
         if (!opened) reject(new Error("WebSocket connection failed"));
       };
     });
-  }, [onAudioReceived, onActionToast, onSessionEnd, onThinkingStart, onThinkingEnd, onError]);
+  }, [onAudioReceived, onActionToast, onSessionEnd, onThinkingStart, onThinkingEnd, onInterrupted, onError]);
 
   const disconnect = useCallback(() => {
     wsRef.current?.close(1000, "user_exit");

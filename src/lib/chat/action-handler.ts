@@ -42,19 +42,24 @@ function sanitizeTaskDef(def: any): {
  * in the given IANA timezone. Without this, new Date() treats it as UTC.
  */
 function parseNaiveDateTime(isoString: string, timezone?: string): Date {
-  // If already has timezone info (Z or +/-offset), parse directly
-  if (/[Zz]$/.test(isoString) || /[+-]\d{2}:\d{2}$/.test(isoString)) {
-    return new Date(isoString);
+  // Strip trailing Z — LLM tool calls often append Z even when they mean local
+  // time.  We always interpret datetimes in the user's timezone so the Z would
+  // incorrectly shift the result to UTC.
+  const cleaned = isoString.replace(/[Zz]$/, "");
+
+  // If the string has an explicit UTC offset like +05:30 / -07:00 keep it.
+  if (/[+-]\d{2}:\d{2}$/.test(cleaned)) {
+    return new Date(cleaned);
   }
 
   if (!timezone) {
     // No timezone available — fall back to treating as UTC (legacy behavior)
-    return new Date(isoString);
+    return new Date(cleaned);
   }
 
   // Use Intl to find the UTC offset for this timezone at the given date/time.
   // Parse the naive string parts, construct a date in the target timezone.
-  const [datePart, timePart] = isoString.split("T");
+  const [datePart, timePart] = cleaned.split("T");
   const [year, month, day] = datePart.split("-").map(Number);
   const [hour, minute, second] = (timePart || "00:00:00").split(":").map(Number);
 
@@ -114,7 +119,7 @@ export async function handleAction(
     case "create_tasks":
       return handleCreateTasks(action.tasks, userId, timezone);
     case "generate_schedule":
-      return handleGenerateSchedule(userId, weekStart, weekEnd, pinnedBlockIds, action.startAfter, timezone);
+      return handleGenerateSchedule(userId, weekStart, weekEnd, pinnedBlockIds, action.startAfter, timezone, action.rescheduleAll);
     case "confirm_plan":
       return handleConfirmPlan(userId);
     case "adjust_block":
@@ -279,7 +284,8 @@ async function handleGenerateSchedule(
   weekEnd: string,
   pinnedBlockIds?: Set<string>,
   startAfter?: string,
-  timezone?: string
+  timezone?: string,
+  rescheduleAll?: boolean
 ): Promise<ActionResult> {
   const preferences = { maxBlockMinutes: 120, meetingBuffer: 10 };
 
@@ -292,23 +298,24 @@ async function handleGenerateSchedule(
     await db.select().from(timeBlocks).where(eq(timeBlocks.userId, userId))
   ).map(dbBlockToTimeBlock);
 
-  // Find uncommitted Runekeeper blocks to delete (but preserve pinned blocks
-  // created by create_tasks in the same action batch)
-  const uncommittedBlocks = existingBlocks.filter(
+  // Determine which blocks to clear.
+  // rescheduleAll: clear ALL runekeeper blocks (committed + uncommitted)
+  // normal: only clear uncommitted blocks
+  const blocksToDelete = existingBlocks.filter(
     (b) =>
-      !b.committed &&
       b.source !== "google_calendar" &&
-      !(pinnedBlockIds && pinnedBlockIds.has(b.id))
+      !(pinnedBlockIds && pinnedBlockIds.has(b.id)) &&
+      (rescheduleAll || !b.committed)
   );
 
-  // Only reset tasks that DON'T already have a committed block —
-  // tasks with committed blocks should stay "scheduled", not be re-proposed
-  for (const block of uncommittedBlocks) {
+  // Reset task status for blocks we're about to delete
+  for (const block of blocksToDelete) {
     if (block.taskId) {
-      const hasCommittedBlock = existingBlocks.some(
-        (b) => b.taskId === block.taskId && b.committed
+      // In rescheduleAll mode, always reset. Otherwise only reset if no committed block remains.
+      const shouldReset = rescheduleAll || !existingBlocks.some(
+        (b) => b.taskId === block.taskId && b.committed && !blocksToDelete.some((d) => d.id === b.id)
       );
-      if (!hasCommittedBlock) {
+      if (shouldReset) {
         await db
           .update(tasks)
           .set({ status: "unscheduled", updatedAt: new Date() })
@@ -317,8 +324,8 @@ async function handleGenerateSchedule(
     }
   }
 
-  // Delete existing uncommitted Runekeeper blocks (preserve Google Calendar imports + pinned)
-  for (const block of uncommittedBlocks) {
+  // Delete selected blocks (preserve Google Calendar imports + pinned)
+  for (const block of blocksToDelete) {
     await db.delete(timeBlocks).where(eq(timeBlocks.id, block.id));
   }
 
@@ -331,8 +338,10 @@ async function handleGenerateSchedule(
   const pinnedBlocks = existingBlocks.filter(
     (b) => pinnedBlockIds && pinnedBlockIds.has(b.id)
   );
+  // Remaining committed blocks (not deleted) + pinned blocks are busy windows
+  const deletedIds = new Set(blocksToDelete.map((b) => b.id));
   const busyWindows = [
-    ...existingBlocks.filter((b) => b.committed),
+    ...existingBlocks.filter((b) => b.committed && !deletedIds.has(b.id)),
     ...pinnedBlocks,
   ];
 
@@ -419,6 +428,8 @@ async function handleAdjustBlock(
     typeof action.newStartTime === "string" && !isNaN(Date.parse(action.newStartTime))
       ? action.newStartTime
       : undefined;
+  const startAfter =
+    typeof action.startAfter === "string" ? action.startAfter : undefined;
 
   if (!blockTitle) {
     return handleGenerateSchedule(userId, weekStart, weekEnd, undefined, undefined, timezone);
@@ -431,9 +442,7 @@ async function handleAdjustBlock(
     .where(eq(timeBlocks.userId, userId));
 
   const targetBlock = allBlocks.find(
-    (b) =>
-      b.title.toLowerCase().includes(blockTitle.toLowerCase()) &&
-      !b.committed
+    (b) => b.title.toLowerCase().includes(blockTitle.toLowerCase())
   );
 
   if (!targetBlock) {
@@ -473,14 +482,9 @@ async function handleAdjustBlock(
           })
           .returning();
 
-        const pinnedBlockIds = new Set<string>([blockRow.id]);
-        const result = await handleGenerateSchedule(userId, weekStart, weekEnd, pinnedBlockIds, undefined, timezone);
+        // Return the placed block directly — no full reschedule.
         return {
-          ...result,
-          proposedBlocks: [
-            dbBlockToTimeBlock(blockRow),
-            ...(result.proposedBlocks ?? []),
-          ],
+          proposedBlocks: [dbBlockToTimeBlock(blockRow)],
         };
       }
     }
@@ -517,6 +521,7 @@ async function handleAdjustBlock(
         .where(eq(tasks.id, targetBlock.taskId));
     }
 
+    const wasCommitted = targetBlock.committed;
     const [blockRow] = await db
       .insert(timeBlocks)
       .values({
@@ -526,24 +531,20 @@ async function handleAdjustBlock(
         startTime,
         endTime,
         blockType: inferBlockType({ title: targetBlock.title }),
-        committed: false,
+        committed: wasCommitted,
       })
       .returning();
 
-    const pinnedBlockIds = new Set<string>([blockRow.id]);
-
-    // Regenerate remaining unscheduled tasks around this pinned block
-    const result = await handleGenerateSchedule(userId, weekStart, weekEnd, pinnedBlockIds, undefined, timezone);
+    // Return the moved block directly — do NOT call handleGenerateSchedule here.
+    // Triggering a full reschedule would delete other uncommitted blocks from
+    // previous adjust_block calls, undoing those moves.
     return {
-      ...result,
-      proposedBlocks: [
-        dbBlockToTimeBlock(blockRow),
-        ...(result.proposedBlocks ?? []),
-      ],
+      proposedBlocks: [dbBlockToTimeBlock(blockRow)],
     };
   }
 
-  // No specific time — reset task and regenerate the full schedule
+  // No specific time — reset only the target task and reschedule it.
+  // Pin all remaining blocks so other adjustments aren't wiped out.
   if (targetBlock.taskId) {
     await db
       .update(tasks)
@@ -551,5 +552,11 @@ async function handleAdjustBlock(
       .where(eq(tasks.id, targetBlock.taskId));
   }
 
-  return handleGenerateSchedule(userId, weekStart, weekEnd, undefined, undefined, timezone);
+  const remainingBlocks = await db
+    .select({ id: timeBlocks.id })
+    .from(timeBlocks)
+    .where(eq(timeBlocks.userId, userId));
+  const pinnedIds = new Set(remainingBlocks.map((b) => b.id));
+
+  return handleGenerateSchedule(userId, weekStart, weekEnd, pinnedIds, startAfter, timezone);
 }

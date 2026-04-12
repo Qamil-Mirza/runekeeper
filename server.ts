@@ -20,6 +20,7 @@ import { db } from "./src/db";
 import { tasks, timeBlocks } from "./src/db/schema";
 import { eq } from "drizzle-orm";
 import { dbTaskToTask, dbBlockToTimeBlock } from "./src/lib/types";
+import { VoiceSessionLogger } from "./src/lib/voice/session-logger";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOSTNAME || "0.0.0.0";
@@ -77,6 +78,7 @@ async function handleVoiceSession(
   user: { id: string; name: string; timezone: string }
 ) {
   const tracker = new VoiceSessionTracker();
+  const sessionLog = new VoiceSessionLogger(user.id, user.name);
   const { weekStart, weekEnd } = getCurrentWeekRange(user.timezone);
 
   // Start Gemini TCP+TLS handshake in parallel with DB queries
@@ -89,10 +91,11 @@ async function handleVoiceSession(
         }
       },
       onToolCall: async (_id, name, args) => {
+        sessionLog.logToolCall(name, args);
         // Send thinking state to client
         sendJson(clientWs, { type: "thinking" });
 
-        const { result, summary } = await executeToolCall(
+        const { result, summary, details } = await executeToolCall(
           name,
           args,
           user.id,
@@ -103,7 +106,7 @@ async function handleVoiceSession(
         );
 
         // Send action toast to client
-        sendJson(clientWs, { type: "action", summary });
+        sendJson(clientWs, { type: "action", action: name, summary, details });
         sendJson(clientWs, { type: "thinking_end" });
 
         // Re-fetch current state so Gemini has up-to-date context
@@ -124,7 +127,7 @@ async function handleVoiceSession(
         const currentQuests = buildQuestSummary(freshTasks, freshBlocks, user.timezone);
 
         // Return result + fresh context to Gemini so it can speak about it
-        return {
+        const toolResponse = {
           success: !result.error,
           ...(result.error ? { error: result.error } : {}),
           ...(result.tasksCreated
@@ -136,12 +139,20 @@ async function handleVoiceSession(
               }
             : {}),
           ...(result.proposedBlocks
-            ? { blocksScheduled: result.proposedBlocks.length }
+            ? {
+                blocksScheduled: result.proposedBlocks.map((b) => ({
+                  title: b.title,
+                  start: b.start,
+                  end: b.end,
+                })),
+              }
             : {}),
           ...(result.committed ? { committed: true } : {}),
           currentSchedule,
           currentQuests,
         };
+        sessionLog.logToolResult(name, toolResponse);
+        return toolResponse;
       },
       onTurnStart: () => {
         sendJson(clientWs, { type: "thinking" });
@@ -150,13 +161,21 @@ async function handleVoiceSession(
         sendJson(clientWs, { type: "thinking_end" });
       },
       onInputTranscript: (text) => {
+        sessionLog.logUserTranscript(text);
         sendJson(clientWs, { type: "transcript_in", text });
       },
       onOutputTranscript: (text) => {
+        sessionLog.logAssistantTranscript(text);
         sendJson(clientWs, { type: "transcript_out", text });
+      },
+      onInterrupted: () => {
+        sessionLog.logInterrupted();
+        sendJson(clientWs, { type: "interrupted" });
       },
       onClose: () => {
         const summary = tracker.buildSummary();
+        sessionLog.logEnd(summary);
+        console.log(`[voice] session log saved: ${sessionLog.getFilePath()}`);
         sendJson(clientWs, { type: "session_end", summary });
       },
     },
