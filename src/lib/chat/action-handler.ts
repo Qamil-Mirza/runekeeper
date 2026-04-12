@@ -533,16 +533,11 @@ async function handleAdjustBlock(
       })
       .returning();
 
-    const pinnedBlockIds = new Set<string>([blockRow.id]);
-
-    // Regenerate remaining unscheduled tasks around this pinned block
-    const result = await handleGenerateSchedule(userId, weekStart, weekEnd, pinnedBlockIds, undefined, timezone);
+    // Return the moved block directly — do NOT call handleGenerateSchedule here.
+    // Triggering a full reschedule would delete other uncommitted blocks from
+    // previous adjust_block calls, undoing those moves.
     return {
-      ...result,
-      proposedBlocks: [
-        dbBlockToTimeBlock(blockRow),
-        ...(result.proposedBlocks ?? []),
-      ],
+      proposedBlocks: [dbBlockToTimeBlock(blockRow)],
     };
   }
 
