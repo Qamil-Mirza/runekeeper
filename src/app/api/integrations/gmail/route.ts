@@ -11,6 +11,8 @@ import { createLogger } from "@/lib/logger";
 const log = createLogger("api:integrations:gmail");
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DOMAIN_PATTERN_REGEX =
+  /^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$/;
 
 export async function GET() {
   const user = await getAuthenticatedUser();
@@ -48,17 +50,42 @@ export async function PUT(req: Request) {
     enabled?: boolean;
     config?: {
       monitoredSenders?: string[];
+      monitoredDomains?: string[];
+      blockedSenders?: string[];
+      blockedDomains?: string[];
+      unmatchedBehavior?: "analyze" | "skip";
       autoCreateTasks?: boolean;
     };
   };
 
-  // Validate monitored sender emails
-  if (config?.monitoredSenders) {
-    for (const email of config.monitoredSenders) {
-      if (!EMAIL_REGEX.test(email)) {
-        return errorResponse(`Invalid email address: ${email}`);
+  // Validate email addresses
+  for (const list of [config?.monitoredSenders, config?.blockedSenders]) {
+    if (list) {
+      for (const email of list) {
+        if (!EMAIL_REGEX.test(email)) {
+          return errorResponse(`Invalid email address: ${email}`);
+        }
       }
     }
+  }
+
+  // Validate domain patterns
+  for (const list of [config?.monitoredDomains, config?.blockedDomains]) {
+    if (list) {
+      for (const pattern of list) {
+        if (!DOMAIN_PATTERN_REGEX.test(pattern)) {
+          return errorResponse(`Invalid domain pattern: ${pattern}`);
+        }
+      }
+    }
+  }
+
+  // Validate unmatchedBehavior
+  if (
+    config?.unmatchedBehavior &&
+    !["analyze", "skip"].includes(config.unmatchedBehavior)
+  ) {
+    return errorResponse("unmatchedBehavior must be 'analyze' or 'skip'");
   }
 
   // If enabling, check that Gmail scope is authorized

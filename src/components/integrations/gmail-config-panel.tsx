@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { signIn } from "next-auth/react";
 import * as api from "@/lib/api-client";
 import { usePlanner } from "@/context/planner-context";
@@ -14,14 +14,153 @@ interface GmailConfigPanelProps {
 }
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DOMAIN_PATTERN_REGEX =
+  /^(\*\.)?[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$/;
+
+// ─── Collapsible Section ────────────────────────────────────────────────────
+
+function Section({
+  title,
+  defaultOpen,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen ?? false);
+  return (
+    <div className="mb-3">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center justify-between w-full text-left"
+      >
+        <h4 className="font-label text-label-md text-[#d4a860]">{title}</h4>
+        <svg
+          className={`w-3.5 h-3.5 text-[rgba(212,168,96,0.5)] transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="pt-2">{children}</div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Add/Remove List ────────────────────────────────────────────────────────
+
+function ItemList({
+  items,
+  placeholder,
+  validate,
+  onAdd,
+  onRemove,
+}: {
+  items: string[];
+  placeholder: string;
+  validate: (value: string) => string | null;
+  onAdd: (value: string) => void;
+  onRemove: (value: string) => void;
+}) {
+  const [input, setInput] = useState("");
+  const [error, setError] = useState("");
+
+  function handleAdd() {
+    const value = input.trim().toLowerCase();
+    if (!value) return;
+    const err = validate(value);
+    if (err) {
+      setError(err);
+      return;
+    }
+    if (items.includes(value)) {
+      setError("Already added");
+      return;
+    }
+    setError("");
+    onAdd(value);
+    setInput("");
+  }
+
+  return (
+    <div>
+      <div className="flex gap-2 mb-1.5">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => {
+            setInput(e.target.value);
+            setError("");
+          }}
+          onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+          placeholder={placeholder}
+          className="flex-1 px-2 py-1.5 rounded bg-[rgba(0,0,0,0.3)] border border-[rgba(212,168,96,0.2)] text-on-surface text-body-sm placeholder:text-[#555] focus:outline-none focus:border-[#d4a860]"
+        />
+        <button
+          onClick={handleAdd}
+          className="px-3 py-1.5 rounded bg-[rgba(212,168,96,0.15)] text-[#d4a860] font-label text-label-sm hover:bg-[rgba(212,168,96,0.25)] transition-colors"
+        >
+          Add
+        </button>
+      </div>
+      {error && <p className="text-[11px] text-[#ea4335] mb-1.5">{error}</p>}
+      {items.length === 0 ? (
+        <p className="text-body-sm text-[#666] italic">None added</p>
+      ) : (
+        <ul className="space-y-1">
+          {items.map((item) => (
+            <li
+              key={item}
+              className="flex items-center justify-between px-2 py-1.5 rounded bg-[rgba(0,0,0,0.15)] text-body-sm text-on-surface-variant"
+            >
+              <span className="truncate">{item}</span>
+              <button
+                onClick={() => onRemove(item)}
+                className="text-[#666] hover:text-[#ea4335] transition-colors ml-2 shrink-0"
+              >
+                <svg
+                  className="w-3.5 h-3.5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ─── Main Component ─────────────────────────────────────────────────────────
 
 export function GmailConfigPanel({
   config,
   onClose,
   onUpdate,
 }: GmailConfigPanelProps) {
-  const [newSender, setNewSender] = useState("");
-  const [senderError, setSenderError] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{
     processed: number;
@@ -33,15 +172,16 @@ export function GmailConfigPanel({
   const [isSettingUpPush, setIsSettingUpPush] = useState(false);
   const [pushResult, setPushResult] = useState<string | null>(null);
 
-  // History is loaded after manual sync, not on mount
+  const cfg = config?.config;
+  const monitoredSenders = cfg?.monitoredSenders ?? [];
+  const monitoredDomains = cfg?.monitoredDomains ?? [];
+  const blockedSenders = cfg?.blockedSenders ?? [];
+  const blockedDomains = cfg?.blockedDomains ?? [];
+  const unmatchedBehavior = cfg?.unmatchedBehavior ?? "skip";
 
-  const monitoredSenders = config?.config?.monitoredSenders ?? [];
-
-  // After OAuth redirect, auto-enable if we came back with the flag
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("enable_gmail") === "1") {
-      // Clean up URL
       window.history.replaceState({}, "", window.location.pathname);
       (async () => {
         try {
@@ -55,12 +195,18 @@ export function GmailConfigPanel({
     }
   }, [onUpdate]);
 
+  async function updateConfig(patch: Record<string, unknown>) {
+    const current = config?.config ?? {};
+    await api.updateGmailIntegration({ config: { ...current, ...patch } });
+    const refreshed = await api.fetchGmailIntegration();
+    onUpdate(refreshed as IntegrationConfig);
+  }
+
   async function handleEnable() {
     setIsEnabling(true);
     try {
       const result = await api.updateGmailIntegration({ enabled: true });
       if (result.requiresReauth) {
-        // Redirect to re-auth — come back with flag to auto-enable
         signIn("google", { callbackUrl: "/planner?enable_gmail=1" });
         return;
       }
@@ -73,35 +219,6 @@ export function GmailConfigPanel({
     }
   }
 
-  async function handleAddSender() {
-    const email = newSender.trim().toLowerCase();
-    if (!EMAIL_REGEX.test(email)) {
-      setSenderError("Invalid email address");
-      return;
-    }
-    if (monitoredSenders.includes(email)) {
-      setSenderError("Already monitoring this sender");
-      return;
-    }
-    setSenderError("");
-    const updated = [...monitoredSenders, email];
-    await api.updateGmailIntegration({
-      config: { monitoredSenders: updated },
-    });
-    const refreshed = await api.fetchGmailIntegration();
-    onUpdate(refreshed as IntegrationConfig);
-    setNewSender("");
-  }
-
-  async function handleRemoveSender(email: string) {
-    const updated = monitoredSenders.filter((s) => s !== email);
-    await api.updateGmailIntegration({
-      config: { monitoredSenders: updated },
-    });
-    const refreshed = await api.fetchGmailIntegration();
-    onUpdate(refreshed as IntegrationConfig);
-  }
-
   async function handleSync() {
     setIsSyncing(true);
     setSyncResult(null);
@@ -111,7 +228,6 @@ export function GmailConfigPanel({
         processed: result.processed,
         tasksCreated: result.tasksCreated,
       });
-      // Refresh history
       const h = await api.fetchGmailHistory();
       setHistory(h);
       refreshData();
@@ -147,6 +263,11 @@ export function GmailConfigPanel({
     if (hours < 24) return `${hours}h ago`;
     return `${Math.floor(hours / 24)}d ago`;
   }
+
+  const validateEmail = (v: string) =>
+    EMAIL_REGEX.test(v) ? null : "Invalid email address";
+  const validateDomain = (v: string) =>
+    DOMAIN_PATTERN_REGEX.test(v) ? null : "Invalid domain pattern";
 
   const actionBadge: Record<string, { label: string; cls: string }> = {
     task_created: { label: "Task Created", cls: "text-[#6bcb6b]" },
@@ -208,8 +329,8 @@ export function GmailConfigPanel({
           </p>
           <ol className="text-body-sm text-on-surface-variant space-y-2 list-decimal pl-4">
             <li>Connect your Gmail account</li>
-            <li>Add email addresses to monitor</li>
-            <li>Emails from monitored senders will create tasks</li>
+            <li>Add email addresses or domain patterns to monitor</li>
+            <li>Matching emails will be analyzed for tasks</li>
           </ol>
           <button
             onClick={handleEnable}
@@ -221,69 +342,124 @@ export function GmailConfigPanel({
         </div>
       )}
 
-      {/* Monitor list */}
+      {/* Filter rules */}
       {config?.enabled && (
-        <div className="mb-4">
-          <h4 className="font-label text-label-md text-[#d4a860] mb-2">
-            Monitored Senders
-          </h4>
-
-          {/* Add sender */}
-          <div className="flex gap-2 mb-2">
-            <input
-              type="email"
-              value={newSender}
-              onChange={(e) => {
-                setNewSender(e.target.value);
-                setSenderError("");
-              }}
-              onKeyDown={(e) => e.key === "Enter" && handleAddSender()}
-              placeholder="email@example.com"
-              className="flex-1 px-2 py-1.5 rounded bg-[rgba(0,0,0,0.3)] border border-[rgba(212,168,96,0.2)] text-on-surface text-body-sm placeholder:text-[#555] focus:outline-none focus:border-[#d4a860]"
-            />
-            <button
-              onClick={handleAddSender}
-              className="px-3 py-1.5 rounded bg-[rgba(212,168,96,0.15)] text-[#d4a860] font-label text-label-sm hover:bg-[rgba(212,168,96,0.25)] transition-colors"
-            >
-              Add
-            </button>
-          </div>
-          {senderError && (
-            <p className="text-[11px] text-[#ea4335] mb-2">{senderError}</p>
-          )}
-
-          {/* Sender list */}
-          {monitoredSenders.length === 0 ? (
-            <p className="text-body-sm text-[#666] italic">
-              No senders added yet
+        <>
+          {/* Always Analyze */}
+          <Section title="Always Analyze" defaultOpen>
+            <p className="text-[11px] text-[#666] mb-2">
+              Emails from these senders and domains will always be analyzed.
             </p>
-          ) : (
-            <ul className="space-y-1">
-              {monitoredSenders.map((email) => (
-                <li
-                  key={email}
-                  className="flex items-center justify-between px-2 py-1.5 rounded bg-[rgba(0,0,0,0.15)] text-body-sm text-on-surface-variant"
-                >
-                  <span className="truncate">{email}</span>
-                  <button
-                    onClick={() => handleRemoveSender(email)}
-                    className="text-[#666] hover:text-[#ea4335] transition-colors ml-2 shrink-0"
-                  >
-                    <svg
-                      className="w-3.5 h-3.5"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path d="M18 6L6 18M6 6l12 12" />
-                    </svg>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+            <div className="mb-3">
+              <p className="text-[11px] text-[#888] mb-1 font-label">
+                Email Addresses
+              </p>
+              <ItemList
+                items={monitoredSenders}
+                placeholder="email@example.com"
+                validate={validateEmail}
+                onAdd={(v) =>
+                  updateConfig({ monitoredSenders: [...monitoredSenders, v] })
+                }
+                onRemove={(v) =>
+                  updateConfig({
+                    monitoredSenders: monitoredSenders.filter((s) => s !== v),
+                  })
+                }
+              />
+            </div>
+            <div>
+              <p className="text-[11px] text-[#888] mb-1 font-label">
+                Domain Patterns
+              </p>
+              <ItemList
+                items={monitoredDomains}
+                placeholder="edu, company.com"
+                validate={validateDomain}
+                onAdd={(v) =>
+                  updateConfig({ monitoredDomains: [...monitoredDomains, v] })
+                }
+                onRemove={(v) =>
+                  updateConfig({
+                    monitoredDomains: monitoredDomains.filter((d) => d !== v),
+                  })
+                }
+              />
+            </div>
+          </Section>
+
+          {/* Never Analyze */}
+          <Section title="Never Analyze">
+            <p className="text-[11px] text-[#666] mb-2">
+              Emails from these senders and domains will always be skipped.
+            </p>
+            <div className="mb-3">
+              <p className="text-[11px] text-[#888] mb-1 font-label">
+                Email Addresses
+              </p>
+              <ItemList
+                items={blockedSenders}
+                placeholder="noreply@example.com"
+                validate={validateEmail}
+                onAdd={(v) =>
+                  updateConfig({ blockedSenders: [...blockedSenders, v] })
+                }
+                onRemove={(v) =>
+                  updateConfig({
+                    blockedSenders: blockedSenders.filter((s) => s !== v),
+                  })
+                }
+              />
+            </div>
+            <div>
+              <p className="text-[11px] text-[#888] mb-1 font-label">
+                Domain Patterns
+              </p>
+              <ItemList
+                items={blockedDomains}
+                placeholder="noreply.*, marketing.*"
+                validate={validateDomain}
+                onAdd={(v) =>
+                  updateConfig({ blockedDomains: [...blockedDomains, v] })
+                }
+                onRemove={(v) =>
+                  updateConfig({
+                    blockedDomains: blockedDomains.filter((d) => d !== v),
+                  })
+                }
+              />
+            </div>
+          </Section>
+
+          {/* Unmatched Emails */}
+          <Section title="Unmatched Emails">
+            <p className="text-[11px] text-[#666] mb-2">
+              What to do with emails that don&apos;t match any rule above.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => updateConfig({ unmatchedBehavior: "skip" })}
+                className={`flex-1 py-1.5 px-2 rounded text-label-sm font-label transition-colors ${
+                  unmatchedBehavior === "skip"
+                    ? "bg-[rgba(212,168,96,0.2)] text-[#d4a860] border border-[rgba(212,168,96,0.4)]"
+                    : "bg-[rgba(0,0,0,0.2)] text-[#666] border border-transparent hover:text-[#888]"
+                }`}
+              >
+                Skip
+              </button>
+              <button
+                onClick={() => updateConfig({ unmatchedBehavior: "analyze" })}
+                className={`flex-1 py-1.5 px-2 rounded text-label-sm font-label transition-colors ${
+                  unmatchedBehavior === "analyze"
+                    ? "bg-[rgba(212,168,96,0.2)] text-[#d4a860] border border-[rgba(212,168,96,0.4)]"
+                    : "bg-[rgba(0,0,0,0.2)] text-[#666] border border-transparent hover:text-[#888]"
+                }`}
+              >
+                Analyze
+              </button>
+            </div>
+          </Section>
+        </>
       )}
 
       {/* Manual sync */}
@@ -334,10 +510,16 @@ export function GmailConfigPanel({
             disabled={isSettingUpPush}
             className="w-full py-2 px-3 rounded bg-[rgba(212,168,96,0.08)] text-[rgba(212,168,96,0.7)] font-label text-label-sm hover:bg-[rgba(212,168,96,0.15)] hover:text-[#d4a860] transition-colors disabled:opacity-50"
           >
-            {isSettingUpPush ? "Setting up..." : config?.watchExpiration ? "Renew Push Notifications" : "Enable Push Notifications"}
+            {isSettingUpPush
+              ? "Setting up..."
+              : config?.watchExpiration
+                ? "Renew Push Notifications"
+                : "Enable Push Notifications"}
           </button>
           {pushResult && (
-            <p className={`text-[11px] mt-1 text-center ${pushResult.includes("Failed") ? "text-[#ea4335]" : "text-[#6bcb6b]"}`}>
+            <p
+              className={`text-[11px] mt-1 text-center ${pushResult.includes("Failed") ? "text-[#ea4335]" : "text-[#6bcb6b]"}`}
+            >
               {pushResult}
             </p>
           )}
@@ -371,7 +553,9 @@ export function GmailConfigPanel({
                       {email.subject || "(no subject)"}
                     </p>
                   </div>
-                  <span className={`text-[10px] font-label shrink-0 ${badge.cls}`}>
+                  <span
+                    className={`text-[10px] font-label shrink-0 ${badge.cls}`}
+                  >
                     {badge.label}
                   </span>
                 </li>

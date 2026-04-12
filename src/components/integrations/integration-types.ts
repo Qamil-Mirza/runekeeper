@@ -11,6 +11,10 @@ export interface IntegrationConfig {
   enabled: boolean;
   config: {
     monitoredSenders: string[];
+    monitoredDomains?: string[];
+    blockedSenders?: string[];
+    blockedDomains?: string[];
+    unmatchedBehavior?: "analyze" | "skip";
     autoCreateTasks: boolean;
     pubsubSubscriptionActive: boolean;
   };

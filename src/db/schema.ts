@@ -144,7 +144,7 @@ export const chatMemories = pgTable("chat_memories", {
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
   content: text("content").notNull(),
-  category: text("category").notNull(), // "preference" | "fact" | "context"
+  category: text("category").notNull(), // "identity" | "person" | "routine"
   createdAt: timestamp("created_at").defaultNow().notNull(),
   expiresAt: timestamp("expires_at"),
 });
@@ -178,6 +178,10 @@ export const integrations = pgTable(
     enabled: boolean("enabled").default(false).notNull(),
     config: jsonb("config").$type<{
       monitoredSenders?: string[];
+      monitoredDomains?: string[];
+      blockedSenders?: string[];
+      blockedDomains?: string[];
+      unmatchedBehavior?: "analyze" | "skip";
       autoCreateTasks?: boolean;
       pubsubSubscriptionActive?: boolean;
       canvasApiToken?: string;
