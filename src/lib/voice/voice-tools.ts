@@ -37,11 +37,12 @@ export const VOICE_TOOL_DECLARATIONS = [
   },
   {
     name: "generate_schedule",
-    description: "Auto-schedule all unscheduled tasks into available time blocks. Use when the user asks to plan or schedule everything.",
+    description: "Auto-schedule tasks into available time blocks. Use when the user asks to plan or schedule everything. Set rescheduleAll to true when the user wants to reorganize, rearrange, or reschedule tasks that are already on their calendar.",
     parameters: {
       type: "OBJECT",
       properties: {
         startAfter: { type: "STRING", description: "Earliest allowed start time as ISO datetime." },
+        rescheduleAll: { type: "BOOLEAN", description: "When true, clears existing scheduled blocks and reschedules everything from scratch. Use when the user wants to reorganize or rearrange their entire schedule." },
       },
     },
   },
@@ -148,8 +149,20 @@ export async function executeToolCall(
       break;
     case "adjust_block": {
       const title = args.blockTitle || "block";
-      summary = `Adjusted: ${title}`;
-      details = [{ title, time: args.newStartTime ? "rescheduled" : undefined }];
+      if (args.newStartTime) {
+        const newTime = new Date(args.newStartTime).toLocaleString("en-US", {
+          weekday: "short",
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+          timeZone: timezone,
+        });
+        summary = `${title} moved to ${newTime}`;
+        details = [{ title, time: newTime }];
+      } else {
+        summary = `Adjusted: ${title}`;
+        details = [{ title }];
+      }
       tracker.trackAction("adjust_block", title);
       break;
     }
