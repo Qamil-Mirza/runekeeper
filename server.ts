@@ -92,7 +92,7 @@ async function handleVoiceSession(
         // Send thinking state to client
         sendJson(clientWs, { type: "thinking" });
 
-        const { result, summary } = await executeToolCall(
+        const { result, summary, details } = await executeToolCall(
           name,
           args,
           user.id,
@@ -103,7 +103,7 @@ async function handleVoiceSession(
         );
 
         // Send action toast to client
-        sendJson(clientWs, { type: "action", summary });
+        sendJson(clientWs, { type: "action", action: name, summary, details });
         sendJson(clientWs, { type: "thinking_end" });
 
         // Re-fetch current state so Gemini has up-to-date context
@@ -136,7 +136,13 @@ async function handleVoiceSession(
               }
             : {}),
           ...(result.proposedBlocks
-            ? { blocksScheduled: result.proposedBlocks.length }
+            ? {
+                blocksScheduled: result.proposedBlocks.map((b) => ({
+                  title: b.title,
+                  start: b.start,
+                  end: b.end,
+                })),
+              }
             : {}),
           ...(result.committed ? { committed: true } : {}),
           currentSchedule,
@@ -154,6 +160,9 @@ async function handleVoiceSession(
       },
       onOutputTranscript: (text) => {
         sendJson(clientWs, { type: "transcript_out", text });
+      },
+      onInterrupted: () => {
+        sendJson(clientWs, { type: "interrupted" });
       },
       onClose: () => {
         const summary = tracker.buildSummary();

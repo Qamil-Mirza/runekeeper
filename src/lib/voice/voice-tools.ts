@@ -72,6 +72,33 @@ export const VOICE_TOOL_DECLARATIONS = [
   },
 ];
 
+export interface ActionDetail {
+  title: string;
+  time?: string;
+}
+
+function formatBlockTime(isoStart: string, isoEnd: string, timezone: string): string {
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleString("en-US", {
+      weekday: "short",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: timezone,
+    });
+  const start = new Date(isoStart);
+  const end = new Date(isoEnd);
+  const startStr = fmt(isoStart);
+  // Only show end time (no weekday) if same day
+  const endStr = end.toLocaleString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: timezone,
+  });
+  return `${startStr} – ${endStr}`;
+}
+
 export async function executeToolCall(
   functionName: string,
   args: Record<string, any>,
@@ -80,7 +107,7 @@ export async function executeToolCall(
   weekEnd: string,
   timezone: string,
   tracker: VoiceSessionTracker
-): Promise<{ result: ActionResult; summary: string }> {
+): Promise<{ result: ActionResult; summary: string; details?: ActionDetail[] }> {
   log.info({ functionName, userId }, "executing voice tool call");
 
   // refresh_context is a no-op — the caller in server.ts always appends fresh
@@ -94,17 +121,24 @@ export async function executeToolCall(
   const result = await handleAction(action, userId, weekStart, weekEnd, undefined, timezone);
 
   let summary = "";
+  let details: ActionDetail[] | undefined;
   switch (functionName) {
     case "create_tasks": {
       const count = result.tasksCreated?.length ?? 0;
       const names = result.tasksCreated?.map((t) => t.title).join(", ") ?? "";
       summary = count === 1 ? `Created task: ${names}` : `Created ${count} tasks: ${names}`;
+      details = result.tasksCreated?.map((t) => ({ title: t.title }));
       tracker.trackAction("create_tasks", names);
       break;
     }
     case "generate_schedule": {
-      const count = result.proposedBlocks?.length ?? 0;
+      const blocks = result.proposedBlocks ?? [];
+      const count = blocks.length;
       summary = `Scheduled ${count} block${count !== 1 ? "s" : ""}`;
+      details = blocks.map((b) => ({
+        title: b.title,
+        time: formatBlockTime(b.start, b.end, timezone),
+      }));
       tracker.trackAction("generate_schedule", `${count} blocks`);
       break;
     }
@@ -115,6 +149,7 @@ export async function executeToolCall(
     case "adjust_block": {
       const title = args.blockTitle || "block";
       summary = `Adjusted: ${title}`;
+      details = [{ title, time: args.newStartTime ? "rescheduled" : undefined }];
       tracker.trackAction("adjust_block", title);
       break;
     }
@@ -129,7 +164,7 @@ export async function executeToolCall(
     summary = `Error: ${result.error}`;
   }
 
-  return { result, summary };
+  return { result, summary, details };
 }
 
 export function getCurrentWeekRange(timezone: string): { weekStart: string; weekEnd: string } {

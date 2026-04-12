@@ -15,6 +15,7 @@ interface AudioPipeline {
   getAnalyser: () => AnalyserNode | null;
   getAudioContext: () => AudioContext | null;
   playAudio: (pcmData: ArrayBuffer, sampleRate?: number) => void;
+  flushAudioQueue: () => void;
   isPlayingRef: React.RefObject<boolean>;
 }
 
@@ -28,6 +29,7 @@ export function useAudioPipeline({ onStateChange, onAmplitudeChange, isMuted }: 
   const outputAnalyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number>(0);
   const isPlayingRef = useRef(false);
+  const activeSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const [started, setStarted] = useState(false);
 
   const start = useCallback(async (): Promise<MediaStream> => {
@@ -103,14 +105,25 @@ export function useAudioPipeline({ onStateChange, onAmplitudeChange, isMuted }: 
     const startTime = Math.max(now, nextPlayTimeRef.current);
     nextPlayTimeRef.current = startTime + buffer.duration;
 
+    activeSourcesRef.current.add(source);
     isPlayingRef.current = true;
     source.onended = () => {
+      activeSourcesRef.current.delete(source);
       // Only clear playing state if no more audio is scheduled
       if (ctx.currentTime >= nextPlayTimeRef.current - 0.01) {
         isPlayingRef.current = false;
       }
     };
     source.start(startTime);
+  }, []);
+
+  const flushAudioQueue = useCallback(() => {
+    for (const source of activeSourcesRef.current) {
+      try { source.stop(); } catch { /* already stopped */ }
+    }
+    activeSourcesRef.current.clear();
+    nextPlayTimeRef.current = 0;
+    isPlayingRef.current = false;
   }, []);
 
   // Amplitude monitoring loop
@@ -161,6 +174,7 @@ export function useAudioPipeline({ onStateChange, onAmplitudeChange, isMuted }: 
     getAnalyser: () => inputAnalyserRef.current,
     getAudioContext: () => audioContextRef.current,
     playAudio,
+    flushAudioQueue,
     isPlayingRef,
   };
 }

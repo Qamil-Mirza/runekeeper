@@ -6,7 +6,7 @@ import { OracleOrb, type OrbState } from "./oracle-orb";
 import { VoiceModeControls } from "./voice-mode-controls";
 import { VoiceToast } from "./voice-toast";
 import { useAudioPipeline } from "./use-audio-pipeline";
-import { useVoiceSession } from "./use-voice-session";
+import { useVoiceSession, type VoiceToastData } from "./use-voice-session";
 
 interface VoiceModeProps {
   onExit: () => void;
@@ -25,7 +25,7 @@ export function VoiceMode({ onExit }: VoiceModeProps) {
   const [amplitude, setAmplitude] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const isMutedRef = useRef(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastData, setToastData] = useState<VoiceToastData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const workletNodeRef = useRef<ScriptProcessorNode | null>(null);
 
@@ -41,8 +41,8 @@ export function VoiceMode({ onExit }: VoiceModeProps) {
     onAudioReceived: (pcmData) => {
       audioPipeline.playAudio(pcmData);
     },
-    onActionToast: (msg) => {
-      setToastMessage(msg);
+    onActionToast: (data) => {
+      setToastData(data);
     },
     onSessionEnd: () => {
       audioPipeline.stop();
@@ -53,6 +53,9 @@ export function VoiceMode({ onExit }: VoiceModeProps) {
     },
     onThinkingEnd: () => {
       // State will be set by audio pipeline based on playback
+    },
+    onInterrupted: () => {
+      audioPipeline.flushAudioQueue();
     },
     onError: (msg) => {
       setError(msg);
@@ -199,7 +202,7 @@ export function VoiceMode({ onExit }: VoiceModeProps) {
 
       {/* Bottom: Toast + controls */}
       <div className="flex flex-col items-center gap-4">
-        <VoiceToast message={toastMessage} />
+        <VoiceToast data={toastData} />
         <VoiceModeControls
           isMuted={isMuted}
           onToggleMute={handleToggleMute}
