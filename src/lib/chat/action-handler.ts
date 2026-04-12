@@ -431,9 +431,7 @@ async function handleAdjustBlock(
     .where(eq(timeBlocks.userId, userId));
 
   const targetBlock = allBlocks.find(
-    (b) =>
-      b.title.toLowerCase().includes(blockTitle.toLowerCase()) &&
-      !b.committed
+    (b) => b.title.toLowerCase().includes(blockTitle.toLowerCase())
   );
 
   if (!targetBlock) {
@@ -517,6 +515,7 @@ async function handleAdjustBlock(
         .where(eq(tasks.id, targetBlock.taskId));
     }
 
+    const wasCommitted = targetBlock.committed;
     const [blockRow] = await db
       .insert(timeBlocks)
       .values({
@@ -526,7 +525,7 @@ async function handleAdjustBlock(
         startTime,
         endTime,
         blockType: inferBlockType({ title: targetBlock.title }),
-        committed: false,
+        committed: wasCommitted,
       })
       .returning();
 
