@@ -1,16 +1,25 @@
 "use client";
 
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef, useMemo, useCallback } from "react";
 import { AnimatePresence } from "framer-motion";
 import { usePlanner } from "@/context/planner-context";
 import { ChatMessage } from "./chat-message";
 import { ChatTypingIndicator } from "./chat-typing-indicator";
 import { ChatInput } from "./chat-input";
 import { VoiceMode } from "@/components/oracle/voice-mode";
+import { useEventSocket } from "@/hooks/use-event-socket";
 
 export function ChatContainer() {
   const { messages, isTyping, sendMessage, user, isVoiceMode, setVoiceMode } = usePlanner();
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEventSocket(
+    useCallback((event: Record<string, unknown>) => {
+      if (event.type === "omi_trigger" && !isVoiceMode) {
+        setVoiceMode(true);
+      }
+    }, [isVoiceMode, setVoiceMode])
+  );
 
   useEffect(() => {
     if (scrollRef.current) {
