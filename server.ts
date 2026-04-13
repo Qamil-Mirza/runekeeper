@@ -21,6 +21,7 @@ import { tasks, timeBlocks } from "./src/db/schema";
 import { eq } from "drizzle-orm";
 import { dbTaskToTask, dbBlockToTimeBlock } from "./src/lib/types";
 import { VoiceSessionLogger } from "./src/lib/voice/session-logger";
+import { setRegistry } from "./src/lib/voice/omi-bridge";
 
 // ─── Registries (used by OMI webhook via omi-bridge) ───────────────────────
 export const activeVoiceSessions = new Map<
@@ -29,6 +30,8 @@ export const activeVoiceSessions = new Map<
 >();
 
 export const eventConnections = new Map<string, Set<WebSocket>>();
+
+setRegistry({ activeVoiceSessions, eventConnections });
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOSTNAME || "0.0.0.0";
