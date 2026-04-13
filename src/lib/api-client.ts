@@ -389,6 +389,29 @@ export function syncGradescope() {
   });
 }
 
+// ─── OMI Integration ────────────────────────────────────────────────────────
+
+export interface OmiIntegrationConfig {
+  enabled: boolean;
+  config: {
+    omiUserId: string | null;
+  };
+}
+
+export function fetchOmiIntegration() {
+  return apiFetch<OmiIntegrationConfig>("/api/integrations/omi");
+}
+
+export function updateOmiIntegration(data: {
+  enabled?: boolean;
+  omiUserId?: string;
+}) {
+  return apiFetch<OmiIntegrationConfig>("/api/integrations/omi", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
 // ─── User Data ───────────────────────────────────────────────────────────────
 
 export function clearUserData() {
