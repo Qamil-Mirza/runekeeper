@@ -16,6 +16,7 @@ interface VoiceSessionOptions {
   onThinkingEnd: () => void;
   onInterrupted: () => void;
   onError: (error: string) => void;
+  onOmiActiveChange?: (active: boolean) => void;
 }
 
 interface VoiceSession {
@@ -33,6 +34,7 @@ export function useVoiceSession({
   onThinkingEnd,
   onInterrupted,
   onError,
+  onOmiActiveChange,
 }: VoiceSessionOptions): VoiceSession {
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -102,6 +104,9 @@ export function useVoiceSession({
             case "error":
               onError(msg.message || "An error occurred");
               break;
+            case "omi_active":
+              onOmiActiveChange?.(msg.active);
+              break;
           }
         } catch {
           // Ignore malformed messages
@@ -119,7 +124,7 @@ export function useVoiceSession({
         if (!opened) reject(new Error("WebSocket connection failed"));
       };
     });
-  }, [onAudioReceived, onActionToast, onSessionEnd, onThinkingStart, onThinkingEnd, onInterrupted, onError]);
+  }, [onAudioReceived, onActionToast, onSessionEnd, onThinkingStart, onThinkingEnd, onInterrupted, onError, onOmiActiveChange]);
 
   const disconnect = useCallback(() => {
     wsRef.current?.close(1000, "user_exit");
