@@ -16,7 +16,8 @@ export function useEventSocket(onEvent: EventHandler) {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    if (wsRef.current?.readyState === WebSocket.OPEN ||
+        wsRef.current?.readyState === WebSocket.CONNECTING) return;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsHost = window.location.hostname;

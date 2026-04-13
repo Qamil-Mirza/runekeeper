@@ -15,10 +15,10 @@ export function ChatContainer() {
 
   useEventSocket(
     useCallback((event: Record<string, unknown>) => {
-      if (event.type === "omi_trigger" && !isVoiceMode) {
+      if (event.type === "omi_trigger") {
         setVoiceMode(true);
       }
-    }, [isVoiceMode, setVoiceMode])
+    }, [setVoiceMode])
   );
 
   useEffect(() => {

@@ -14,8 +14,9 @@ import {
 
 const log = createLogger("api:integrations:omi:webhook");
 
-// Track last audio timestamp per user to detect OMI going silent
+// Track last audio timestamp and silence timer per user
 const lastAudioTimestamp = new Map<string, number>();
+const silenceTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const OMI_SILENCE_TIMEOUT_MS = 5000;
 
 function verifyWebhookToken(token: string | null): boolean {
@@ -26,7 +27,7 @@ function verifyWebhookToken(token: string | null): boolean {
 }
 
 async function lookupUserByOmiId(omiUserId: string): Promise<string | null> {
-  const [integration] = await db
+  const results = await db
     .select()
     .from(integrations)
     .where(
@@ -34,16 +35,16 @@ async function lookupUserByOmiId(omiUserId: string): Promise<string | null> {
         eq(integrations.provider, "omi"),
         eq(integrations.enabled, true)
       )
-    )
-    .limit(1);
+    );
 
-  if (!integration) return null;
+  for (const integration of results) {
+    const config = integration.config as { omiUserId?: string } | null;
+    if (config?.omiUserId === omiUserId) {
+      return integration.userId;
+    }
+  }
 
-  // Check if this integration's omiUserId matches
-  const config = integration.config as { omiUserId?: string } | null;
-  if (config?.omiUserId !== omiUserId) return null;
-
-  return integration.userId;
+  return null;
 }
 
 export async function POST(request: NextRequest) {
@@ -91,15 +92,15 @@ export async function POST(request: NextRequest) {
     // Pipe into active Gemini session
     pipeOmiAudio(registry, userId, pcmBuffer);
 
-    // Schedule silence check
-    setTimeout(() => {
-      const lastTs = lastAudioTimestamp.get(userId);
-      if (lastTs && Date.now() - lastTs >= OMI_SILENCE_TIMEOUT_MS) {
-        lastAudioTimestamp.delete(userId);
-        setOmiActive(registry, userId, false);
-        log.info({ userId }, "OMI audio timed out, deactivating");
-      }
-    }, OMI_SILENCE_TIMEOUT_MS + 500);
+    // Reset silence timer (single timer per user instead of one per chunk)
+    const existingTimer = silenceTimers.get(userId);
+    if (existingTimer) clearTimeout(existingTimer);
+    silenceTimers.set(userId, setTimeout(() => {
+      lastAudioTimestamp.delete(userId);
+      silenceTimers.delete(userId);
+      setOmiActive(registry, userId, false);
+      log.info({ userId }, "OMI audio timed out, deactivating");
+    }, OMI_SILENCE_TIMEOUT_MS));
 
     return jsonResponse({ status: "ok" });
   }
