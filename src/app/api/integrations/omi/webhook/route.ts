@@ -11,6 +11,7 @@ import {
   pipeOmiAudio,
   setOmiActive,
 } from "@/lib/voice/omi-bridge";
+import { detectDoubleClap } from "@/lib/voice/clap-detector";
 
 const log = createLogger("api:integrations:omi:webhook");
 
@@ -78,6 +79,13 @@ export async function POST(request: NextRequest) {
     // Read raw audio bytes
     const arrayBuffer = await request.arrayBuffer();
     const pcmBuffer = Buffer.from(arrayBuffer);
+    const sampleRate = parseInt(request.nextUrl.searchParams.get("sample_rate") || "16000", 10);
+
+    // Detect double-clap to trigger voice modal (runs even without active session)
+    if (detectDoubleClap(userId, pcmBuffer, sampleRate)) {
+      pushEventToUser(registry, userId, { type: "omi_trigger" });
+      return jsonResponse({ status: "ok" });
+    }
 
     // Track timestamps for silence detection
     const now = Date.now();
