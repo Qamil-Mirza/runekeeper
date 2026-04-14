@@ -49,8 +49,14 @@ async function lookupUserByOmiId(omiUserId: string): Promise<string | null> {
 }
 
 export async function POST(request: NextRequest) {
-  // Verify shared secret
-  const token = request.nextUrl.searchParams.get("token");
+  // OMI appends its params with "?" instead of "&", which gets URL-encoded
+  // to %3F by the time it reaches us. Extract just the 64-char hex token.
+  const rawToken = request.nextUrl.searchParams.get("token") ?? "";
+  const token = rawToken.replace(/[?%].*$/, "");
+
+  // Re-parse OMI's extra params from the token's encoded suffix
+  const omiExtra = new URLSearchParams(rawToken.slice(token.length).replace(/^\?/, ""));
+  const getParam = (key: string) => request.nextUrl.searchParams.get(key) ?? omiExtra.get(key);
   if (!verifyWebhookToken(token)) {
     return errorResponse("Forbidden", 403);
   }
@@ -65,7 +71,7 @@ export async function POST(request: NextRequest) {
 
   // ─── Audio stream ──────────────────────────────────────────────────────
   if (contentType.includes("application/octet-stream")) {
-    const omiUserId = request.nextUrl.searchParams.get("uid");
+    const omiUserId = getParam("uid");
     if (!omiUserId) {
       return jsonResponse({ status: "ok" });
     }
@@ -76,10 +82,14 @@ export async function POST(request: NextRequest) {
       return jsonResponse({ status: "ok" });
     }
 
-    // Read raw audio bytes
-    const arrayBuffer = await request.arrayBuffer();
-    const pcmBuffer = Buffer.from(arrayBuffer);
-    const sampleRate = parseInt(request.nextUrl.searchParams.get("sample_rate") || "16000", 10);
+    // Read raw audio bytes (OMI may drop the connection mid-stream)
+    let pcmBuffer: Buffer;
+    try {
+      pcmBuffer = Buffer.from(await request.arrayBuffer());
+    } catch {
+      return jsonResponse({ status: "ok" });
+    }
+    const sampleRate = parseInt(getParam("sample_rate") || "16000", 10);
 
     // Detect double-clap to trigger voice modal (runs even without active session)
     if (detectDoubleClap(userId, pcmBuffer, sampleRate)) {

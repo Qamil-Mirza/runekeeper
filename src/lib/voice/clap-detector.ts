@@ -5,29 +5,22 @@ const log = createLogger("clap-detector");
 // ─── Tuning constants ──────────────────────────────────────────────────────
 
 /** Amplitude threshold (0-32768 for 16-bit PCM). Claps are loud impulses. */
-const AMPLITUDE_THRESHOLD = 12000;
+const AMPLITUDE_THRESHOLD = 20000;
 
-/** A clap must not last longer than this (ms). Distinguishes from speech. */
-const MAX_CLAP_DURATION_MS = 80;
+/** Minimum quiet gap between two claps (ms). Filters out reverb from a single clap. */
+const MIN_QUIET_GAP_MS = 100;
 
-/** Minimum silence between two claps (ms). */
-const MIN_GAP_MS = 150;
-
-/** Maximum gap between two claps to count as a double-clap (ms). */
-const MAX_GAP_MS = 800;
+/** Max time between two claps, across chunks (ms). */
+const MAX_GAP_MS = 3000;
 
 /** Cooldown after a double-clap is detected before another can fire (ms). */
-const COOLDOWN_MS = 2000;
+const COOLDOWN_MS = 3000;
 
 // ─── Per-user state ────────────────────────────────────────────────────────
 
 interface ClapState {
-  /** Timestamp of the first clap in a potential double-clap */
+  /** Wall-clock time of the first clap (for cross-chunk tracking) */
   firstClapAt: number | null;
-  /** Whether we're currently inside a loud spike */
-  inSpike: boolean;
-  /** When the current spike started */
-  spikeStartAt: number | null;
   /** Last time a double-clap was detected (cooldown) */
   lastTriggerAt: number;
 }
@@ -37,19 +30,53 @@ const userStates = new Map<string, ClapState>();
 function getState(userId: string): ClapState {
   let state = userStates.get(userId);
   if (!state) {
-    state = { firstClapAt: null, inSpike: false, spikeStartAt: null, lastTriggerAt: 0 };
+    state = { firstClapAt: null, lastTriggerAt: 0 };
     userStates.set(userId, state);
   }
   return state;
 }
 
 /**
+ * Count distinct claps in a PCM16 chunk.
+ * A clap = samples crossing AMPLITUDE_THRESHOLD after at least MIN_QUIET_GAP_MS
+ * of samples below QUIET_THRESHOLD.
+ *
+ * Returns array of clap positions as offsets in ms from chunk start.
+ */
+function findClaps(pcmBuffer: Buffer, sampleRate: number): number[] {
+  const numSamples = pcmBuffer.length / 2;
+  const samplesPerMs = sampleRate / 1000;
+  const minQuietSamples = Math.floor(MIN_QUIET_GAP_MS * samplesPerMs);
+
+  const claps: number[] = [];
+  let belowCount = minQuietSamples; // samples below threshold — start high
+  let inClap = false;
+
+  for (let i = 0; i < numSamples; i++) {
+    const amp = Math.abs(pcmBuffer.readInt16LE(i * 2));
+
+    if (amp >= AMPLITUDE_THRESHOLD) {
+      if (!inClap && belowCount >= minQuietSamples) {
+        // New clap after sufficient non-loud samples
+        claps.push(i / samplesPerMs);
+        inClap = true;
+      }
+      belowCount = 0;
+    } else {
+      belowCount++;
+      inClap = false;
+    }
+  }
+
+  return claps;
+}
+
+/**
  * Analyze a PCM16 buffer for double-clap patterns.
  * Returns true if a double-clap was detected.
  *
- * @param userId - User ID for per-user state tracking
- * @param pcmBuffer - Raw PCM16 little-endian audio buffer
- * @param sampleRate - Sample rate in Hz (default 16000)
+ * Detects two distinct loud spikes separated by a quiet gap, either within
+ * the same chunk (quick successive claps) or across chunks.
  */
 export function detectDoubleClap(
   userId: string,
@@ -59,65 +86,43 @@ export function detectDoubleClap(
   const state = getState(userId);
   const now = Date.now();
 
-  // In cooldown — skip detection
   if (now - state.lastTriggerAt < COOLDOWN_MS) {
     return false;
   }
 
-  const samplesPerMs = sampleRate / 1000;
-  const numSamples = pcmBuffer.length / 2; // 16-bit = 2 bytes per sample
-  const chunkDurationMs = numSamples / samplesPerMs;
+  const claps = findClaps(pcmBuffer, sampleRate);
 
-  // Scan samples for amplitude spikes
-  for (let i = 0; i < numSamples; i++) {
-    const sample = Math.abs(pcmBuffer.readInt16LE(i * 2));
-    const sampleTimeMs = now - chunkDurationMs + (i / samplesPerMs);
-
-    if (sample >= AMPLITUDE_THRESHOLD) {
-      if (!state.inSpike) {
-        // Start of a new spike
-        state.inSpike = true;
-        state.spikeStartAt = sampleTimeMs;
-      }
-    } else if (state.inSpike) {
-      // End of spike — check if it was short enough to be a clap
-      const spikeDuration = sampleTimeMs - (state.spikeStartAt ?? sampleTimeMs);
-      state.inSpike = false;
-
-      if (spikeDuration <= MAX_CLAP_DURATION_MS) {
-        // This is a clap!
-        if (state.firstClapAt === null) {
-          // First clap
-          state.firstClapAt = sampleTimeMs;
-        } else {
-          // Potential second clap — check gap
-          const gap = sampleTimeMs - state.firstClapAt;
-
-          if (gap >= MIN_GAP_MS && gap <= MAX_GAP_MS) {
-            // Double clap detected!
-            log.info({ userId, gap: Math.round(gap) }, "double-clap detected");
-            state.firstClapAt = null;
-            state.lastTriggerAt = now;
-            return true;
-          } else if (gap > MAX_GAP_MS) {
-            // Too slow — treat this as a new first clap
-            state.firstClapAt = sampleTimeMs;
-          }
-          // If gap < MIN_GAP_MS, ignore (probably same clap reverb)
-        }
-      } else {
-        // Spike too long — not a clap, reset
-        state.firstClapAt = null;
-      }
-
-      state.spikeStartAt = null;
-    }
-  }
-
-  // Expire stale first clap
-  if (state.firstClapAt !== null && now - state.firstClapAt > MAX_GAP_MS) {
+  // Two claps in the same chunk — immediate trigger
+  if (claps.length >= 2) {
+    log.info({ userId, gap: Math.round(claps[1] - claps[0]), source: "same-chunk" }, "double-clap detected");
     state.firstClapAt = null;
+    state.lastTriggerAt = now;
+    return true;
   }
 
+  if (claps.length === 0) {
+    // Expire stale first clap
+    if (state.firstClapAt !== null && now - state.firstClapAt > MAX_GAP_MS) {
+      state.firstClapAt = null;
+    }
+    return false;
+  }
+
+  // Exactly one clap in this chunk
+  if (state.firstClapAt === null) {
+    state.firstClapAt = now;
+    return false;
+  }
+
+  // Second clap in a different chunk
+  const gapMs = now - state.firstClapAt;
+  if (gapMs <= MAX_GAP_MS) {
+    log.info({ userId, gap: gapMs, source: "cross-chunk" }, "double-clap detected");
+    state.firstClapAt = null;
+    state.lastTriggerAt = now;
+    return true;
+  }
+
+  state.firstClapAt = now;
   return false;
 }

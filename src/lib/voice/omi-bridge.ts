@@ -46,6 +46,7 @@ export function pipeOmiAudio(
     return false;
   }
 
+  if (!session.gemini) return false;
   session.gemini.sendAudioChunk(pcmBuffer);
   return true;
 }
@@ -67,13 +68,18 @@ export function setOmiActive(
 // ─── Shared registry reference ─────────────────────────────────────────────
 // server.ts sets this at startup so the Next.js API route can access
 // the in-memory session/event maps without importing server.ts directly.
+//
+// We use globalThis because Next.js compiles API routes with its own bundler,
+// creating a separate module instance. A module-level variable would be null
+// in the bundled copy even though server.ts already called setRegistry().
+// globalThis is shared across the entire Node.js process.
 
-let _registry: SessionRegistry | null = null;
+const REGISTRY_KEY = "__omi_session_registry__";
 
 export function setRegistry(registry: SessionRegistry): void {
-  _registry = registry;
+  (globalThis as any)[REGISTRY_KEY] = registry;
 }
 
 export function getRegistry(): SessionRegistry | null {
-  return _registry;
+  return (globalThis as any)[REGISTRY_KEY] ?? null;
 }
