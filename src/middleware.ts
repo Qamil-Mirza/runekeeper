@@ -12,9 +12,10 @@ export default auth((req) => {
   const isPlanner = req.nextUrl.pathname.startsWith("/planner");
   const isApi = req.nextUrl.pathname.startsWith("/api");
   const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
+  const isWebhook = req.nextUrl.pathname.endsWith("/webhook");
 
-  // Allow auth API routes through
-  if (isAuthApi) return;
+  // Allow auth API routes and external webhooks through (they use their own secret-based auth)
+  if (isAuthApi || isWebhook) return;
 
   // Protect planner and non-auth API routes
   if (!isAuth) {
