@@ -261,6 +261,20 @@ async function handleVoiceSession(
     gemini.updateSystemPrompt(systemPrompt);
     await gemini.sendSetupAndWait();
     activeVoiceSessions.set(user.id, { clientWs, gemini });
+
+    const hour = parseInt(
+      new Date().toLocaleString("en-US", {
+        hour: "numeric",
+        hour12: false,
+        timeZone: user.timezone,
+      }),
+      10
+    );
+    const timeOfDay = hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
+    const firstName = user.name.split(" ")[0];
+    gemini.sendClientText(
+      `[Session started. Greet the user now by saying exactly: "Good ${timeOfDay}, ${firstName}. How can I help you?" Do not say anything else.]`
+    );
   } catch {
     sendJson(clientWs, {
       type: "error",

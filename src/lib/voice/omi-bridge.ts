@@ -4,7 +4,16 @@ import { createLogger } from "@/lib/logger";
 const log = createLogger("omi-bridge");
 
 export interface SessionRegistry {
-  activeVoiceSessions: Map<string, { clientWs: WebSocket; gemini: { sendAudioChunk: (buf: Buffer) => void } }>;
+  activeVoiceSessions: Map<
+    string,
+    {
+      clientWs: WebSocket;
+      gemini: {
+        sendAudioChunk: (buf: Buffer) => void;
+        readonly isSpeaking: boolean;
+      };
+    }
+  >;
   eventConnections: Map<string, Set<WebSocket>>;
 }
 
@@ -47,6 +56,10 @@ export function pipeOmiAudio(
   }
 
   if (!session.gemini) return false;
+  // Drop OMI audio while Gemini is speaking — otherwise the assistant's
+  // own voice bleeds from laptop speakers into the OMI mic and gets
+  // transcribed as "user" input, causing self-interruption loops.
+  if (session.gemini.isSpeaking) return false;
   session.gemini.sendAudioChunk(pcmBuffer);
   return true;
 }

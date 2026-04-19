@@ -110,11 +110,9 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
     if (status !== "authenticated") return;
     setIsLoading(true);
     try {
-      // Sync Google Calendar + Gmail (best-effort), then fetch all data
-      await Promise.all([
-        api.syncCalendar().catch(() => null),
-        api.syncGmail().catch(() => null),
-      ]);
+      // Sync Google Calendar (best-effort), then fetch all data.
+      // Gmail sync is user-initiated only — runs from the Gmail config panel.
+      await api.syncCalendar().catch(() => null);
 
       const [userPrefs, tasksData, blocksData] = await Promise.all([
         api.fetchUserPreferences(),
