@@ -9,8 +9,9 @@ import { FieryEdge } from "./fiery-edge";
 import { GmailConfigPanel } from "./gmail-config-panel";
 import { CanvasConfigPanel } from "./canvas-config-panel";
 import { GradescopeConfigPanel } from "./gradescope-config-panel";
+import { OmiConfigPanel } from "./omi-config-panel";
 import type { IntegrationNodeDef, IntegrationConfig } from "./integration-types";
-import type { CanvasIntegrationConfig, GradescopeIntegrationConfig } from "@/lib/api-client";
+import type { CanvasIntegrationConfig, GradescopeIntegrationConfig, OmiIntegrationConfig } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
 // Inline icon components
@@ -35,14 +36,23 @@ function GmailIcon() {
   );
 }
 
-function SlackIcon() {
+function OmiIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
+      <circle cx="12" cy="8" r="5" stroke="#fff" strokeWidth={1.5} />
       <path
-        d="M7 4v7M17 13v7M4 17h7M13 7h7"
-        stroke="currentColor"
-        strokeWidth={2}
+        d="M12 13v4"
+        stroke="#fff"
+        strokeWidth={1.5}
         strokeLinecap="round"
+      />
+      <circle cx="12" cy="19" r="2" stroke="#fff" strokeWidth={1.5} />
+      <path
+        d="M9 6.5l3 2 3-2"
+        stroke="#fff"
+        strokeWidth={1}
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   );
@@ -119,6 +129,7 @@ export default function IntegrationsGraph() {
   const [gmailConfig, setGmailConfig] = useState<IntegrationConfig | null>(null);
   const [canvasConfig, setCanvasConfig] = useState<CanvasIntegrationConfig | null>(null);
   const [gradescopeConfig, setGradescopeConfig] = useState<GradescopeIntegrationConfig | null>(null);
+  const [omiConfig, setOmiConfig] = useState<OmiIntegrationConfig | null>(null);
   const [expandedNode, setExpandedNode] = useState<string | null>(null);
   const [graphRadius, setGraphRadius] = useState(180);
   const [centerNodeSize, setCenterNodeSize] = useState(120);
@@ -170,6 +181,10 @@ export default function IntegrationsGraph() {
       .fetchGradescopeIntegration()
       .then((c) => setGradescopeConfig(c))
       .catch(() => {});
+    api
+      .fetchOmiIntegration()
+      .then((c) => setOmiConfig(c))
+      .catch(() => {});
   }, []);
 
   // Derive statuses
@@ -182,11 +197,14 @@ export default function IntegrationsGraph() {
   const gradescopeStatus: IntegrationNodeDef["status"] = gradescopeConfig?.enabled
     ? "active"
     : "setup-required";
+  const omiStatus: IntegrationNodeDef["status"] = omiConfig?.enabled
+    ? "active"
+    : "setup-required";
 
   // Node definitions
   const integrationNodes: IntegrationNodeDef[] = [
     { id: "gmail", label: "Gmail", icon: <GmailIcon />, status: gmailStatus, color: "#EA4335", angle: 0 },
-    { id: "slack", label: "Slack", icon: <SlackIcon />, status: "coming-soon", color: "#4A154B", angle: 90 },
+    { id: "omi", label: "OMI", icon: <OmiIcon />, status: omiStatus, color: "#8B5CF6", angle: 90 },
     { id: "gradescope", label: "Gradescope", icon: <GradescopeIcon />, status: gradescopeStatus, color: "#00B4D8", angle: 180 },
     { id: "canvas", label: "Canvas", icon: <CanvasIcon />, status: canvasStatus, color: "#E13F29", angle: 270 },
   ];
@@ -323,6 +341,23 @@ export default function IntegrationsGraph() {
                       </div>
                     </motion.div>
                   )}
+                  {isExpanded && node.id === "omi" && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="pt-3">
+                        <OmiConfigPanel
+                          config={omiConfig}
+                          onClose={() => setExpandedNode(null)}
+                          onUpdate={setOmiConfig}
+                        />
+                      </div>
+                    </motion.div>
+                  )}
                 </AnimatePresence>
               </div>
             );
@@ -348,7 +383,7 @@ export default function IntegrationsGraph() {
         >
           {integrationNodes.map((node) => {
             const pos = nodePosition(node.angle);
-            const isConfigurable = node.id === "gmail" || node.id === "canvas" || node.id === "gradescope";
+            const isConfigurable = node.id === "gmail" || node.id === "canvas" || node.id === "gradescope" || node.id === "omi";
             const isActive = isConfigurable && (node.status === "active" || node.status === "setup-required");
 
             return (
@@ -410,6 +445,30 @@ export default function IntegrationsGraph() {
               config={gmailConfig}
               onClose={() => setExpandedNode(null)}
               onUpdate={setGmailConfig}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* OMI config panel — beside node (90° = right side) */}
+      <AnimatePresence>
+        {expandedNode === "omi" && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="absolute z-10"
+            style={{
+              left: `calc(50% + ${Math.cos(((90 - 90) * Math.PI) / 180) * graphRadius + integrationNodeSize / 2 + 20}px)`,
+              top: `calc(50% + ${Math.sin(((90 - 90) * Math.PI) / 180) * graphRadius}px)`,
+              transform: "translateY(-50%)",
+            }}
+          >
+            <OmiConfigPanel
+              config={omiConfig}
+              onClose={() => setExpandedNode(null)}
+              onUpdate={setOmiConfig}
             />
           </motion.div>
         )}

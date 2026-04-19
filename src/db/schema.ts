@@ -174,7 +174,7 @@ export const integrations = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    provider: text("provider").notNull(), // "gmail" | "canvas" | "gradescope" | "slack"
+    provider: text("provider").notNull(), // "gmail" | "canvas" | "gradescope" | "slack" | "omi"
     enabled: boolean("enabled").default(false).notNull(),
     config: jsonb("config").$type<{
       monitoredSenders?: string[];
@@ -188,6 +188,8 @@ export const integrations = pgTable(
       canvasBaseUrl?: string;
       gradescopeEmail?: string;
       gradescopePassword?: string; // encrypted
+      // OMI Dev Kit
+      omiUserId?: string;
     }>().default({}),
     gmailHistoryId: text("gmail_history_id"),
     watchExpiration: timestamp("watch_expiration"),

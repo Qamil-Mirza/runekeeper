@@ -24,6 +24,7 @@ export function VoiceMode({ onExit }: VoiceModeProps) {
   const [orbState, setOrbState] = useState<OrbState>("idle");
   const [amplitude, setAmplitude] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
+  const [omiActive, setOmiActive] = useState(false);
   const isMutedRef = useRef(false);
   const [toastData, setToastData] = useState<VoiceToastData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +64,14 @@ export function VoiceMode({ onExit }: VoiceModeProps) {
         audioPipeline.stop();
         onExit();
       }, 2000);
+    },
+    onOmiActiveChange: (active) => {
+      setOmiActive(active);
+      if (active) {
+        setIsMuted(true); // Mute browser mic when OMI takes over
+      } else {
+        setIsMuted(false); // Restore browser mic when OMI goes silent
+      }
     },
   });
 
@@ -193,7 +202,7 @@ export function VoiceMode({ onExit }: VoiceModeProps) {
           The Oracle
         </div>
         <div className="text-[13px] text-[rgba(140,100,220,0.5)] mt-1 font-body">
-          {error || STATE_LABELS[orbState]}
+          {error || (omiActive ? "Listening via OMI..." : STATE_LABELS[orbState])}
         </div>
       </div>
 

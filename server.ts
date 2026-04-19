@@ -21,6 +21,17 @@ import { tasks, timeBlocks } from "./src/db/schema";
 import { eq } from "drizzle-orm";
 import { dbTaskToTask, dbBlockToTimeBlock } from "./src/lib/types";
 import { VoiceSessionLogger } from "./src/lib/voice/session-logger";
+import { setRegistry } from "./src/lib/voice/omi-bridge";
+
+// ─── Registries (used by OMI webhook via omi-bridge) ───────────────────────
+export const activeVoiceSessions = new Map<
+  string,
+  { clientWs: WebSocket; gemini: GeminiLiveSession }
+>();
+
+export const eventConnections = new Map<string, Set<WebSocket>>();
+
+setRegistry({ activeVoiceSessions, eventConnections });
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOSTNAME || "0.0.0.0";
@@ -48,6 +59,41 @@ app.prepare().then(() => {
   wsServer.on("upgrade", async (req: IncomingMessage, socket, head) => {
     const { pathname } = parse(req.url || "/", true);
     console.log(`[ws] upgrade request: ${pathname}`);
+
+    if (pathname === "/api/events") {
+      const user = await authenticateUpgrade(req);
+      if (!user) {
+        socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+        socket.destroy();
+        return;
+      }
+
+      wss.handleUpgrade(req, socket, head, (clientWs) => {
+        // Register event connection
+        if (!eventConnections.has(user.id)) {
+          eventConnections.set(user.id, new Set());
+        }
+        eventConnections.get(user.id)!.add(clientWs);
+        console.log(`[events] connected: ${user.name} (${eventConnections.get(user.id)!.size} tabs)`);
+
+        clientWs.on("close", () => {
+          const conns = eventConnections.get(user.id);
+          if (conns) {
+            conns.delete(clientWs);
+            if (conns.size === 0) eventConnections.delete(user.id);
+          }
+        });
+
+        clientWs.on("error", () => {
+          const conns = eventConnections.get(user.id);
+          if (conns) {
+            conns.delete(clientWs);
+            if (conns.size === 0) eventConnections.delete(user.id);
+          }
+        });
+      });
+      return;
+    }
 
     if (pathname !== "/api/voice") {
       socket.destroy();
@@ -79,6 +125,7 @@ async function handleVoiceSession(
 ) {
   const tracker = new VoiceSessionTracker();
   const sessionLog = new VoiceSessionLogger(user.id, user.name);
+  activeVoiceSessions.set(user.id, { clientWs, gemini: null! });
   const { weekStart, weekEnd } = getCurrentWeekRange(user.timezone);
 
   // Start Gemini TCP+TLS handshake in parallel with DB queries
@@ -213,6 +260,21 @@ async function handleVoiceSession(
 
     gemini.updateSystemPrompt(systemPrompt);
     await gemini.sendSetupAndWait();
+    activeVoiceSessions.set(user.id, { clientWs, gemini });
+
+    const hour = parseInt(
+      new Date().toLocaleString("en-US", {
+        hour: "numeric",
+        hour12: false,
+        timeZone: user.timezone,
+      }),
+      10
+    );
+    const timeOfDay = hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening";
+    const firstName = user.name.split(" ")[0];
+    gemini.sendClientText(
+      `[Session started. Greet the user now by saying exactly: "Good ${timeOfDay}, ${firstName}. How can I help you?" Do not say anything else.]`
+    );
   } catch {
     sendJson(clientWs, {
       type: "error",
@@ -242,10 +304,12 @@ async function handleVoiceSession(
   });
 
   clientWs.on("close", () => {
+    activeVoiceSessions.delete(user.id);
     gemini.disconnect();
   });
 
   clientWs.on("error", () => {
+    activeVoiceSessions.delete(user.id);
     gemini.disconnect();
   });
 }

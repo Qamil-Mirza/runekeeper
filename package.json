@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "dev:server": "npx tsx --env-file=.env server.ts",
+    "dev": "npx tsx --env-file=.env server.ts",
+    "dev:tunnel": "bash scripts/dev-tunnel.sh",
     "build": "next build && npx esbuild server.ts --bundle --platform=node --target=node20 --outfile=.next/standalone/server-custom.js --packages=external",
     "start": "next start",
     "lint": "next lint",

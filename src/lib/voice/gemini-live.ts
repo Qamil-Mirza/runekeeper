@@ -38,7 +38,13 @@ export class GeminiLiveSession {
   private isSetupComplete = false;
   private pendingAudio: Buffer[] = [];
   private turnActive = false;
+  private speakingUntil = 0;
   private onSetupComplete: (() => void) | null = null;
+
+  /** True while Gemini is speaking (plus a short tail while audio drains). */
+  get isSpeaking(): boolean {
+    return this.turnActive || Date.now() < this.speakingUntil;
+  }
 
   constructor(
     callbacks: GeminiLiveCallbacks,
@@ -143,6 +149,10 @@ export class GeminiLiveSession {
         realtimeInputConfig: {
           automaticActivityDetection: {
             disabled: false,
+            startOfSpeechSensitivity: "START_SENSITIVITY_LOW",
+            endOfSpeechSensitivity: "END_SENSITIVITY_LOW",
+            prefixPaddingMs: 200,
+            silenceDurationMs: 1200,
           },
         },
         contextWindowCompression: {
@@ -233,6 +243,8 @@ export class GeminiLiveSession {
     // Turn complete
     if (content.turnComplete) {
       this.turnActive = false;
+      // Tail window so buffered audio playing through speakers doesn't echo back in
+      this.speakingUntil = Date.now() + 800;
       this.callbacks.onTurnEnd();
     }
 
@@ -240,6 +252,7 @@ export class GeminiLiveSession {
     if (content.interrupted) {
       log.debug("model turn interrupted by user");
       this.turnActive = false;
+      this.speakingUntil = 0;
       this.callbacks.onInterrupted();
     }
   }
@@ -289,6 +302,18 @@ export class GeminiLiveSession {
    * Send a PCM 16-bit 16kHz audio chunk from the browser to Gemini.
    * The raw binary is base64-encoded and wrapped in a realtimeInput message.
    */
+  /**
+   * Send a text message via realtimeInput to prompt Gemini to respond.
+   * Used to make Gemini speak first at session start.
+   */
+  sendClientText(text: string) {
+    this.send({
+      realtimeInput: {
+        text,
+      },
+    });
+  }
+
   sendAudioChunk(pcmBuffer: Buffer) {
     if (!this.isSetupComplete) {
       this.pendingAudio.push(pcmBuffer);
