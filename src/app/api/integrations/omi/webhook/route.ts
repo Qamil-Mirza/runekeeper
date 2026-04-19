@@ -11,7 +11,7 @@ import {
   pipeOmiAudio,
   setOmiActive,
 } from "@/lib/voice/omi-bridge";
-import { detectDoubleClap } from "@/lib/voice/clap-detector";
+import { feedAudio, destroyWakeWordState } from "@/lib/voice/wake-word-detector";
 
 const log = createLogger("api:integrations:omi:webhook");
 
@@ -91,11 +91,10 @@ export async function POST(request: NextRequest) {
     }
     const sampleRate = parseInt(getParam("sample_rate") || "16000", 10);
 
-    // Detect double-clap to trigger voice modal (runs even without active session)
-    if (detectDoubleClap(userId, pcmBuffer, sampleRate)) {
+    // Feed audio to wake word detector (async — trigger fires via callback)
+    feedAudio(userId, pcmBuffer, sampleRate, () => {
       pushEventToUser(registry, userId, { type: "omi_trigger" });
-      return jsonResponse({ status: "ok" });
-    }
+    });
 
     // Track timestamps for silence detection
     const now = Date.now();
@@ -104,6 +103,7 @@ export async function POST(request: NextRequest) {
 
     // First audio chunk — notify browser to mute its mic
     if (!hadPreviousAudio) {
+      log.info({ userId, omiUserId, sampleRate }, "OMI device connected, audio streaming");
       setOmiActive(registry, userId, true);
     }
 
@@ -116,6 +116,7 @@ export async function POST(request: NextRequest) {
     silenceTimers.set(userId, setTimeout(() => {
       lastAudioTimestamp.delete(userId);
       silenceTimers.delete(userId);
+      destroyWakeWordState(userId);
       setOmiActive(registry, userId, false);
       log.info({ userId }, "OMI audio timed out, deactivating");
     }, OMI_SILENCE_TIMEOUT_MS));
