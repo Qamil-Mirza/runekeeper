@@ -1,4 +1,4 @@
-import { writeFileSync, mkdirSync, appendFileSync } from "fs";
+import { mkdirSync, appendFileSync } from "fs";
 import { join } from "path";
 
 export interface SessionLogEntry {
@@ -13,19 +13,30 @@ export interface SessionLogEntry {
  * per-session JSONL file for debugging. Each line is a JSON object.
  *
  * Files are written to `logs/voice-sessions/` at the project root.
+ * Logging is best-effort: if the directory is not writable (e.g. in
+ * read-only container filesystems), the logger disables itself rather
+ * than crash the voice session.
  */
 export class VoiceSessionLogger {
-  private filePath: string;
+  private filePath: string = "";
   private sessionId: string;
+  private disabled = false;
 
   constructor(userId: string, userName: string) {
-    const dir = join(process.cwd(), "logs", "voice-sessions");
-    mkdirSync(dir, { recursive: true });
-
     this.sessionId = `${Date.now()}-${userId.slice(0, 8)}`;
-    this.filePath = join(dir, `${this.sessionId}.jsonl`);
 
-    // Write header as first entry
+    try {
+      const dir = join(process.cwd(), "logs", "voice-sessions");
+      mkdirSync(dir, { recursive: true });
+      this.filePath = join(dir, `${this.sessionId}.jsonl`);
+    } catch (err) {
+      this.disabled = true;
+      console.warn(
+        `[voice-logger] disabled (cannot create log dir): ${(err as Error).message}`
+      );
+      return;
+    }
+
     this.log({
       type: "session_start",
       content: `Voice session started for ${userName}`,
@@ -34,11 +45,19 @@ export class VoiceSessionLogger {
   }
 
   log(entry: Omit<SessionLogEntry, "timestamp">) {
+    if (this.disabled) return;
     const full: SessionLogEntry = {
       timestamp: new Date().toISOString(),
       ...entry,
     };
-    appendFileSync(this.filePath, JSON.stringify(full) + "\n");
+    try {
+      appendFileSync(this.filePath, JSON.stringify(full) + "\n");
+    } catch (err) {
+      this.disabled = true;
+      console.warn(
+        `[voice-logger] disabled after write failure: ${(err as Error).message}`
+      );
+    }
   }
 
   logUserTranscript(text: string) {
@@ -74,6 +93,6 @@ export class VoiceSessionLogger {
   }
 
   getFilePath(): string {
-    return this.filePath;
+    return this.disabled ? "(disabled)" : this.filePath;
   }
 }
