@@ -1,5 +1,5 @@
 {
-  "id": "1a702842-e306-4841-adab-76bab4fbca36",
+  "id": "d498edb7-528a-47c2-bdad-2ccd81e5b9a9",
   "prevId": "c48ce871-8cd2-4b0b-9cd5-1bf68d8c9ec0",
   "version": "7",
   "dialect": "postgresql",
@@ -961,11 +961,12 @@
           "notNull": false,
           "default": "'{\"workingHoursStart\":9,\"workingHoursEnd\":18,\"lunchDurationMinutes\":30,\"maxBlockMinutes\":120,\"meetingBuffer\":10}'::jsonb"
         },
-        "last_digest_sent_on": {
-          "name": "last_digest_sent_on",
-          "type": "text",
+        "digest_sent_log": {
+          "name": "digest_sent_log",
+          "type": "jsonb",
           "primaryKey": false,
-          "notNull": false
+          "notNull": false,
+          "default": "'{}'::jsonb"
         },
         "sync_token": {
           "name": "sync_token",

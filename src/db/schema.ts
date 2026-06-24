@@ -27,9 +27,9 @@ export const users = pgTable("users", {
     maxBlockMinutes: number;
     meetingBuffer: number;
     onboardingCompleted?: boolean;
-    // Daily quest-digest email reminder
-    digestEnabled?: boolean; // default on when undefined
-    digestHour?: number; // 0–23 local hour to send; default 8
+    // Quest-digest email reminders
+    digestEnabled?: boolean; // master on/off; default on when undefined
+    digestTimes?: string[]; // local send times as "HH:MM" (24h), e.g. ["08:00","12:00","21:00"]
   }>().default({
     workingHoursStart: 9,
     workingHoursEnd: 18,
@@ -37,8 +37,9 @@ export const users = pgTable("users", {
     maxBlockMinutes: 120,
     meetingBuffer: 10,
   }),
-  // Local date ("YYYY-MM-DD") the last digest was sent — dedups across ticks/restarts
-  lastDigestSentOn: text("last_digest_sent_on"),
+  // Per-slot digest dedup: maps "HH:MM" send time -> local date ("YYYY-MM-DD") last sent.
+  // Restart-safe; one entry per configured time.
+  digestSentLog: jsonb("digest_sent_log").$type<Record<string, string>>().default({}),
   syncToken: text("sync_token"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

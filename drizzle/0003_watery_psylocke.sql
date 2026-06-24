@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "digest_sent_log" jsonb DEFAULT '{}'::jsonb;
