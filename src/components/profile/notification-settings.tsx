@@ -246,9 +246,20 @@ export function NotificationSettings({ timezone }: { timezone: string }) {
           <Button onClick={handleSave} disabled={saving || loading || !dirty}>
             {saving ? "Saving…" : "Save"}
           </Button>
-          {feedback && (
-            <p className="font-body text-body-md text-on-surface-variant">{feedback}</p>
-          )}
+          <div role="status" aria-live="polite" className="flex items-center gap-2">
+            {feedback ? (
+              <span className="font-body text-body-md text-on-surface-variant">
+                {feedback}
+              </span>
+            ) : dirty && !saving ? (
+              <>
+                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-tertiary" />
+                <span className="font-label text-label-sm font-medium tracking-wide uppercase text-[#d4a860]">
+                  Unsaved changes
+                </span>
+              </>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>
