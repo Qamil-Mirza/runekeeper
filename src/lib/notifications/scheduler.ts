@@ -8,7 +8,7 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("digest-scheduler");
 
-const TICK_INTERVAL_MS = 5 * 60_000; // 5 minutes
+const TICK_INTERVAL_MS = 60_000; // 1 minute — fire configured times within ~60s
 const DEFAULT_DIGEST_TIMES = ["08:00"];
 
 let started = false;
