@@ -43,6 +43,9 @@ services:
       GMAIL_PUBSUB_TOPIC: ${GMAIL_PUBSUB_TOPIC:-runekeeper-gmail}
       GEMINI_LIVE_MODEL: ${GEMINI_LIVE_MODEL:-gemini-3.1-flash-live-preview}
       OMI_WEBHOOK_SECRET: ${OMI_WEBHOOK_SECRET:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM: ${RESEND_FROM:-Runekeeper <onboarding@resend.dev>}
+      EMAIL_NOTIFICATIONS_ENABLED: ${EMAIL_NOTIFICATIONS_ENABLED:-true}
     depends_on:
       db:
         condition: service_healthy
