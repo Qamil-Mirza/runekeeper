@@ -4,6 +4,7 @@ import { useState } from "react";
 import { usePlanner } from "@/context/planner-context";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { NotificationSettings } from "@/components/profile/notification-settings";
 
 export function ProfileView() {
   const { user, clearRunekeeperData } = usePlanner();
@@ -52,6 +53,9 @@ export function ProfileView() {
             )}
           </div>
         </div>
+
+        {/* Notification preferences */}
+        <NotificationSettings timezone={user.timezone} />
 
         {/* Danger zone */}
         <div className="space-y-3">

@@ -30,6 +30,26 @@ export async function PATCH(req: Request) {
     return errorResponse("Invalid request body", 400);
   }
 
+  // Validate digest-notification fields when present.
+  if ("digestEnabled" in updates && typeof updates.digestEnabled !== "boolean") {
+    return errorResponse("digestEnabled must be a boolean", 400);
+  }
+  if ("digestTimes" in updates) {
+    const times = updates.digestTimes;
+    const isValid =
+      Array.isArray(times) &&
+      times.length <= 12 &&
+      times.every((t: unknown) => typeof t === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(t));
+    if (!isValid) {
+      return errorResponse(
+        'digestTimes must be an array (max 12) of "HH:MM" 24-hour strings',
+        400
+      );
+    }
+    // Normalize: dedupe and sort ascending.
+    updates.digestTimes = [...new Set(times as string[])].sort();
+  }
+
   const [updated] = await db
     .update(users)
     .set({

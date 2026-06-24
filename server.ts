@@ -22,6 +22,7 @@ import { eq } from "drizzle-orm";
 import { dbTaskToTask, dbBlockToTimeBlock } from "./src/lib/types";
 import { VoiceSessionLogger } from "./src/lib/voice/session-logger";
 import { setRegistry } from "./src/lib/voice/omi-bridge";
+import { startDigestScheduler } from "./src/lib/notifications/scheduler";
 
 // ─── Registries (used by OMI webhook via omi-bridge) ───────────────────────
 export const activeVoiceSessions = new Map<
@@ -117,6 +118,9 @@ app.prepare().then(() => {
   wsServer.listen(wsPort, hostname, () => {
     console.log(`> Voice WebSocket available at ws://${hostname}:${wsPort}/api/voice`);
   });
+
+  // Daily quest-digest email reminders (in-process scheduler)
+  startDigestScheduler();
 });
 
 async function handleVoiceSession(
