@@ -101,7 +101,7 @@ export function NotificationSettings({ timezone }: { timezone: string }) {
         Notifications
       </h2>
 
-      <div className="border border-outline/40 p-4 space-y-4">
+      <div className="border border-[rgba(212,168,96,0.25)] p-4 space-y-4">
         {/* Master toggle */}
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -121,12 +121,12 @@ export function NotificationSettings({ timezone }: { timezone: string }) {
             disabled={loading}
             className={cn(
               "relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-50",
-              enabled ? "bg-tertiary" : "bg-outline/40"
+              enabled ? "bg-tertiary" : "bg-[rgba(212,168,96,0.25)]"
             )}
           >
             <span
               className={cn(
-                "absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform duration-200",
+                "absolute top-0.5 h-5 w-5 rounded-full bg-on-surface transition-transform duration-200",
                 enabled ? "translate-x-[22px]" : "translate-x-0.5"
               )}
             />
@@ -164,9 +164,10 @@ export function NotificationSettings({ timezone }: { timezone: string }) {
                       value={t}
                       onChange={(e) => updateTime(i, e.target.value)}
                       className={cn(
-                        "bg-surface-container-high border-0 border-b-2 border-primary/30 rounded-none",
-                        "px-3 py-2 font-body text-body-md text-on-surface",
-                        "focus:border-tertiary focus:outline-none transition-colors duration-200"
+                        "rounded-none border border-[rgba(212,168,96,0.3)] bg-[rgba(26,16,8,0.4)]",
+                        "px-3 py-2 font-body text-body-md text-on-surface [color-scheme:dark]",
+                        "focus:border-tertiary focus:outline-none transition-colors duration-200",
+                        "[&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-70"
                       )}
                     />
                     <button
@@ -190,7 +191,7 @@ export function NotificationSettings({ timezone }: { timezone: string }) {
                     onClick={() => addTime(p.time)}
                     disabled={times.includes(p.time)}
                     className={cn(
-                      "font-label text-label-sm tracking-wide px-3 py-1.5 border border-outline/40",
+                      "font-label text-label-sm tracking-wide px-3 py-1.5 border border-[rgba(212,168,96,0.25)]",
                       "text-on-surface-variant hover:border-on-surface hover:text-on-surface transition-colors",
                       "disabled:opacity-40 disabled:pointer-events-none"
                     )}
@@ -201,7 +202,7 @@ export function NotificationSettings({ timezone }: { timezone: string }) {
                 <button
                   type="button"
                   onClick={() => addTime()}
-                  className="font-label text-label-sm tracking-wide px-3 py-1.5 border border-outline/40 text-on-surface-variant hover:border-on-surface hover:text-on-surface transition-colors"
+                  className="font-label text-label-sm tracking-wide px-3 py-1.5 border border-[rgba(212,168,96,0.25)] text-on-surface-variant hover:border-on-surface hover:text-on-surface transition-colors"
                 >
                   + Custom time
                 </button>
