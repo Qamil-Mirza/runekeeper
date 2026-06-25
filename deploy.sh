@@ -19,9 +19,11 @@ until docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec db pg_isread
 done
 
 echo "==> Applying database schema (drizzle-kit push)..."
-set -a
-source "$ENV_FILE"
-set +a
+# Read ONLY the password from the env file — do not `source` it. It's a Docker
+# env file, not a shell script: values like RESEND_FROM="Runekeeper <a@b.com>"
+# contain shell metacharacters (< >) that make `source` fail with a syntax error.
+POSTGRES_PASSWORD="$(grep -E '^POSTGRES_PASSWORD=' "$ENV_FILE" | head -1 | cut -d= -f2- | sed -E 's/^"(.*)"$/\1/')"
+: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD not found in $ENV_FILE}"
 export DATABASE_URL="postgresql://runekeeper:${POSTGRES_PASSWORD}@localhost:5432/runekeeper"
 npx drizzle-kit push
 
