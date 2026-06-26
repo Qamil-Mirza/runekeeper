@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,11 @@ import {
 
 // Build-time flag: hide the entire Goggins section unless explicitly enabled.
 const SHOW_GOGGINS = process.env.NEXT_PUBLIC_GOGGINS_CALLS_ENABLED === "true";
+
+// How long the transient "Calling …" notice stays up after a test call is
+// placed. The browser gets no signal when a Twilio call actually ends, so we
+// approximate a short call's length, then clear the notice on its own.
+const CALL_NOTICE_TIMEOUT_MS = 30_000;
 
 function sortUnique(times: string[]): string[] {
   return [...new Set(times.filter(Boolean))].sort();
@@ -91,6 +96,15 @@ export function NotificationSettings({ timezone }: { timezone: string }) {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [testFeedback, setTestFeedback] = useState<string | null>(null);
+  const callNoticeTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Drop any pending "Calling …" auto-clear when this component unmounts.
+  useEffect(
+    () => () => {
+      if (callNoticeTimeout.current) clearTimeout(callNoticeTimeout.current);
+    },
+    []
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -128,11 +142,24 @@ export function NotificationSettings({ timezone }: { timezone: string }) {
   const gogginsTimeHandlers = timeHandlers(setGogginsTimes, markDirty);
 
   const handleTestCall = async () => {
+    if (callNoticeTimeout.current) {
+      clearTimeout(callNoticeTimeout.current);
+      callNoticeTimeout.current = null;
+    }
     setTesting(true);
     setTestFeedback(null);
     try {
       const res = await sendGogginsTestCall();
       setTestFeedback(res?.message ?? (res?.called ? "Calling…" : "No call placed."));
+      // The "Calling …" notice describes a call that's now in flight; once it has
+      // had time to wrap up there's nothing left to report, so clear it. Failure
+      // messages (no number set, etc.) stay put so the user can act on them.
+      if (res?.called) {
+        callNoticeTimeout.current = setTimeout(() => {
+          setTestFeedback(null);
+          callNoticeTimeout.current = null;
+        }, CALL_NOTICE_TIMEOUT_MS);
+      }
     } catch {
       setTestFeedback("Test failed. Check the server logs and your config.");
     } finally {
