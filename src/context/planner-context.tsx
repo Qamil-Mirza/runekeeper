@@ -121,6 +121,15 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
       ]);
 
       if (userPrefs) {
+        // Keep the stored timezone in sync with where the user actually is, so
+        // digest/call scheduling and the profile display follow them as they
+        // travel. Mirrors the chat route's auto-update, but fires on every load
+        // instead of only when a chat message is sent.
+        const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const timezone = browserTimezone || userPrefs.timezone;
+        if (browserTimezone && browserTimezone !== userPrefs.timezone) {
+          api.updateUserPreferences({ timezone: browserTimezone }).catch(() => null);
+        }
         setUser({
           id: userPrefs.id,
           name: userPrefs.name,
@@ -130,7 +139,7 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
             .join("")
             .toUpperCase()
             .slice(0, 2),
-          timezone: userPrefs.timezone,
+          timezone,
           email: userPrefs.email,
           image: userPrefs.image ?? undefined,
         });
