@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { users, tasks } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { dbTaskToTask } from "@/lib/types";
-import { buildGogginsRant } from "@/lib/notifications/goggins";
+import { generateGogginsRant } from "@/lib/notifications/goggins-rant";
 import { synthesizeSpeech } from "@/lib/notifications/tts";
 import { putAudio } from "@/lib/notifications/audio-cache";
 import { placeCall } from "@/lib/notifications/phone";
@@ -60,7 +60,7 @@ export async function placeGogginsCall(user: {
     .map(dbTaskToTask)
     .filter((t) => t.status !== "done" && !!t.dueDate && t.dueDate < today);
 
-  const rant = buildGogginsRant(overdue, today);
+  const rant = await generateGogginsRant(overdue, today);
   if (!rant) return { called: false, reason: "no_overdue_quests" };
 
   const audio = await synthesizeSpeech(rant);
