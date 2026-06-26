@@ -10,6 +10,15 @@ import { QuestEditModal } from "./quest-edit-modal";
 export function InventoryPanel() {
   const { tasks, blocks, toggleTaskDone, addTask, updateTask, deleteTask, updateBlockType } = usePlanner();
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [isNewTask, setIsNewTask] = useState(false);
+
+  const handleAddTask = async (title: string) => {
+    const created = await addTask(title);
+    if (created) {
+      setIsNewTask(true);
+      setEditingTask(created);
+    }
+  };
 
   const editingBlock = editingTask
     ? blocks.find((b) => b.taskId === editingTask.id) ?? null
@@ -38,7 +47,7 @@ export function InventoryPanel() {
           Your quests and tasks, sorted by urgency.
         </p>
       </div>
-      <AddTaskInput onAdd={addTask} />
+      <AddTaskInput onAdd={handleAddTask} />
       <div className="flex-1 overflow-y-auto archivist-scroll">
         <TaskGroup title="Active Quests" tasks={grouped.scheduled} onToggleDone={toggleTaskDone} onEdit={setEditingTask} />
         <TaskGroup title="Unscheduled" tasks={grouped.unscheduled} onToggleDone={toggleTaskDone} onEdit={setEditingTask} />
@@ -48,7 +57,11 @@ export function InventoryPanel() {
       <QuestEditModal
         task={editingTask}
         timeBlock={editingBlock}
-        onClose={() => setEditingTask(null)}
+        isNew={isNewTask}
+        onClose={() => {
+          setEditingTask(null);
+          setIsNewTask(false);
+        }}
         onSave={updateTask}
         onDelete={deleteTask}
         onBlockTypeChange={updateBlockType}

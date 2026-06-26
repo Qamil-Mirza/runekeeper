@@ -67,7 +67,7 @@ interface PlannerState {
 interface PlannerActions {
   sendMessage: (content: string) => void;
   toggleTaskDone: (taskId: string) => void;
-  addTask: (title: string) => void;
+  addTask: (title: string) => Promise<Task | null>;
   updateTask: (taskId: string, updates: Partial<Task>, startTime?: string) => void;
   deleteTask: (taskId: string) => void;
   updateBlockType: (blockId: string, blockType: string) => void;
@@ -314,12 +314,14 @@ export function PlannerProvider({ children }: { children: ReactNode }) {
 
     try {
       const created = await api.createTask({ title });
+      const createdTask = dbTaskToTask(created as any);
       setTasks((prev) =>
-        prev.map((t) => (t.id === tempId ? dbTaskToTask(created as any) : t))
+        prev.map((t) => (t.id === tempId ? createdTask : t))
       );
+      return createdTask;
     } catch (err) {
-
       setTasks((prev) => prev.filter((t) => t.id !== tempId));
+      return null;
     }
   }, []);
 
