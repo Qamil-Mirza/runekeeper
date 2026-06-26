@@ -35,6 +35,8 @@ export async function placeCall({ to, audioUrl }: PlaceCallParams): Promise<bool
 
   const twiml = `<Response><Play>${audioUrl}</Play></Response>`;
   const call = await tw.calls.create({ to, from, twiml });
-  log.info({ to, sid: call.sid }, "call initiated");
+  // Log the audio URL Twilio will fetch — if a call fails with "an application
+  // error has occurred", this is the URL to check is reachable and serving MP3.
+  log.info({ to, sid: call.sid, audioUrl }, "call initiated");
   return true;
 }
