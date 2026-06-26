@@ -146,6 +146,41 @@
   color: #3a2410;
 }
 
+/* ── Native date/time inputs on parchment surfaces ── */
+/* WebKit (Safari) renders the date/time digits — and the empty placeholder
+   today's-date hint — using -webkit-text-fill-color, NOT the `color` property.
+   Under a dark color-scheme that fill is a faint tone that reads pinkish and
+   illegible on parchment. color-scheme:light fixes the picker icon; the
+   text-fill override is what makes the digits match the other fields. */
+.parchment-context input[type="date"],
+.parchment-context input[type="time"] {
+  color-scheme: light;
+  color: #3a2410;
+  -webkit-text-fill-color: #3a2410;
+}
+
+.parchment-context input[type="date"]::-webkit-datetime-edit,
+.parchment-context input[type="time"]::-webkit-datetime-edit,
+.parchment-context input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+.parchment-context input[type="time"]::-webkit-datetime-edit-fields-wrapper,
+.parchment-context input[type="date"]::-webkit-datetime-edit-text,
+.parchment-context input[type="time"]::-webkit-datetime-edit-text,
+.parchment-context input[type="date"]::-webkit-datetime-edit-month-field,
+.parchment-context input[type="date"]::-webkit-datetime-edit-day-field,
+.parchment-context input[type="date"]::-webkit-datetime-edit-year-field,
+.parchment-context input[type="time"]::-webkit-datetime-edit-hour-field,
+.parchment-context input[type="time"]::-webkit-datetime-edit-minute-field,
+.parchment-context input[type="time"]::-webkit-datetime-edit-ampm-field {
+  color: #3a2410;
+  -webkit-text-fill-color: #3a2410;
+}
+
+.parchment-context input[type="date"]::-webkit-calendar-picker-indicator,
+.parchment-context input[type="time"]::-webkit-calendar-picker-indicator {
+  opacity: 0.55;
+  cursor: pointer;
+}
+
 /* ── Ink-Wash Glassmorphism (Dark Timber) ── */
 .vellum-overlay {
   background: rgba(44, 24, 16, 0.85);
