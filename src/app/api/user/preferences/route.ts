@@ -6,6 +6,7 @@ import {
   jsonResponse,
   errorResponse,
 } from "@/lib/api-helpers";
+import { isValidTimezone } from "@/lib/utils";
 
 export async function GET() {
   const user = await getAuthenticatedUser();
@@ -28,6 +29,19 @@ export async function PATCH(req: Request) {
   const updates = await req.json();
   if (!updates || typeof updates !== "object") {
     return errorResponse("Invalid request body", 400);
+  }
+
+  // Timezone lives on a top-level column, not in the preferences jsonb. Pull it
+  // out so the client can keep it in sync with where the user actually is
+  // (digest/call scheduling and the profile display both read this column).
+  let timezoneUpdate: string | undefined;
+  if ("timezone" in updates) {
+    const tz = updates.timezone;
+    if (typeof tz !== "string" || !isValidTimezone(tz)) {
+      return errorResponse("timezone must be a valid IANA timezone", 400);
+    }
+    timezoneUpdate = tz;
+    delete updates.timezone; // keep it out of the preferences blob
   }
 
   // Validate digest-notification fields when present.
@@ -87,10 +101,11 @@ export async function PATCH(req: Request) {
     .update(users)
     .set({
       preferences: sql`COALESCE(${users.preferences}, '{}'::jsonb) || ${JSON.stringify(updates)}::jsonb`,
+      ...(timezoneUpdate ? { timezone: timezoneUpdate } : {}),
       updatedAt: new Date(),
     })
     .where(eq(users.id, user.id))
     .returning();
 
-  return jsonResponse({ preferences: updated.preferences });
+  return jsonResponse({ preferences: updated.preferences, timezone: updated.timezone });
 }
