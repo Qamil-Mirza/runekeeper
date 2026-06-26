@@ -22,6 +22,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_WS_PORT: "8443"
+        NEXT_PUBLIC_GOGGINS_CALLS_ENABLED: "${NEXT_PUBLIC_GOGGINS_CALLS_ENABLED:-false}"
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:3000"
@@ -46,6 +47,13 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       RESEND_FROM: ${RESEND_FROM:-Runekeeper <onboarding@resend.dev>}
       EMAIL_NOTIFICATIONS_ENABLED: ${EMAIL_NOTIFICATIONS_ENABLED:-true}
+      PHONE_NOTIFICATIONS_ENABLED: ${PHONE_NOTIFICATIONS_ENABLED:-false}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-}
+      ELEVENLABS_MODEL: ${ELEVENLABS_MODEL:-eleven_turbo_v2_5}
     depends_on:
       db:
         condition: service_healthy

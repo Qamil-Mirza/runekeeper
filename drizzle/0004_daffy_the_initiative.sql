@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "goggins_call_sent_log" jsonb DEFAULT '{}'::jsonb;

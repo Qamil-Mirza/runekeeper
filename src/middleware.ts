@@ -13,9 +13,12 @@ export default auth((req) => {
   const isApi = req.nextUrl.pathname.startsWith("/api");
   const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
   const isWebhook = req.nextUrl.pathname.endsWith("/webhook");
+  // Twilio fetches this token-guarded audio URL while connecting a Goggins call.
+  const isGogginsAudio =
+    req.nextUrl.pathname === "/api/notifications/goggins/audio";
 
   // Allow auth API routes and external webhooks through (they use their own secret-based auth)
-  if (isAuthApi || isWebhook) return;
+  if (isAuthApi || isWebhook || isGogginsAudio) return;
 
   // Protect planner and non-auth API routes
   if (!isAuth) {
