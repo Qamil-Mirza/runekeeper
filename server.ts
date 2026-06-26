@@ -23,6 +23,7 @@ import { dbTaskToTask, dbBlockToTimeBlock } from "./src/lib/types";
 import { VoiceSessionLogger } from "./src/lib/voice/session-logger";
 import { setRegistry } from "./src/lib/voice/omi-bridge";
 import { startDigestScheduler } from "./src/lib/notifications/scheduler";
+import { startGogginsScheduler } from "./src/lib/notifications/goggins-scheduler";
 
 // ─── Registries (used by OMI webhook via omi-bridge) ───────────────────────
 export const activeVoiceSessions = new Map<
@@ -121,6 +122,9 @@ app.prepare().then(() => {
 
   // Daily quest-digest email reminders (in-process scheduler)
   startDigestScheduler();
+
+  // Goggins overdue-quest phone calls (in-process scheduler)
+  startGogginsScheduler();
 });
 
 async function handleVoiceSession(

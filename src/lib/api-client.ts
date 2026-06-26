@@ -135,6 +135,13 @@ export function updateUserPreferences(data: Record<string, unknown>) {
   });
 }
 
+export function sendGogginsTestCall() {
+  return apiFetch<{ called: boolean; reason?: string; message: string }>(
+    "/api/notifications/goggins/test",
+    { method: "POST" }
+  );
+}
+
 // ─── Chat with Ollama ────────────────────────────────────────────────────────
 
 export interface ChatResponse {

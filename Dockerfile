@@ -13,6 +13,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 ARG NEXT_PUBLIC_WS_PORT=3001
 ENV NEXT_PUBLIC_WS_PORT=$NEXT_PUBLIC_WS_PORT
+# NEXT_PUBLIC_* vars are inlined at build time, so the Goggins UI flag must be
+# passed as a build arg (not just a runtime env) to show the settings section.
+ARG NEXT_PUBLIC_GOGGINS_CALLS_ENABLED=false
+ENV NEXT_PUBLIC_GOGGINS_CALLS_ENABLED=$NEXT_PUBLIC_GOGGINS_CALLS_ENABLED
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 

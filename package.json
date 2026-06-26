@@ -29,6 +29,7 @@
     "react-dom": "^19.1.0",
     "resend": "^6.14.0",
     "tailwind-merge": "^3.3.0",
+    "twilio": "^6.0.2",
     "ws": "^8.20.0"
   },
   "devDependencies": {

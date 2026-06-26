@@ -30,6 +30,10 @@ export const users = pgTable("users", {
     // Quest-digest email reminders
     digestEnabled?: boolean; // master on/off; default on when undefined
     digestTimes?: string[]; // local send times as "HH:MM" (24h), e.g. ["08:00","12:00","21:00"]
+    // Goggins overdue-quest phone calls (opt-in; off unless explicitly true)
+    gogginsCallEnabled?: boolean; // master on/off; default OFF
+    gogginsCallTimes?: string[]; // local call times as "HH:MM" (24h), default ["18:00"]
+    gogginsPhoneNumber?: string | null; // E.164-ish number to call, e.g. "+15551234567"
   }>().default({
     workingHoursStart: 9,
     workingHoursEnd: 18,
@@ -40,6 +44,8 @@ export const users = pgTable("users", {
   // Per-slot digest dedup: maps "HH:MM" send time -> local date ("YYYY-MM-DD") last sent.
   // Restart-safe; one entry per configured time.
   digestSentLog: jsonb("digest_sent_log").$type<Record<string, string>>().default({}),
+  // Per-slot Goggins-call dedup: maps "HH:MM" call time -> local date ("YYYY-MM-DD") last called.
+  gogginsCallSentLog: jsonb("goggins_call_sent_log").$type<Record<string, string>>().default({}),
   syncToken: text("sync_token"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
