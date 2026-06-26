@@ -66,7 +66,7 @@ export async function placeGogginsCall(user: {
   const audio = await synthesizeSpeech(rant);
   if (!audio) return { called: false, reason: "tts_unavailable" };
 
-  const token = putAudio(audio);
+  const token = await putAudio(audio);
   const audioUrl = `${base}/api/notifications/goggins/audio?token=${token}`;
   const ok = await placeCall({ to: user.phoneNumber, audioUrl });
 
