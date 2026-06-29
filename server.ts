@@ -78,6 +78,13 @@ app.prepare().then(() => {
         eventConnections.get(user.id)!.add(clientWs);
         console.log(`[events] connected: ${user.name} (${eventConnections.get(user.id)!.size} tabs)`);
 
+        // Tell the client which build it just connected to. A deploy restarts
+        // the server, so a reconnect re-delivers this with a new value, which
+        // the client uses to detect that a newer version is live.
+        clientWs.send(
+          JSON.stringify({ type: "app_version", version: process.env.APP_VERSION || "dev" })
+        );
+
         clientWs.on("close", () => {
           const conns = eventConnections.get(user.id);
           if (conns) {
