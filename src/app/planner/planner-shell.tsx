@@ -15,6 +15,7 @@ import IntegrationsGraph from "@/components/integrations/integrations-graph";
 import { ProfileView } from "@/components/profile/profile-view";
 import { useOnboarding } from "@/components/onboarding/use-onboarding";
 import { OnboardingOverlay } from "@/components/onboarding/onboarding-overlay";
+import { UpdateBanner } from "@/components/update-banner";
 const viewTitles: Record<ViewId, string> = {
   home: "Hearth",
   chat: "Oracle",
@@ -209,6 +210,9 @@ function PlannerShell() {
       <AnimatePresence>
         {showOnboarding && <OnboardingOverlay onComplete={completeOnboarding} />}
       </AnimatePresence>
+
+      {/* New-deployment notice */}
+      <UpdateBanner />
     </div>
   );
 }

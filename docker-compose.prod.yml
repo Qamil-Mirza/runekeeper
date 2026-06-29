@@ -23,6 +23,7 @@ services:
       args:
         NEXT_PUBLIC_WS_PORT: "8443"
         NEXT_PUBLIC_GOGGINS_CALLS_ENABLED: "${NEXT_PUBLIC_GOGGINS_CALLS_ENABLED:-false}"
+        APP_VERSION: "${APP_VERSION:-dev}"
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:3000"

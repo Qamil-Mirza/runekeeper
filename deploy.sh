@@ -7,6 +7,10 @@ COMPOSE_FILE="docker-compose.prod.yml"
 echo "==> Pulling latest code..."
 git pull origin main
 
+# Stamp the build with the deployed commit so the app can detect new versions.
+export APP_VERSION="$(git rev-parse --short HEAD)"
+echo "==> Building APP_VERSION=$APP_VERSION"
+
 # Bring up the database first (no-op if already running) so the schema can be
 # applied before the new app container starts serving — additive schema changes
 # are backward-compatible, so the currently-running app tolerates them.

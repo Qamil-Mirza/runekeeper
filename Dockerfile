@@ -25,6 +25,9 @@ RUN npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# Build stamp (git short SHA) so the running app can detect new deployments.
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
