@@ -396,26 +396,44 @@ export function syncGradescope() {
   });
 }
 
-// ─── OMI Integration ────────────────────────────────────────────────────────
+// ─── Pensive Integration ────────────────────────────────────────────────────
 
-export interface OmiIntegrationConfig {
+export interface PensiveIntegrationConfig {
   enabled: boolean;
   config: {
-    omiUserId: string | null;
+    connected: boolean;
   };
+  lastSyncAt: string | null;
+  lastSyncError: string | null;
 }
 
-export function fetchOmiIntegration() {
-  return apiFetch<OmiIntegrationConfig>("/api/integrations/omi");
+export interface PensiveSyncResult {
+  processed: number;
+  tasksCreated: number;
+  errors: string[];
 }
 
-export function updateOmiIntegration(data: {
-  enabled?: boolean;
-  omiUserId?: string;
-}) {
-  return apiFetch<OmiIntegrationConfig>("/api/integrations/omi", {
+export function fetchPensiveIntegration() {
+  return apiFetch<PensiveIntegrationConfig>("/api/integrations/pensive");
+}
+
+export function connectPensive(authRecord: string) {
+  return apiFetch<PensiveIntegrationConfig>("/api/integrations/pensive", {
     method: "PUT",
-    body: JSON.stringify(data),
+    body: JSON.stringify({ authRecord }),
+  });
+}
+
+export function disconnectPensive() {
+  return apiFetch<PensiveIntegrationConfig>("/api/integrations/pensive", {
+    method: "PUT",
+    body: JSON.stringify({ enabled: false }),
+  });
+}
+
+export function syncPensive() {
+  return apiFetch<PensiveSyncResult>("/api/integrations/pensive/sync", {
+    method: "POST",
   });
 }
 

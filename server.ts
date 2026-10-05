@@ -21,19 +21,16 @@ import { tasks, timeBlocks } from "./src/db/schema";
 import { eq } from "drizzle-orm";
 import { dbTaskToTask, dbBlockToTimeBlock } from "./src/lib/types";
 import { VoiceSessionLogger } from "./src/lib/voice/session-logger";
-import { setRegistry } from "./src/lib/voice/omi-bridge";
 import { startDigestScheduler } from "./src/lib/notifications/scheduler";
 import { startGogginsScheduler } from "./src/lib/notifications/goggins-scheduler";
 
-// ─── Registries (used by OMI webhook via omi-bridge) ───────────────────────
+// ─── Registries ────────────────────────────────────────────────────────────
 export const activeVoiceSessions = new Map<
   string,
   { clientWs: WebSocket; gemini: GeminiLiveSession }
 >();
 
 export const eventConnections = new Map<string, Set<WebSocket>>();
-
-setRegistry({ activeVoiceSessions, eventConnections });
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOSTNAME || "0.0.0.0";

@@ -6,7 +6,7 @@ type EventHandler = (event: Record<string, unknown>) => void;
 
 /**
  * Persistent WebSocket connection to /api/events for receiving
- * server-pushed events (OMI triggers, etc.).
+ * server-pushed events (app version updates, etc.).
  */
 export function useEventSocket(onEvent: EventHandler) {
   const wsRef = useRef<WebSocket | null>(null);

@@ -19,7 +19,6 @@ sudo tailscale funnel --bg 3000
 FUNNEL_URL=$(tailscale funnel status 2>/dev/null | grep -oE 'https://[^ ]+' | head -1 || true)
 if [ -n "$FUNNEL_URL" ]; then
   echo "==> Public URL: $FUNNEL_URL"
-  echo "==> OMI webhook: ${FUNNEL_URL}/api/integrations/omi/webhook?token=<your-secret>"
 fi
 
 echo "==> Starting dev server..."

@@ -1,0 +1,1 @@
+ALTER TABLE "tasks" ADD COLUMN "pensive_assignment_id" text;
