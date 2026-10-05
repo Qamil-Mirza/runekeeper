@@ -53,8 +53,6 @@ export function PensiveConfigPanel({
     try {
       const result = await api.syncPensive();
       setSyncResult(result);
-      const updated = await api.fetchPensiveIntegration();
-      onUpdate(updated);
       refreshData();
     } catch {
       setSyncResult({
@@ -63,6 +61,13 @@ export function PensiveConfigPanel({
         errors: ["Sync failed"],
       });
     } finally {
+      // Always pick up server-side state (e.g. session expired -> disabled)
+      try {
+        const updated = await api.fetchPensiveIntegration();
+        onUpdate(updated);
+      } catch {
+        // ignore refresh failure
+      }
       setIsSyncing(false);
     }
   }
