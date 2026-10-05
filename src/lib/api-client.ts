@@ -396,6 +396,47 @@ export function syncGradescope() {
   });
 }
 
+// ─── Pensive Integration ────────────────────────────────────────────────────
+
+export interface PensiveIntegrationConfig {
+  enabled: boolean;
+  config: {
+    connected: boolean;
+  };
+  lastSyncAt: string | null;
+  lastSyncError: string | null;
+}
+
+export interface PensiveSyncResult {
+  processed: number;
+  tasksCreated: number;
+  errors: string[];
+}
+
+export function fetchPensiveIntegration() {
+  return apiFetch<PensiveIntegrationConfig>("/api/integrations/pensive");
+}
+
+export function connectPensive(authRecord: string) {
+  return apiFetch<PensiveIntegrationConfig>("/api/integrations/pensive", {
+    method: "PUT",
+    body: JSON.stringify({ authRecord }),
+  });
+}
+
+export function disconnectPensive() {
+  return apiFetch<PensiveIntegrationConfig>("/api/integrations/pensive", {
+    method: "PUT",
+    body: JSON.stringify({ enabled: false }),
+  });
+}
+
+export function syncPensive() {
+  return apiFetch<PensiveSyncResult>("/api/integrations/pensive/sync", {
+    method: "POST",
+  });
+}
+
 // ─── OMI Integration ────────────────────────────────────────────────────────
 
 export interface OmiIntegrationConfig {
