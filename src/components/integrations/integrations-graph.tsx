@@ -9,9 +9,9 @@ import { FieryEdge } from "./fiery-edge";
 import { GmailConfigPanel } from "./gmail-config-panel";
 import { CanvasConfigPanel } from "./canvas-config-panel";
 import { GradescopeConfigPanel } from "./gradescope-config-panel";
-import { OmiConfigPanel } from "./omi-config-panel";
+import { PensiveConfigPanel } from "./pensive-config-panel";
 import type { IntegrationNodeDef, IntegrationConfig } from "./integration-types";
-import type { CanvasIntegrationConfig, GradescopeIntegrationConfig, OmiIntegrationConfig } from "@/lib/api-client";
+import type { CanvasIntegrationConfig, GradescopeIntegrationConfig, PensiveIntegrationConfig } from "@/lib/api-client";
 
 // ---------------------------------------------------------------------------
 // Inline icon components
@@ -36,24 +36,17 @@ function GmailIcon() {
   );
 }
 
-function OmiIcon() {
+function PensiveIcon() {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none">
-      <circle cx="12" cy="8" r="5" stroke="#fff" strokeWidth={1.5} />
       <path
-        d="M12 13v4"
+        d="M4 20l4-1 10-10-3-3L5 16l-1 4z"
         stroke="#fff"
         strokeWidth={1.5}
-        strokeLinecap="round"
-      />
-      <circle cx="12" cy="19" r="2" stroke="#fff" strokeWidth={1.5} />
-      <path
-        d="M9 6.5l3 2 3-2"
-        stroke="#fff"
-        strokeWidth={1}
-        strokeLinecap="round"
         strokeLinejoin="round"
       />
+      <path d="M13 8l3 3" stroke="#fff" strokeWidth={1.5} strokeLinecap="round" />
+      <path d="M14 20h6" stroke="#fff" strokeWidth={1.5} strokeLinecap="round" />
     </svg>
   );
 }
@@ -129,7 +122,7 @@ export default function IntegrationsGraph() {
   const [gmailConfig, setGmailConfig] = useState<IntegrationConfig | null>(null);
   const [canvasConfig, setCanvasConfig] = useState<CanvasIntegrationConfig | null>(null);
   const [gradescopeConfig, setGradescopeConfig] = useState<GradescopeIntegrationConfig | null>(null);
-  const [omiConfig, setOmiConfig] = useState<OmiIntegrationConfig | null>(null);
+  const [pensiveConfig, setPensiveConfig] = useState<PensiveIntegrationConfig | null>(null);
   const [expandedNode, setExpandedNode] = useState<string | null>(null);
   const [graphRadius, setGraphRadius] = useState(180);
   const [centerNodeSize, setCenterNodeSize] = useState(120);
@@ -182,8 +175,8 @@ export default function IntegrationsGraph() {
       .then((c) => setGradescopeConfig(c))
       .catch(() => {});
     api
-      .fetchOmiIntegration()
-      .then((c) => setOmiConfig(c))
+      .fetchPensiveIntegration()
+      .then((c) => setPensiveConfig(c))
       .catch(() => {});
   }, []);
 
@@ -197,14 +190,14 @@ export default function IntegrationsGraph() {
   const gradescopeStatus: IntegrationNodeDef["status"] = gradescopeConfig?.enabled
     ? "active"
     : "setup-required";
-  const omiStatus: IntegrationNodeDef["status"] = omiConfig?.enabled
+  const pensiveStatus: IntegrationNodeDef["status"] = pensiveConfig?.enabled
     ? "active"
     : "setup-required";
 
   // Node definitions
   const integrationNodes: IntegrationNodeDef[] = [
     { id: "gmail", label: "Gmail", icon: <GmailIcon />, status: gmailStatus, color: "#EA4335", angle: 0 },
-    { id: "omi", label: "OMI", icon: <OmiIcon />, status: omiStatus, color: "#8B5CF6", angle: 90 },
+    { id: "pensive", label: "Pensive", icon: <PensiveIcon />, status: pensiveStatus, color: "#0F7B6C", angle: 90 },
     { id: "gradescope", label: "Gradescope", icon: <GradescopeIcon />, status: gradescopeStatus, color: "#00B4D8", angle: 180 },
     { id: "canvas", label: "Canvas", icon: <CanvasIcon />, status: canvasStatus, color: "#E13F29", angle: 270 },
   ];
@@ -341,7 +334,7 @@ export default function IntegrationsGraph() {
                       </div>
                     </motion.div>
                   )}
-                  {isExpanded && node.id === "omi" && (
+                  {isExpanded && node.id === "pensive" && (
                     <motion.div
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: "auto", opacity: 1 }}
@@ -350,10 +343,10 @@ export default function IntegrationsGraph() {
                       className="overflow-hidden"
                     >
                       <div className="pt-3">
-                        <OmiConfigPanel
-                          config={omiConfig}
+                        <PensiveConfigPanel
+                          config={pensiveConfig}
                           onClose={() => setExpandedNode(null)}
-                          onUpdate={setOmiConfig}
+                          onUpdate={setPensiveConfig}
                         />
                       </div>
                     </motion.div>
@@ -383,7 +376,7 @@ export default function IntegrationsGraph() {
         >
           {integrationNodes.map((node) => {
             const pos = nodePosition(node.angle);
-            const isConfigurable = node.id === "gmail" || node.id === "canvas" || node.id === "gradescope" || node.id === "omi";
+            const isConfigurable = node.id === "gmail" || node.id === "canvas" || node.id === "gradescope" || node.id === "pensive";
             const isActive = isConfigurable && (node.status === "active" || node.status === "setup-required");
 
             return (
@@ -450,9 +443,9 @@ export default function IntegrationsGraph() {
         )}
       </AnimatePresence>
 
-      {/* OMI config panel — beside node (90° = right side) */}
+      {/* Pensive config panel — beside node (90° = right side) */}
       <AnimatePresence>
-        {expandedNode === "omi" && (
+        {expandedNode === "pensive" && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -465,10 +458,10 @@ export default function IntegrationsGraph() {
               transform: "translateY(-50%)",
             }}
           >
-            <OmiConfigPanel
-              config={omiConfig}
+            <PensiveConfigPanel
+              config={pensiveConfig}
               onClose={() => setExpandedNode(null)}
-              onUpdate={setOmiConfig}
+              onUpdate={setPensiveConfig}
             />
           </motion.div>
         )}
