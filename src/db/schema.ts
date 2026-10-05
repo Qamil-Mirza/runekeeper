@@ -187,7 +187,7 @@ export const integrations = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    provider: text("provider").notNull(), // "gmail" | "canvas" | "gradescope" | "slack" | "omi" | "pensive"
+    provider: text("provider").notNull(), // "gmail" | "canvas" | "gradescope" | "slack" | "pensive"
     enabled: boolean("enabled").default(false).notNull(),
     config: jsonb("config").$type<{
       monitoredSenders?: string[];
@@ -204,8 +204,6 @@ export const integrations = pgTable(
       pensiveUid?: string;
       pensiveApiKey?: string; // Pensive's public Firebase web key
       pensiveRefreshToken?: string; // encrypted
-      // OMI Dev Kit
-      omiUserId?: string;
     }>().default({}),
     gmailHistoryId: text("gmail_history_id"),
     watchExpiration: timestamp("watch_expiration"),

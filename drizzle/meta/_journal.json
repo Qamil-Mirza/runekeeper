@@ -43,6 +43,13 @@
       "when": 1791179185674,
       "tag": "0005_equal_doctor_doom",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791179489963,
+      "tag": "0006_remove_omi_integrations",
+      "breakpoints": true
     }
   ]
 }
