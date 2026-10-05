@@ -18,9 +18,25 @@ test("normalizeClasses maps the clazz_id-keyed dashboard map", () => {
   ]);
 });
 
-test("normalizeClasses skips malformed entries and tolerates non-objects", () => {
-  assert.deepEqual(normalizeClasses(null), []);
+test("normalizeClasses skips malformed entries", () => {
   assert.deepEqual(normalizeClasses({ bad: { year: "x" } }), []);
+});
+
+test("normalizeClasses throws on non-object", () => {
+  assert.throws(() => normalizeClasses(null), /Pensive classes returned an unexpected shape/);
+  assert.throws(() => normalizeClasses([]), /unexpected shape/);
+});
+
+test("normalizeAssignmentHeads throws on non-object", () => {
+  assert.throws(() => normalizeAssignmentHeads("x"), /Pensive assignment heads returned an unexpected shape/);
+});
+
+test("normalizeSubmittedIds throws on non-object", () => {
+  assert.throws(() => normalizeSubmittedIds(null), /Pensive submissions returned an unexpected shape/);
+});
+
+test("normalizeSubmittedIds throws on a value that is neither array nor null", () => {
+  assert.throws(() => normalizeSubmittedIds({ a: "oops" }), /Pensive submissions returned an unexpected shape/);
 });
 
 test("normalizeAssignmentHeads converts epoch ms to ISO and treats 0/missing as null", () => {
@@ -40,9 +56,11 @@ test("normalizeSubmittedIds keeps ids with at least one submission", () => {
   assert.deepEqual([...normalizeSubmittedIds(json)], ["a"]);
 });
 
-test("errorForStatus maps 401/403 to auth and 429 to rate limit", () => {
+test("errorForStatus maps 401 to auth, 403 to generic, and 429 to rate limit", () => {
   assert.ok(errorForStatus(401, "x") instanceof PensiveAuthError);
-  assert.ok(errorForStatus(403, "x") instanceof PensiveAuthError);
+  const forbidden = errorForStatus(403, "classes");
+  assert.ok(!(forbidden instanceof PensiveAuthError));
+  assert.equal(forbidden.message, "Pensive classes request failed (403)");
   assert.ok(errorForStatus(429, "x") instanceof PensiveRateLimitError);
   const other = errorForStatus(500, "assignment heads");
   assert.ok(!(other instanceof PensiveAuthError));

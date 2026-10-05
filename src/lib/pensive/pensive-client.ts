@@ -4,6 +4,7 @@ const log = createLogger("pensive-client");
 
 const API_BASE = "https://api.pensieve.co/api/b2s/v1";
 const TOKEN_URL = "https://securetoken.googleapis.com/v1/token";
+const REQUEST_TIMEOUT_MS = 15_000;
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -39,7 +40,7 @@ export class PensiveRateLimitError extends Error {
 }
 
 export function errorForStatus(status: number, context: string): Error {
-  if (status === 401 || status === 403) return new PensiveAuthError();
+  if (status === 401) return new PensiveAuthError();
   if (status === 429) return new PensiveRateLimitError();
   return new Error(`Pensive ${context} request failed (${status})`);
 }
@@ -50,12 +51,17 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === "object" && !Array.isArray(v);
 }
 
+function unexpectedShape(context: string): Error {
+  log.warn({ context }, "pensive api returned unexpected shape");
+  return new Error(`Pensive ${context} returned an unexpected shape`);
+}
+
 function epochToIso(v: unknown): string | null {
   return typeof v === "number" && v > 0 ? new Date(v).toISOString() : null;
 }
 
 export function normalizeClasses(json: unknown): PensiveClass[] {
-  if (!isObject(json)) return [];
+  if (!isObject(json)) throw unexpectedShape("classes");
   const result: PensiveClass[] = [];
   for (const [key, raw] of Object.entries(json)) {
     if (!isObject(raw)) continue;
@@ -74,7 +80,7 @@ export function normalizeClasses(json: unknown): PensiveClass[] {
 }
 
 export function normalizeAssignmentHeads(json: unknown): PensiveAssignment[] {
-  if (!isObject(json)) return [];
+  if (!isObject(json)) throw unexpectedShape("assignment heads");
   const result: PensiveAssignment[] = [];
   for (const [id, raw] of Object.entries(json)) {
     if (!isObject(raw) || typeof raw.name !== "string") continue;
@@ -90,8 +96,9 @@ export function normalizeAssignmentHeads(json: unknown): PensiveAssignment[] {
 
 export function normalizeSubmittedIds(json: unknown): Set<string> {
   const ids = new Set<string>();
-  if (!isObject(json)) return ids;
+  if (!isObject(json)) throw unexpectedShape("submissions");
   for (const [id, subs] of Object.entries(json)) {
+    if (subs !== null && !Array.isArray(subs)) throw unexpectedShape("submissions");
     if (Array.isArray(subs) && subs.length > 0) ids.add(id);
   }
   return ids;
@@ -107,6 +114,7 @@ export async function refreshIdToken(
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken }),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
 
   if (!res.ok) {
@@ -132,6 +140,7 @@ async function apiGet(idToken: string, path: string, params: Record<string, stri
   const url = `${API_BASE}${path}?${new URLSearchParams(params)}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${idToken}`, Accept: "application/json" },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!res.ok) {
     log.warn({ path, status: res.status }, "pensive api request failed");

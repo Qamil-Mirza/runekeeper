@@ -61,7 +61,7 @@ export async function PUT(req: Request) {
     const { pensiveUid: _u, pensiveApiKey: _k, pensiveRefreshToken: _r, ...rest } = existing.config ?? {};
     const [updated] = await db
       .update(integrations)
-      .set({ enabled: false, config: rest, updatedAt: new Date() })
+      .set({ enabled: false, config: rest, lastSyncError: null, updatedAt: new Date() })
       .where(eq(integrations.id, existing.id))
       .returning();
     log.info({ userId: user.id }, "pensive integration disconnected");
