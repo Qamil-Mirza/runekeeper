@@ -106,6 +106,7 @@ export const tasks = pgTable("tasks", {
   googleTasklistId: text("google_tasklist_id"),
   canvasAssignmentId: text("canvas_assignment_id"),
   gradescopeAssignmentId: text("gradescope_assignment_id"),
+  pensiveAssignmentId: text("pensive_assignment_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -186,7 +187,7 @@ export const integrations = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    provider: text("provider").notNull(), // "gmail" | "canvas" | "gradescope" | "slack" | "omi"
+    provider: text("provider").notNull(), // "gmail" | "canvas" | "gradescope" | "slack" | "omi" | "pensive"
     enabled: boolean("enabled").default(false).notNull(),
     config: jsonb("config").$type<{
       monitoredSenders?: string[];
@@ -200,6 +201,9 @@ export const integrations = pgTable(
       canvasBaseUrl?: string;
       gradescopeEmail?: string;
       gradescopePassword?: string; // encrypted
+      pensiveUid?: string;
+      pensiveApiKey?: string; // Pensive's public Firebase web key
+      pensiveRefreshToken?: string; // encrypted
       // OMI Dev Kit
       omiUserId?: string;
     }>().default({}),
