@@ -29,15 +29,23 @@ ENV NODE_ENV=production
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
 
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
+# Dedicated identity that collides with no account or group on the host: the
+# host kernel sees a container's uid as its own, so sharing one with a real
+# login account lets that account signal the app and, with a matching group,
+# read its environment. Reserved on the host as "runekeeper-app".
+# See docs/lab/2026-10-10-lab-container-identity.md.
+ARG APP_UID=61010
+ARG APP_GID=61010
+RUN addgroup --system --gid ${APP_GID} runekeeper && \
+    adduser --system --uid ${APP_UID} --ingroup runekeeper runekeeper
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 # Custom server needs full node_modules (standalone trace is incomplete)
 COPY --from=prod-deps /app/node_modules ./node_modules
 
-USER nextjs
+# Numeric, so the identity does not depend on a name lookup in the image.
+USER ${APP_UID}:${APP_GID}
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
