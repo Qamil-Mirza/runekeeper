@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { AgentCard, formatAgo } from "./agent-card";
+import { AgentConsole } from "./agent-console";
 import { labFontClasses } from "./fonts";
 import { LAB_STATUS_TONE, LabRail } from "./lab-rail";
 import { LabTopBar } from "./lab-top-bar";
-import { Chip, LabButton, Strip, toneClass } from "./lab-ui";
+import { Chip, LabButton, Strip } from "./lab-ui";
+import { RuntimeMeter } from "./runtime-meter";
 import { useLab } from "./use-lab";
 import "./lab.css";
 
@@ -25,6 +27,7 @@ export function LabView({ onExit }: { onExit: () => void }) {
   const lab = useLab();
   const [now, setNow] = useState(() => Date.now());
   const [confirmStop, setConfirmStop] = useState(false);
+  const [openAgentId, setOpenAgentId] = useState<string | null>(null);
   const [warp, setWarp] = useState<"in" | "out" | null>("in");
   const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -51,11 +54,14 @@ export function LabView({ onExit }: { onExit: () => void }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = e.target instanceof HTMLElement && e.target.closest("input, textarea, select");
-      if (e.key === "Escape" && !e.defaultPrevented && !typing) leave();
+      if (e.key !== "Escape" || e.defaultPrevented || typing) return;
+      // Escape steps back one level: out of an agent first, then out of the Lab.
+      if (openAgentId) setOpenAgentId(null);
+      else leave();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [leave]);
+  }, [leave, openAgentId]);
 
   const { snapshot, status } = lab;
   // Shown data is stale when the manager is gone or the last refresh failed.
@@ -65,12 +71,11 @@ export function LabView({ onExit }: { onExit: () => void }) {
   const labStatus = snapshot?.lab.status;
 
   useEffect(() => setConfirmStop(false), [labStatus, lab.selectedLabId]);
+  useEffect(() => setOpenAgentId(null), [lab.selectedLabId]);
 
-  const budget = snapshot?.budget;
-  const spent = budget?.consumed.costUsd ?? 0;
-  const limit = budget?.limits.costUsd ?? 0;
-  const spentShare = limit > 0 ? Math.min(1, spent / limit) : 0;
-  const budgetTone = spentShare >= 1 ? "bad" : spentShare >= 0.8 ? "warn" : "accent";
+  const runtime = snapshot?.budget.runtime;
+  const runtimeLeft = runtime ? runtime.limitWallClockMinutes - runtime.usedWallClockMinutes : null;
+  const openAgent = snapshot?.agents.find((a) => a.id === openAgentId) ?? null;
 
   return (
     <div
@@ -102,7 +107,7 @@ export function LabView({ onExit }: { onExit: () => void }) {
             onCreate={lab.createLab}
           />
 
-          <main className="lab-scroll flex-1 min-w-0 min-h-0 overflow-y-auto px-3 sm:px-5 py-5">
+          <main className="lab-scroll flex-1 min-w-0 min-h-0 overflow-y-auto px-3 sm:px-5 py-5 flex flex-col">
             {lab.selectedLabId && !snapshot && lab.snapshotFailure && (
               <Strip tone="bad" role="alert">
                 Could not load this lab: {lab.snapshotFailure.message}
@@ -120,7 +125,10 @@ export function LabView({ onExit }: { onExit: () => void }) {
             )}
 
             {snapshot && (
-              <section className="flex flex-col gap-4 max-w-[1400px]" aria-label={`Lab ${snapshot.lab.name}`}>
+              <section
+                className={cn("flex flex-col gap-4 w-full max-w-[1400px]", openAgent && "flex-1 min-h-[34rem]")}
+                aria-label={`Lab ${snapshot.lab.name}`}
+              >
                 <header className="lab-panel p-4 flex flex-col gap-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -168,25 +176,16 @@ export function LabView({ onExit }: { onExit: () => void }) {
                     </div>
                   </div>
 
-                  <div className={toneClass(budgetTone)}>
-                    <div className="flex items-baseline justify-between gap-3 mb-1.5">
-                      <span className="lab-eyebrow">Budget</span>
-                      <span className="lab-mono text-[13.5px]">
-                        ${spent.toFixed(2)}
-                        <span className="text-[var(--lab-dim)]"> / ${limit.toFixed(2)}</span>
-                      </span>
-                    </div>
-                    <div
-                      className="lab-meter"
-                      role="progressbar"
-                      aria-label="Budget used"
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={Math.round(spentShare * 100)}
-                    >
-                      <span style={{ width: `${spentShare * 100}%` }} />
-                    </div>
-                  </div>
+                  {runtime && (
+                    <RuntimeMeter
+                      runtime={runtime}
+                      capMinutes={status?.health?.policy?.runtimeCapMinutes ?? null}
+                      disabled={controlsDisabled}
+                      pending={lab.pending.runtime !== undefined}
+                      failure={lab.actionFailures.runtime}
+                      onSet={lab.setRuntimeLimit}
+                    />
+                  )}
                 </header>
 
                 {confirmStop && (
@@ -216,24 +215,38 @@ export function LabView({ onExit }: { onExit: () => void }) {
                   </Strip>
                 )}
 
-                <div className="flex items-center justify-between">
-                  <p className="lab-eyebrow">Agents · {snapshot.agents.length}</p>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
-                  {snapshot.agents.map((agent) => (
-                    <AgentCard
-                      key={agent.id}
-                      agent={agent}
-                      now={now}
-                      disabled={controlsDisabled}
-                      pendingAction={lab.pending[agent.id]}
-                      failure={lab.actionFailures[agent.id]}
-                      systemNote={lab.systemNotes[agent.id]}
-                      onAction={(action) => void lab.agentAction(agent.id, action)}
-                    />
-                  ))}
-                </div>
+                {openAgent ? (
+                  <AgentConsole
+                    labId={snapshot.lab.id}
+                    agent={openAgent}
+                    now={now}
+                    disabled={controlsDisabled}
+                    runtimeLeftMinutes={runtimeLeft}
+                    pendingAction={lab.pending[openAgent.id]}
+                    actionFailure={lab.actionFailures[openAgent.id]}
+                    onAction={(action) => void lab.agentAction(openAgent.id, action)}
+                    onClose={() => setOpenAgentId(null)}
+                  />
+                ) : (
+                  <>
+                    <p className="lab-eyebrow">Agents · {snapshot.agents.length}</p>
+                    <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+                      {snapshot.agents.map((agent) => (
+                        <AgentCard
+                          key={agent.id}
+                          agent={agent}
+                          now={now}
+                          disabled={controlsDisabled}
+                          pendingAction={lab.pending[agent.id]}
+                          failure={lab.actionFailures[agent.id]}
+                          systemNote={lab.systemNotes[agent.id]}
+                          onAction={(action) => void lab.agentAction(agent.id, action)}
+                          onOpen={() => setOpenAgentId(agent.id)}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
               </section>
             )}
           </main>

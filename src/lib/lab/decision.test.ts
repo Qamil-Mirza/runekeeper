@@ -13,8 +13,7 @@ import {
   issueReviewTicket,
   maxAuthAgeMs,
   reviewApproval,
-  reviewBudgetChange,
-  reviewJobRetry,
+  reviewSpendLimit,
   type ApprovalRecord,
   type JobRecord,
   type Review,
@@ -40,14 +39,8 @@ function fixtures() {
     labId: v.binding.labId,
     agentId: v.binding.agentId,
     kind: "task",
-    title: "Run the baseline",
     experimentId: null,
-    instructions: "do the thing",
-    instructionsHash: sha256Hex("do the thing"),
-    binding: null,
-    bindingHash: "",
-    needsReconciliation: false,
-    limits: { costUsd: 2, wallClockMinutes: 30, maxTurns: 60 },
+    limits: { wallClockMinutes: 30, maxTurns: 60 },
   };
   const approval: ApprovalRecord = {
     id: v.binding.approvalId,
@@ -60,7 +53,7 @@ function fixtures() {
     requestTruncated: false,
     binding,
     bindingHash: bindingHash(binding),
-    estimate: { costUsd: null, wallClockMinutes: null },
+    estimate: { wallClockMinutes: null },
     expiresAt: v.binding.expiresAt,
     decision: null,
   };
@@ -69,7 +62,7 @@ function fixtures() {
 
 function okReview(): Review {
   const { approval, job } = fixtures();
-  const r = reviewApproval(approval, job, NOW);
+  const r = reviewApproval(approval, job, null, NOW);
   assert.equal(r.ok, true);
   return (r as { ok: true; review: Review }).review;
 }
@@ -86,40 +79,21 @@ describe("rebuilding bindings on the server", () => {
       bindingHash: v.bindingHash,
     };
     // The vector's request is not published, so only the hash mismatch is reachable here...
-    assert.equal((reviewApproval(approval, job, NOW) as any).code, "binding_mismatch");
+    assert.equal((reviewApproval(approval, job, null, NOW) as any).code, "binding_mismatch");
     // ...and with a request we do hold, the rebuilt binding differs from the vector only in requestHash.
     const review = okReview();
     assert.deepEqual({ ...review.binding, requestHash: v.binding.requestHash }, v.binding);
   });
 
-  it("reproduces the backend's job retry vector", () => {
-    const v = vector("job retry");
-    const job: JobRecord = {
-      id: v.binding.jobId,
-      labId: v.binding.labId,
-      agentId: v.binding.agentId,
-      kind: v.binding.kind,
-      title: v.binding.title,
-      experimentId: null,
-      instructions: "x",
-      instructionsHash: v.binding.instructionsHash,
-      binding: v.binding,
-      bindingHash: v.bindingHash,
-      needsReconciliation: true,
-      limits: { costUsd: 1.25, wallClockMinutes: 30, maxTurns: 60 },
-    };
-    // Instructions that do not hash to instructionsHash are refused.
-    assert.equal((reviewJobRetry(job) as any).code, "request_incomplete");
-    const full = { ...job, instructions: "abc", instructionsHash: sha256Hex("abc") };
-    const binding = { ...v.binding, instructionsHash: full.instructionsHash };
-    const r = reviewJobRetry({ ...full, binding, bindingHash: bindingHash(binding) });
-    assert.equal(r.ok, true);
-    assert.deepEqual({ ...(r as any).review.binding, instructionsHash: v.binding.instructionsHash }, v.binding);
-  });
+  it("reproduces the backend's spending limit vectors exactly, hash included", () => {
+    const manual = vector("spending limit, manual mode");
+    const binding = { ...manual.binding, previousSpendLimitUsd: "5.000000" };
+    const lowered = reviewSpendLimit(manual.binding.labId, 5, 0, "none", null);
+    assert.equal(lowered.ok, true);
+    assert.deepEqual((lowered as any).review.binding, binding);
 
-  it("reproduces the backend's budget vector exactly, hash included", () => {
-    const v = vector("budget change");
-    const r = reviewBudgetChange(v.binding.labId, { costUsd: 0, wallClockMinutes: 0 }, { costUsd: 0.1, wallClockMinutes: 600 });
+    const v = vector("spending limit under a host policy");
+    const r = reviewSpendLimit(v.binding.labId, 0, 25.5, "active", v.binding.policyHash);
     assert.equal(r.ok, true);
     assert.deepEqual((r as any).review.binding, v.binding);
     assert.equal((r as any).review.bindingHash, v.bindingHash);
@@ -130,7 +104,7 @@ describe("reviewApproval refuses anything it cannot verify", () => {
   const refusal = (mutate: (a: ApprovalRecord, j: JobRecord) => void, job: "keep" | "drop" = "keep") => {
     const { approval, job: j } = fixtures();
     mutate(approval, j);
-    const r = reviewApproval(approval, job === "keep" ? j : null, NOW);
+    const r = reviewApproval(approval, job === "keep" ? j : null, null, NOW);
     return r.ok ? "ok" : r.code;
   };
 
@@ -143,8 +117,13 @@ describe("reviewApproval refuses anything it cannot verify", () => {
     assert.equal(refusal((a) => (a.request = { toolName: "Bash", input: { command: "rm -rf /" } })), "binding_mismatch"));
   it("job missing", () => assert.equal(refusal(() => {}, "drop"), "binding_mismatch"));
   it("job belongs to another agent", () => assert.equal(refusal((_, j) => (j.agentId = "agt_other")), "binding_mismatch"));
-  it("job limits differ from the binding's", () => assert.equal(refusal((_, j) => (j.limits.costUsd = 200)), "binding_mismatch"));
-  it("estimate differs from the binding's", () => assert.equal(refusal((a) => (a.estimate.costUsd = 5)), "binding_mismatch"));
+  it("job limits differ from the binding's", () => assert.equal(refusal((_, j) => (j.limits.wallClockMinutes = 200)), "binding_mismatch"));
+  it("estimate differs from the binding's", () => assert.equal(refusal((a) => (a.estimate.wallClockMinutes = 5)), "binding_mismatch"));
+  it("the host policy differs from the one the request was made under", () => {
+    const { approval, job } = fixtures();
+    const r = reviewApproval(approval, job, "a".repeat(64), NOW);
+    assert.equal(r.ok ? "ok" : r.code, "binding_mismatch");
+  });
   it("published hash does not match the published binding", () =>
     assert.equal(refusal((a) => (a.bindingHash = "0".repeat(64))), "binding_mismatch"));
   it("binding names a different approval", () =>
@@ -156,32 +135,33 @@ describe("reviewApproval refuses anything it cannot verify", () => {
       "binding_mismatch"
     ));
 
-  it("an experiment can be denied but not approved until its protocol text is verifiable", () => {
-    const { approval, job } = fixtures();
-    approval.kind = "experiment";
-    approval.binding = { ...(approval.binding as object), kind: "experiment" };
-    approval.bindingHash = bindingHash(approval.binding);
-    const r = reviewApproval(approval, job, NOW);
-    assert.equal(r.ok, true);
-    assert.deepEqual((r as any).review.outcomes, ["denied"]);
+  it("refuses any kind but a tool permission", () => {
+    for (const kind of ["experiment", "budget", "spend", "other"]) {
+      const { approval, job } = fixtures();
+      approval.kind = kind;
+      approval.binding = { ...(approval.binding as object), kind };
+      approval.bindingHash = bindingHash(approval.binding);
+      const r = reviewApproval(approval, job, null, NOW);
+      assert.equal(r.ok ? "ok" : r.code, "unsupported_kind");
+    }
   });
 });
 
-describe("budget changes", () => {
-  const prev = { costUsd: 5, wallClockMinutes: 60 };
-  const code = (requested: unknown, previous: unknown = prev) => {
-    const r = reviewBudgetChange("lab_1", previous, requested);
+describe("spending limit", () => {
+  const code = (requested: unknown, previous: unknown = 5, metering: unknown = "active") => {
+    const r = reviewSpendLimit("lab_1", previous, requested, metering, null);
     return r.ok ? "ok" : r.code;
   };
-  it("accepts a change", () => assert.equal(code({ costUsd: 10, wallClockMinutes: 60 }), "ok"));
-  it("refuses no change", () => assert.equal(code({ ...prev }), "no_change"));
-  it("refuses negative, non-finite, huge and non-numeric limits", () => {
-    for (const bad of [{ costUsd: -1, wallClockMinutes: 1 }, { costUsd: Infinity, wallClockMinutes: 1 }, { costUsd: 1e12, wallClockMinutes: 1 }, { costUsd: "10", wallClockMinutes: 1 }, null, { costUsd: 1 }]) {
-      assert.equal(code(bad), "invalid_limits");
-    }
+  it("accepts a change", () => assert.equal(code(10), "ok"));
+  it("refuses no change", () => assert.equal(code(5), "no_change"));
+  it("refuses negative, non-finite, huge and non-numeric amounts", () => {
+    for (const bad of [-1, Infinity, 1e12, "10", null, { costUsd: 1 }]) assert.equal(code(bad), "invalid_limits");
   });
-  it("refuses when the current limits could not be read", () =>
-    assert.equal(code({ costUsd: 1, wallClockMinutes: 1 }, null), "binding_mismatch"));
+  it("refuses when the current limit could not be read", () => assert.equal(code(1, null), "binding_mismatch"));
+  it("never signs for money nobody can meter", () => {
+    for (const metering of ["none", null, "ACTIVE", 1]) assert.equal(code(10, 0, metering), "metering_unavailable");
+  });
+  it("still allows lowering the limit to zero without metering", () => assert.equal(code(0, 5, "none"), "ok"));
 });
 
 describe("recent authentication", () => {

@@ -153,8 +153,8 @@ export function useLab() {
       if (!agent.sessionId || noteKeys.current[agent.id] === key) continue;
       noteKeys.current[agent.id] = key;
       labApi
-        .fetchAgentTranscript(agent.id)
-        .then((items) => {
+        .fetchAgentTranscript(agent.id, { limit: 20 })
+        .then(({ items }) => {
           const note = [...items].reverse().find((i) => i.kind === "systemNote");
           if (note) setSystemNotes((n) => ({ ...n, [agent.id]: note }));
         })
@@ -230,6 +230,18 @@ export function useLab() {
     [runAction]
   );
 
+  const setRuntimeLimit = useCallback(
+    (wallClockMinutes: number) => {
+      const labId = selectedRef.current;
+      if (!labId) return Promise.resolve();
+      return runAction("runtime", "Saving", async () => {
+        const budget = await labApi.setRuntimeLimit(labId, wallClockMinutes);
+        setSnapshot((s) => (s && s.lab.id === labId ? { ...s, budget } : s));
+      });
+    },
+    [runAction]
+  );
+
   return {
     status,
     statusFailure,
@@ -247,6 +259,7 @@ export function useLab() {
     createLab,
     labAction,
     agentAction,
+    setRuntimeLimit,
     retry: useCallback(() => {
       void refreshStatus();
       void refreshLabs();

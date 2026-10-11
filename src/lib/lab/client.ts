@@ -3,11 +3,15 @@ import type {
   Lab,
   LabAction,
   LabAgent,
+  LabBudget,
   LabConnectionStatus,
   LabErrorBody,
+  LabJob,
+  LabJobPage,
   LabSnapshot,
   LabSummary,
   LabTranscriptItem,
+  LabTranscriptPage,
 } from "./types";
 
 // Browser-side calls to Runekeeper's own /api/lab routes. The Lab Manager's
@@ -91,10 +95,40 @@ export function runAgentAction(agentId: string, action: AgentAction) {
   return mutate<LabAgent>(`/api/lab/agents/${encodeURIComponent(agentId)}/${action}`);
 }
 
-export async function fetchAgentTranscript(agentId: string): Promise<LabTranscriptItem[]> {
-  return (
-    await labFetch<{ items: LabTranscriptItem[] }>(
-      `/api/lab/agents/${encodeURIComponent(agentId)}/transcript`
-    )
-  ).items;
+/** Newest items without a cursor; `before` pages back, `after` returns what is new. */
+export function fetchAgentTranscript(
+  agentId: string,
+  q: { before?: string; after?: string; limit?: number } = {}
+): Promise<LabTranscriptPage> {
+  const params = new URLSearchParams();
+  if (q.before) params.set("before", q.before);
+  if (q.after) params.set("after", q.after);
+  if (q.limit) params.set("limit", String(q.limit));
+  const query = params.toString();
+  return labFetch<LabTranscriptPage>(
+    `/api/lab/agents/${encodeURIComponent(agentId)}/transcript${query ? `?${query}` : ""}`
+  );
+}
+
+export function sendAgentMessage(agentId: string, text: string) {
+  return mutate<{ job: LabJob; transcriptItem: LabTranscriptItem }>(
+    `/api/lab/agents/${encodeURIComponent(agentId)}/messages`,
+    { text }
+  );
+}
+
+export function fetchAgentJobs(labId: string, agentId: string) {
+  return labFetch<LabJobPage>(
+    `/api/lab/labs/${encodeURIComponent(labId)}/jobs?agentId=${encodeURIComponent(agentId)}`
+  );
+}
+
+export function cancelJob(jobId: string) {
+  return mutate<LabJob>(`/api/lab/jobs/${encodeURIComponent(jobId)}/cancel`);
+}
+
+export function setRuntimeLimit(labId: string, wallClockMinutes: number) {
+  return mutate<LabBudget>(`/api/lab/labs/${encodeURIComponent(labId)}/runtime-limit`, {
+    wallClockMinutes,
+  });
 }

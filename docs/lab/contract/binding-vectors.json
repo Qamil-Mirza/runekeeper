@@ -1,5 +1,5 @@
 {
-  "description": "Test vectors for lab-authz-v2. The signing key is the public RFC 8032 test key; never use it for anything else.",
+  "description": "Test vectors for lab-authz-v3. The signing key is the public RFC 8032 test key; never use it for anything else.",
   "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA11qYAYKxCrfVS/7TyWQHOg7hcvPapiMlrwIaaPcHURo=\n-----END PUBLIC KEY-----\n",
   "decimalRule": "Non-integer quantities in bindings are decimal strings with exactly six fractional digits (JavaScript: n.toFixed(6)).",
   "vectors": [
@@ -21,25 +21,24 @@
         "experimentId": null,
         "requestHash": "520c40b9ebddb1b047e969498e780a1c2e636cd438027f6079f2ddeac5f8ae41",
         "limits": {
-          "costUsd": "2.000000",
           "wallClockMinutes": "30.000000",
           "maxTurns": 60
         },
         "estimate": {
-          "costUsd": null,
           "wallClockMinutes": null
         },
-        "expiresAt": "2026-10-10T12:30:00.000Z"
+        "expiresAt": "2026-10-10T12:30:00.000Z",
+        "policyHash": null
       },
-      "canonicalJson": "{\"agentId\":\"agt_01example000000000000000000\",\"approvalId\":\"apr_01example000000000000000000\",\"contractVersion\":\"1.0\",\"estimate\":{\"costUsd\":null,\"wallClockMinutes\":null},\"experimentId\":null,\"expiresAt\":\"2026-10-10T12:30:00.000Z\",\"jobId\":\"job_01example000000000000000000\",\"kind\":\"permission\",\"labId\":\"lab_01example000000000000000000\",\"limits\":{\"costUsd\":\"2.000000\",\"maxTurns\":60,\"wallClockMinutes\":\"30.000000\"},\"requestHash\":\"520c40b9ebddb1b047e969498e780a1c2e636cd438027f6079f2ddeac5f8ae41\",\"role\":\"advisor\"}",
-      "bindingHash": "f1dcad8bc8cd75c782d926dd65e14356b4e163f6f066949cf169e8c6289f4dc2",
+      "canonicalJson": "{\"agentId\":\"agt_01example000000000000000000\",\"approvalId\":\"apr_01example000000000000000000\",\"contractVersion\":\"1.0\",\"estimate\":{\"wallClockMinutes\":null},\"experimentId\":null,\"expiresAt\":\"2026-10-10T12:30:00.000Z\",\"jobId\":\"job_01example000000000000000000\",\"kind\":\"permission\",\"labId\":\"lab_01example000000000000000000\",\"limits\":{\"maxTurns\":60,\"wallClockMinutes\":\"30.000000\"},\"policyHash\":null,\"requestHash\":\"520c40b9ebddb1b047e969498e780a1c2e636cd438027f6079f2ddeac5f8ae41\",\"role\":\"advisor\"}",
+      "bindingHash": "351a7f3b8d60c57ac73c1de586253d8fa7dd46ff92ff53c0301dc06a7e09e35b",
       "authorization": {
         "signedAt": "2026-10-10T12:00:00.000Z",
         "expiresAt": "2026-10-10T12:02:00.000Z",
         "nonce": "AAECAwQFBgcICQoLDA0ODxAR",
-        "signature": "jVFuzFFM/mv0MfQgBVW7URQmKDMWKb7ywFla8YUx7R80DdehdBiIpt9Qw0vbP7QI4NkHjY1snrOd6bdnjUT0BQ=="
+        "signature": "WKQIBRWw34PBatoQ/RfpsUMOLkMq/ir0cY+pW/rRfiRXJ8akLksetTG6W9x3raH48ayDMqqRe9vHbDs83hEMAQ=="
       },
-      "signedText": "lab-authz-v2\napproval.decision\napr_01example000000000000000000\nf1dcad8bc8cd75c782d926dd65e14356b4e163f6f066949cf169e8c6289f4dc2\napproved\n02cdfbb6-0000-4000-8000-000000000001\n2026-10-10T12:00:00.000Z\n2026-10-10T12:02:00.000Z\nAAECAwQFBgcICQoLDA0ODxAR\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      "signedText": "lab-authz-v3\napproval.decision\napr_01example000000000000000000\n351a7f3b8d60c57ac73c1de586253d8fa7dd46ff92ff53c0301dc06a7e09e35b\napproved\n02cdfbb6-0000-4000-8000-000000000001\n2026-10-10T12:00:00.000Z\n2026-10-10T12:02:00.000Z\nAAECAwQFBgcICQoLDA0ODxAR\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     },
     {
       "name": "approval decision denied with a note",
@@ -59,60 +58,27 @@
         "experimentId": null,
         "requestHash": "2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881",
         "limits": {
-          "costUsd": "0.333333",
           "wallClockMinutes": "9.500000",
           "maxTurns": 60
         },
         "estimate": {
-          "costUsd": null,
           "wallClockMinutes": null
         },
-        "expiresAt": "2026-10-10T12:30:00.000Z"
+        "expiresAt": "2026-10-10T12:30:00.000Z",
+        "policyHash": null
       },
-      "canonicalJson": "{\"agentId\":\"agt_01example000000000000000000\",\"approvalId\":\"apr_01example000000000000000000\",\"contractVersion\":\"1.0\",\"estimate\":{\"costUsd\":null,\"wallClockMinutes\":null},\"experimentId\":null,\"expiresAt\":\"2026-10-10T12:30:00.000Z\",\"jobId\":\"job_01example000000000000000000\",\"kind\":\"permission\",\"labId\":\"lab_01example000000000000000000\",\"limits\":{\"costUsd\":\"0.333333\",\"maxTurns\":60,\"wallClockMinutes\":\"9.500000\"},\"requestHash\":\"2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881\",\"role\":\"executor\"}",
-      "bindingHash": "535a77e43bea70c2aa438f2e99c08db0385d580f4e35cd48688bf8dd8cdded8c",
+      "canonicalJson": "{\"agentId\":\"agt_01example000000000000000000\",\"approvalId\":\"apr_01example000000000000000000\",\"contractVersion\":\"1.0\",\"estimate\":{\"wallClockMinutes\":null},\"experimentId\":null,\"expiresAt\":\"2026-10-10T12:30:00.000Z\",\"jobId\":\"job_01example000000000000000000\",\"kind\":\"permission\",\"labId\":\"lab_01example000000000000000000\",\"limits\":{\"maxTurns\":60,\"wallClockMinutes\":\"9.500000\"},\"policyHash\":null,\"requestHash\":\"2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881\",\"role\":\"executor\"}",
+      "bindingHash": "9931a535988f60fe96d424d251919a7da420a619ff337656b8997bfe863007c2",
       "authorization": {
         "signedAt": "2026-10-10T12:00:00.000Z",
         "expiresAt": "2026-10-10T12:02:00.000Z",
         "nonce": "AAECAwQFBgcICQoLDA0ODxAR",
-        "signature": "1m+c+5Ml0LEugzjE0f0FLqaJ1hnu46ajk+yRzN08o3avpVEqMygraZzXh10u02JAkJiffPUAWOPezTeXBSuHAw=="
+        "signature": "hBPHKR5aa1stSOeE1GDsJibk617VxpvmsxrS632k0SGOfZGXj/+N/A7VM6fNSd8W+G1NOvNGBaGR0cO0uFn4Cg=="
       },
-      "signedText": "lab-authz-v2\napproval.decision\napr_01example000000000000000000\n535a77e43bea70c2aa438f2e99c08db0385d580f4e35cd48688bf8dd8cdded8c\ndenied\n02cdfbb6-0000-4000-8000-000000000001\n2026-10-10T12:00:00.000Z\n2026-10-10T12:02:00.000Z\nAAECAwQFBgcICQoLDA0ODxAR\n440b61ba79422f7d38a002333993af5a09f53cdf5fe6188230d6659155018f31"
+      "signedText": "lab-authz-v3\napproval.decision\napr_01example000000000000000000\n9931a535988f60fe96d424d251919a7da420a619ff337656b8997bfe863007c2\ndenied\n02cdfbb6-0000-4000-8000-000000000001\n2026-10-10T12:00:00.000Z\n2026-10-10T12:02:00.000Z\nAAECAwQFBgcICQoLDA0ODxAR\n440b61ba79422f7d38a002333993af5a09f53cdf5fe6188230d6659155018f31"
     },
     {
-      "name": "job retry",
-      "action": "job.retry",
-      "targetId": "job_01example000000000000000000",
-      "outcome": "retry",
-      "actorId": "02cdfbb6-0000-4000-8000-000000000001",
-      "note": "",
-      "binding": {
-        "contractVersion": "1.0",
-        "jobId": "job_01example000000000000000000",
-        "labId": "lab_01example000000000000000000",
-        "agentId": "agt_01example000000000000000000",
-        "kind": "task",
-        "title": "Run the baseline",
-        "experimentId": null,
-        "instructionsHash": "737a4b760836705d56a4d2d97cfcc8aaee4234f32afcdd4cdf2add638e7a29c8",
-        "limits": {
-          "costUsd": "1.250000",
-          "wallClockMinutes": "30.000000",
-          "maxTurns": 60
-        }
-      },
-      "canonicalJson": "{\"agentId\":\"agt_01example000000000000000000\",\"contractVersion\":\"1.0\",\"experimentId\":null,\"instructionsHash\":\"737a4b760836705d56a4d2d97cfcc8aaee4234f32afcdd4cdf2add638e7a29c8\",\"jobId\":\"job_01example000000000000000000\",\"kind\":\"task\",\"labId\":\"lab_01example000000000000000000\",\"limits\":{\"costUsd\":\"1.250000\",\"maxTurns\":60,\"wallClockMinutes\":\"30.000000\"},\"title\":\"Run the baseline\"}",
-      "bindingHash": "f5cbcba4416930aa371ec65d4244951c81507ee407af4a966e1b70e83ad95b0e",
-      "authorization": {
-        "signedAt": "2026-10-10T12:00:00.000Z",
-        "expiresAt": "2026-10-10T12:02:00.000Z",
-        "nonce": "AAECAwQFBgcICQoLDA0ODxAR",
-        "signature": "4uku6cIdKsXZmmIvMOj4joEEhJerySPmUwDIIOB7qSEahMzg2Bor4OORxAVj7Yn9GDSk9GHn7hFj+jmFGGkuBQ=="
-      },
-      "signedText": "lab-authz-v2\njob.retry\njob_01example000000000000000000\nf5cbcba4416930aa371ec65d4244951c81507ee407af4a966e1b70e83ad95b0e\nretry\n02cdfbb6-0000-4000-8000-000000000001\n2026-10-10T12:00:00.000Z\n2026-10-10T12:02:00.000Z\nAAECAwQFBgcICQoLDA0ODxAR\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    },
-    {
-      "name": "budget change",
+      "name": "spending limit, manual mode",
       "action": "budget.set",
       "targetId": "lab_01example000000000000000000",
       "outcome": "set",
@@ -121,24 +87,88 @@
       "binding": {
         "contractVersion": "1.0",
         "labId": "lab_01example000000000000000000",
-        "previousLimits": {
-          "costUsd": "0.000000",
-          "wallClockMinutes": "0.000000"
-        },
-        "limits": {
-          "costUsd": "0.100000",
-          "wallClockMinutes": "600.000000"
-        }
+        "previousSpendLimitUsd": "0.000000",
+        "spendLimitUsd": "0.000000",
+        "policyHash": null
       },
-      "canonicalJson": "{\"contractVersion\":\"1.0\",\"labId\":\"lab_01example000000000000000000\",\"limits\":{\"costUsd\":\"0.100000\",\"wallClockMinutes\":\"600.000000\"},\"previousLimits\":{\"costUsd\":\"0.000000\",\"wallClockMinutes\":\"0.000000\"}}",
-      "bindingHash": "6149c152d51783408986f7df06c590efac3b46bb2b7a2070eb8631ca5ac58303",
+      "canonicalJson": "{\"contractVersion\":\"1.0\",\"labId\":\"lab_01example000000000000000000\",\"policyHash\":null,\"previousSpendLimitUsd\":\"0.000000\",\"spendLimitUsd\":\"0.000000\"}",
+      "bindingHash": "9432b1650b70f0545c347c6d647060728e0a7dd705efc90898863e15fb2cdbde",
       "authorization": {
         "signedAt": "2026-10-10T12:00:00.000Z",
         "expiresAt": "2026-10-10T12:02:00.000Z",
         "nonce": "AAECAwQFBgcICQoLDA0ODxAR",
-        "signature": "YwfSk5zVvfyQ5NccHWlcNBDHwXBku3YUnq6DHwKMFSidU6cPXPYs30GtwrZAHhEUQis7PWfpMMHHu2yiZZ8zCg=="
+        "signature": "pvEx92owFFjINXS1TqKa+sp3a4aVjq7muXBo42sCbyjCQtQw7aDzxGJjNPIHEyvPGfZ9gOf8pcoWPbNxXhHZAw=="
       },
-      "signedText": "lab-authz-v2\nbudget.set\nlab_01example000000000000000000\n6149c152d51783408986f7df06c590efac3b46bb2b7a2070eb8631ca5ac58303\nset\n02cdfbb6-0000-4000-8000-000000000001\n2026-10-10T12:00:00.000Z\n2026-10-10T12:02:00.000Z\nAAECAwQFBgcICQoLDA0ODxAR\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      "signedText": "lab-authz-v3\nbudget.set\nlab_01example000000000000000000\n9432b1650b70f0545c347c6d647060728e0a7dd705efc90898863e15fb2cdbde\nset\n02cdfbb6-0000-4000-8000-000000000001\n2026-10-10T12:00:00.000Z\n2026-10-10T12:02:00.000Z\nAAECAwQFBgcICQoLDA0ODxAR\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "spending limit under a host policy",
+      "action": "budget.set",
+      "targetId": "lab_01example000000000000000000",
+      "outcome": "set",
+      "actorId": "02cdfbb6-0000-4000-8000-000000000001",
+      "note": "For the GPU rental.",
+      "binding": {
+        "contractVersion": "1.0",
+        "labId": "lab_01example000000000000000000",
+        "previousSpendLimitUsd": "0.000000",
+        "spendLimitUsd": "25.500000",
+        "policyHash": "ba4459ca47bff03dc292cf6b637c9674578f89b0a627a4c6b270db18516afa82"
+      },
+      "canonicalJson": "{\"contractVersion\":\"1.0\",\"labId\":\"lab_01example000000000000000000\",\"policyHash\":\"ba4459ca47bff03dc292cf6b637c9674578f89b0a627a4c6b270db18516afa82\",\"previousSpendLimitUsd\":\"0.000000\",\"spendLimitUsd\":\"25.500000\"}",
+      "bindingHash": "5cbf3419d3321ba9a6fc94245988234144acb2b13ea6cb927b04ded12cc9ddcc",
+      "authorization": {
+        "signedAt": "2026-10-10T12:00:00.000Z",
+        "expiresAt": "2026-10-10T12:02:00.000Z",
+        "nonce": "AAECAwQFBgcICQoLDA0ODxAR",
+        "signature": "9owEY0AoLTPkGOXJbGKLT32C9gvBX8bn6jMSLUbQ8kXBhUstCKLkVxkBYT3KCUXsffKBtjtFtsd0/ohtH4t0Dg=="
+      },
+      "signedText": "lab-authz-v3\nbudget.set\nlab_01example000000000000000000\n5cbf3419d3321ba9a6fc94245988234144acb2b13ea6cb927b04ded12cc9ddcc\nset\n02cdfbb6-0000-4000-8000-000000000001\n2026-10-10T12:00:00.000Z\n2026-10-10T12:02:00.000Z\nAAECAwQFBgcICQoLDA0ODxAR\nf3c7de24d68dcad966f114122a40b24a4f40689fd5d788ca390d44f7df84fc18"
+    },
+    {
+      "name": "approval decision (experiment)",
+      "action": "approval.decision",
+      "targetId": "apr_01example000000000000000001",
+      "outcome": "approved",
+      "actorId": "02cdfbb6-0000-4000-8000-000000000001",
+      "note": "",
+      "request": {
+        "experimentId": "exp_01example000000000000000000",
+        "title": "Word count",
+        "hypothesis": "The note has two words.",
+        "protocolVersion": 2,
+        "protocolHash": "4aa12bd3b410071d2f04bc9404f1f3a8fb9b525ce5154dc30ca6f4c32c69aede"
+      },
+      "protocolText": "# Protocol\n1. Read the note — “héllo ✓”.\n2. Count its words.\n",
+      "binding": {
+        "contractVersion": "1.0",
+        "approvalId": "apr_01example000000000000000001",
+        "kind": "experiment",
+        "labId": "lab_01example000000000000000000",
+        "agentId": "agt_01example000000000000000000",
+        "role": "advisor",
+        "jobId": null,
+        "experimentId": "exp_01example000000000000000000",
+        "requestHash": "7f0e6c793dcaafe568c2d487c0f42992bfaa3ae5a6a02d56391aa6c826510eb6",
+        "limits": {
+          "wallClockMinutes": "5.000000",
+          "maxTurns": 60
+        },
+        "estimate": {
+          "wallClockMinutes": "4.000000"
+        },
+        "expiresAt": "2026-10-17T12:00:00.000Z",
+        "policyHash": null
+      },
+      "canonicalJson": "{\"agentId\":\"agt_01example000000000000000000\",\"approvalId\":\"apr_01example000000000000000001\",\"contractVersion\":\"1.0\",\"estimate\":{\"wallClockMinutes\":\"4.000000\"},\"experimentId\":\"exp_01example000000000000000000\",\"expiresAt\":\"2026-10-17T12:00:00.000Z\",\"jobId\":null,\"kind\":\"experiment\",\"labId\":\"lab_01example000000000000000000\",\"limits\":{\"maxTurns\":60,\"wallClockMinutes\":\"5.000000\"},\"policyHash\":null,\"requestHash\":\"7f0e6c793dcaafe568c2d487c0f42992bfaa3ae5a6a02d56391aa6c826510eb6\",\"role\":\"advisor\"}",
+      "bindingHash": "84f3272ee0df0a008b831365c43b89a39eafc049d52f598b80a316ff093f270f",
+      "authorization": {
+        "signedAt": "2026-10-10T12:00:00.000Z",
+        "expiresAt": "2026-10-10T12:02:00.000Z",
+        "nonce": "AAECAwQFBgcICQoLDA0ODxAR",
+        "signature": "7IHC2BshEjO7yVLFgHIVU9HwFWBXfCb80uI74lAVbKZUtu3L6Lhz4++r1VP9zt36rW4oskHYc/4Bxh8BRfSzDw=="
+      },
+      "signedText": "lab-authz-v3\napproval.decision\napr_01example000000000000000001\n84f3272ee0df0a008b831365c43b89a39eafc049d52f598b80a316ff093f270f\napproved\n02cdfbb6-0000-4000-8000-000000000001\n2026-10-10T12:00:00.000Z\n2026-10-10T12:02:00.000Z\nAAECAwQFBgcICQoLDA0ODxAR\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     }
   ]
 }

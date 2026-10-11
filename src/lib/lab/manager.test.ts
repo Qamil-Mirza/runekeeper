@@ -9,7 +9,12 @@ import type { LabConfig } from "./config";
 import {
   LabManagerError,
   createLab,
-  getAgentTranscript,
+  cancelJob,
+  getAgentTranscriptPage,
+  getJob,
+  listJobs,
+  sendAgentMessage,
+  setRuntimeLimit,
   getConnectionStatus,
   getLabSnapshot,
   isApiCompatible,
@@ -153,7 +158,7 @@ describe("over a unix socket", () => {
     await runAgentAction(config, ACTOR, KEY, "agt_1", "restart");
     await runAgentAction(config, ACTOR, KEY, "agt_1", "resume");
     await getLabSnapshot(config, ACTOR, "lab_1");
-    await getAgentTranscript(config, ACTOR, "agt_1", 5);
+    await getAgentTranscriptPage(config, ACTOR, "agt_1", { limit: 5 });
 
     assert.deepEqual(
       seen.map((s) => `${s.method} ${s.url}`),
@@ -169,6 +174,42 @@ describe("over a unix socket", () => {
       ]
     );
     assert.deepEqual(JSON.parse(seen[5].body), { newSession: false });
+  });
+
+  it("maps instructions, tasks and the runtime limit to the contract's paths", async () => {
+    const { config, seen } = await onUnixSocket((_s, res) => json(res, 200, { items: [], nextCursor: null }));
+    await sendAgentMessage(config, ACTOR, KEY, "agt_1", "Summarise the notes.");
+    await getAgentTranscriptPage(config, ACTOR, "agt_1", { after: "41" });
+    await getAgentTranscriptPage(config, ACTOR, "agt_1", { before: "12", limit: 1000 });
+    await listJobs(config, ACTOR, "lab_1", { agentId: "agt_1", limit: 30 });
+    await getJob(config, ACTOR, "job_1");
+    await cancelJob(config, ACTOR, KEY, "job_1");
+    await setRuntimeLimit(config, ACTOR, KEY, "lab_1", 120);
+
+    assert.deepEqual(
+      seen.map((s) => `${s.method} ${s.url}`),
+      [
+        "POST /v1/agents/agt_1/messages",
+        "GET /v1/agents/agt_1/transcript?after=41&limit=50",
+        "GET /v1/agents/agt_1/transcript?before=12&limit=200",
+        "GET /v1/labs/lab_1/jobs?kind=all&agentId=agt_1&limit=30",
+        "GET /v1/jobs/job_1",
+        "POST /v1/jobs/job_1/cancel",
+        "POST /v1/labs/lab_1/runtime-limit",
+      ]
+    );
+    assert.deepEqual(JSON.parse(seen[0].body), { text: "Summarise the notes." });
+    assert.equal(seen[0].headers["idempotency-key"], KEY);
+    assert.deepEqual(JSON.parse(seen[6].body), { wallClockMinutes: 120 });
+  });
+
+  it("refuses cursors that would change the request", async () => {
+    const { config, seen } = await onUnixSocket((_s, res) => json(res, 200, { items: [], nextCursor: null }));
+    for (const bad of ["1&limit=9999", "../x", "", "a b", "x".repeat(65)]) {
+      await assert.rejects(getAgentTranscriptPage(config, ACTOR, "agt_1", { after: bad }), /Invalid cursor/);
+      await assert.rejects(listJobs(config, ACTOR, "lab_1", { before: bad }), /Invalid cursor/);
+    }
+    assert.equal(seen.length, 0);
   });
 
   it("surfaces the manager's error envelope", async () => {

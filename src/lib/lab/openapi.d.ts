@@ -74,10 +74,56 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Set the lab's budget limits. Signed, because it authorizes spend.
-         * @description The signature covers a BudgetBinding, which includes the limits in force before the change.
+         * Set the lab's spending limit. The only signed setting, because it is the only one that authorizes money.
+         * @description The signature covers a BudgetBinding, which includes the limit in
+         *     force before the change and the hash of the host policy in force.
+         *     While `Health.spend.metering` is `none`, any amount above zero is
+         *     refused with 412 `spend_metering_unavailable` before the signature
+         *     is looked at, and nothing is recorded.
          */
         post: operations["setLabBudget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/labs/{labId}/runtime-limit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set how many minutes agents may run in this lab in total. Not money, so not signed.
+         * @description Capped by `Health.policy.runtimeCapMinutes`, which is set on the
+         *     host only. Above the cap: 400 `validation_failed` with
+         *     `details.capMinutes`. A request carrying an `authorization` is
+         *     rejected. With shells and no spending, this is the limit that
+         *     binds, and it can be moved by any caller holding the service token:
+         *     the client should require explicit confirmation before raising it.
+         */
+        post: operations["setLabRuntimeLimit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/labs/{labId}/policy-decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Everything that ran in this lab on the policy's say-so instead of a human's, newest first. */
+        get: operations["listPolicyDecisions"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -317,6 +363,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/{agentId}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List one directory of the agent's workspace. Read-only.
+         * @description For seeing what a task produced. `path` is relative to the
+         *     workspace; empty is the workspace itself. A path that leaves the
+         *     workspace, directly or through a symbolic link, is refused (400).
+         *     Works whether or not the agent is running. Names and contents come
+         *     from the agent side and are untrusted.
+         */
+        get: operations["listAgentFiles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agentId}/files/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the first 256 KB of one regular file in the agent's workspace. */
+        get: operations["readAgentFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/labs/{labId}/jobs": {
         parameters: {
             query?: never;
@@ -380,7 +467,11 @@ export interface paths {
         put?: never;
         /**
          * Resolve a job that was interrupted by a manager restart.
-         * @description Interrupted jobs are never re-executed automatically. A human either
+         * @description Interrupted jobs are never re-executed automatically. Neither
+         *     resolution is signed, and a request carrying an `authorization` is
+         *     rejected. In an autonomous lab the policy acknowledges an
+         *     interrupted job itself (`reconciliation.actor` is null and
+         *     `reconciliation.policy` is set); it never retries one. A human either
          *     acknowledges the interruption or asks for a retry, which creates a NEW
          *     job (returned as `retryJob`) with the same instructions and
          *     `retryOfJobId` set. The new job inherits no approvals and must obtain
@@ -479,11 +570,28 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List research questions. */
+        /** List research questions, newest first. */
         get: operations["listQuestions"];
         put?: never;
         /** The human assigns a research question or objective. */
         post: operations["createQuestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/questions/{questionId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change a question's status. At most one question per lab is active; activating one returns the previous one to open. */
+        post: operations["setQuestionStatus"];
         delete?: never;
         options?: never;
         head?: never;
@@ -497,7 +605,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List experiments. */
+        /** List experiments, newest first. */
         get: operations["listExperiments"];
         put?: never;
         post?: never;
@@ -514,8 +622,180 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get one experiment. */
+        /** One experiment with its protocol versions, jobs, approvals, results and review. */
         get: operations["getExperiment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/experiments/{experimentId}/request-approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Raise a new approval for the current protocol version.
+         * @description Only from `protocolRegistered`, which an experiment returns to when
+         *     its approval is denied, expires, or was spent on an attempt that
+         *     recorded no result. 409 `conflict` otherwise.
+         */
+        post: operations["requestExperimentApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/experiments/{experimentId}/execute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start the one execution attempt an approval authorizes.
+         * @description The Lab Manager builds the Executor's instructions itself from the
+         *     approved protocol text and starts a task job under the approved
+         *     limits. 412 `approval_required` unless the experiment is `approved`;
+         *     412 `protocol_changed` if the current protocol is not the approved
+         *     one or the approval has passed its `expiresAt`. The usual job
+         *     preconditions apply (agent idle, budget, no reconciliation
+         *     outstanding). In the response, `experiment.approvalId` and
+         *     `experiment.approvedProtocolHash` are the approval and protocol this
+         *     attempt consumed. If the attempt ends without a recorded
+         *     result, the experiment returns to `protocolRegistered` and needs a
+         *     new approval.
+         */
+        post: operations["executeExperiment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/experiments/{experimentId}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start an independent review of an executed experiment.
+         * @description The Reviewer is given the approved protocol and the recorded results
+         *     by the Lab Manager, with their hashes, and must cite those hashes in
+         *     its verdict. 409 `conflict` unless the experiment is `executed` and
+         *     no other job is running in the lab; while the review runs, no other
+         *     agent in the lab can start work. If the review ends without a valid
+         *     verdict the experiment returns to `executed`.
+         */
+        post: operations["reviewExperiment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/experiments/{experimentId}/assessment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a person's opinion of a reviewed experiment. Optional and unsigned.
+         * @description Allowed only for a `reviewed` experiment (409 otherwise). It changes
+         *     no status and gates nothing. It is recorded on the experiment and in
+         *     the decision log with the actor and `authentication: unsigned`, and
+         *     it reaches agents only as labelled owner feedback. A request
+         *     carrying an `authorization` is rejected.
+         */
+        post: operations["assessExperiment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/experiments/{experimentId}/abandon": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End an experiment that will not be taken further. Unsigned; it only prevents work.
+         * @description Allowed from any state that is not final. Cancels a pending approval. Refused (409) while a job for the experiment is running.
+         */
+        post: operations["abandonExperiment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/labs/{labId}/escalations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Things a person should look at, newest first. */
+        get: operations["listEscalations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/escalations/{escalationId}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Acknowledge an escalation. It approves nothing and resumes nothing. */
+        post: operations["resolveEscalation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/labs/{labId}/checkpoints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Progress reports written after every `Health.policy.checkpointEvery` reviewed experiments, newest first. */
+        get: operations["listCheckpoints"];
         put?: never;
         post?: never;
         delete?: never;
@@ -531,7 +811,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List findings. */
+        /** List findings, newest first. */
         get: operations["listFindings"];
         put?: never;
         post?: never;
@@ -548,7 +828,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List the research decision log. */
+        /** List the research decision log, newest first (not approval decisions). */
         get: operations["listResearchDecisions"];
         put?: never;
         post?: never;
@@ -565,7 +845,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List handoffs. */
+        /** List handoffs between roles, newest first. */
         get: operations["listHandoffs"];
         put?: never;
         post?: never;
@@ -575,14 +855,18 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/labs/{labId}/artifacts": {
+    "/v1/labs/{labId}/artifacts/{hash}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Read one file from the lab repository at a commit. Confined to the repository; size-capped. */
+        /**
+         * One stored document, whole, by content hash.
+         * @description Only content that a record or protocol in this lab refers to. Never
+         *     truncated: protocols are at most 64 KiB and other bodies 128 KiB.
+         */
         get: operations["getArtifact"];
         put?: never;
         post?: never;
@@ -648,7 +932,7 @@ export interface components {
         /** Format: date-time */
         Timestamp: string;
         /** @enum {string} */
-        ErrorCode: "validation_failed" | "unauthenticated" | "actor_not_allowed" | "not_found" | "conflict" | "agent_already_running" | "agent_not_running" | "agent_busy" | "tmux_mode_active" | "job_not_cancellable" | "job_not_interrupted" | "reconciliation_required" | "approval_already_decided" | "signature_invalid" | "idempotency_conflict" | "cursor_expired" | "approval_expired" | "approval_required" | "budget_exceeded" | "isolation_required" | "protocol_changed" | "claude_code_failed" | "manager_degraded" | "rate_limited" | "internal_error";
+        ErrorCode: "validation_failed" | "unauthenticated" | "actor_not_allowed" | "not_found" | "conflict" | "agent_already_running" | "agent_not_running" | "agent_busy" | "tmux_mode_active" | "job_not_cancellable" | "job_not_interrupted" | "reconciliation_required" | "approval_already_decided" | "signature_invalid" | "idempotency_conflict" | "cursor_expired" | "approval_expired" | "approval_required" | "budget_exceeded" | "spend_metering_unavailable" | "subscription_limited" | "host_busy" | "disk_low" | "isolation_required" | "protocol_changed" | "claude_code_failed" | "manager_degraded" | "rate_limited" | "internal_error";
         ErrorResponse: {
             error: {
                 code: components["schemas"]["ErrorCode"];
@@ -660,11 +944,94 @@ export interface components {
             };
         };
         Health: {
+            /** @description Which rules are in force. Set on the host only; no endpoint changes it. */
+            policy: {
+                active: boolean;
+                /** @enum {string} */
+                mode: "manual" | "autonomous";
+                id: string | null;
+                /** @description sha256 of the canonical JSON of the policy file. Part of every PolicyDecision and of every binding. */
+                hash: string | null;
+                /** @description The most a lab's runtime limit may be set to. */
+                runtimeCapMinutes: number;
+                checkpointEvery: number | null;
+            };
+            spend: {
+                /**
+                 * @description `none`: no paid mechanism exists whose limits the Lab Manager can enforce, so no spending can be authorized and no charge can be verified.
+                 * @enum {string}
+                 */
+                metering: "none" | "active";
+            };
+            /** @description Whether model work is suspended because the Claude subscription's usage limit appears to be reached. */
+            subscription: {
+                /** @enum {string} */
+                state: "ok" | "limited";
+                until: components["schemas"]["Timestamp"] | null;
+                /**
+                 * @description `reported`: from the rate-limit report Claude Code sends with
+                 *     every model call. `inferred`: from the wording of a failed
+                 *     job, or nothing has been reported yet. Neither is measured by
+                 *     the Lab Manager; both arrive through the agent side.
+                 * @enum {string}
+                 */
+                basis: "reported" | "inferred";
+                reportedAt: components["schemas"]["Timestamp"] | null;
+                /** @description Per allowance window as Claude Code names it (for example five_hour, seven_day). */
+                windows: {
+                    [key: string]: {
+                        /** @description Fraction used, 0 to 1. */
+                        utilization: number;
+                        resetsAt: components["schemas"]["Timestamp"] | null;
+                    };
+                };
+                /** @description Paid usage beyond the subscription. If `inUse` is ever reported true the job is stopped, all model work is suspended and an `unauthorized_charge` escalation is raised. */
+                overage: {
+                    status: string | null;
+                    inUse: boolean;
+                };
+            };
+            resources: {
+                /** @description One limit for the whole host. At the limit a new job is refused with 429 `host_busy`. */
+                jobs: {
+                    running: number;
+                    hostLimit: number;
+                };
+                /** @description Below `minFreeBytes` no job starts (412 `disk_low`); below half of it running jobs are stopped. */
+                disk: {
+                    minFreeBytes: number;
+                    /** @description Per identity (agent, reviewer) and for the manager's own storage. Refreshed every 30 seconds. */
+                    freeBytes: {
+                        [key: string]: number | null;
+                    };
+                };
+                /** @description Memory, CPU time and process count per agent identity, read by its worker from its own control group. Null where the host does not expose it. */
+                identities: {
+                    [key: string]: {
+                        memoryBytes?: number | null;
+                        cpuSeconds?: number | null;
+                        processes?: number | null;
+                    };
+                };
+            };
+            reviewIndependence: components["schemas"]["ReviewIndependence"];
             /** @description What this deployment currently permits, so the UI can disable controls up front. */
             capabilities: {
+                /**
+                 * @description Manual mode: a standing rule the owner sets on the host. When
+                 *     allowed, an agent's Write of one record file directly inside
+                 *     its own outbox is permitted without a per-request approval.
+                 *     Always allowed under an autonomous policy.
+                 */
+                recordWrites: components["schemas"]["Capability"];
+                /** @description Deprecated; same as shell.executor. */
                 executorShell: components["schemas"]["Capability"];
                 unattendedExecution: components["schemas"]["Capability"];
                 tmuxMode: components["schemas"]["Capability"];
+                /** @description Per role, whether a job started now would have a shell, and on which boundary. */
+                shell: {
+                    [key: string]: components["schemas"]["ShellCapability"];
+                };
             };
             /** @enum {string} */
             status: "ok" | "degraded";
@@ -673,6 +1040,61 @@ export interface components {
             serviceVersion: string;
             degraded: boolean;
             reasons: ("claude_code_unavailable" | "claude_code_logged_out" | "tmux_unavailable" | "agent_isolation_missing" | "storage_error")[];
+        };
+        ShellCapability: {
+            allowed: boolean;
+            /**
+             * @description Why not. Known values: no_autonomy_policy, role_not_granted,
+             *     worker_unavailable, agent_isolation_missing, isolation_unverified,
+             *     isolation_check_failed, reviewer_identity_missing,
+             *     sandbox_unavailable.
+             */
+            reason: string | null;
+            /**
+             * @description What confines the shell. `osIdentity`: a dedicated OS user with
+             *     no administrative rights inside a hardened service.
+             *     `osIdentityAndCommandSandbox`: that, and every command also runs
+             *     in Claude Code's sandbox and cannot opt out of it.
+             * @enum {string|null}
+             */
+            boundary: "osIdentity" | "osIdentityAndCommandSandbox" | null;
+        };
+        /**
+         * @description `enforced` only when the Reviewer runs as a different OS user from
+         *     every other role AND the isolation checks of both identities pass,
+         *     which include that neither can read or write where the other keeps
+         *     its files. Otherwise `notEnforced`.
+         * @enum {string}
+         */
+        ReviewIndependence: "enforced" | "notEnforced";
+        /**
+         * @description A decision made by the host policy instead of a human. It has no
+         *     actor and no authorization, and must never be displayed as a
+         *     signature. Immutable.
+         */
+        PolicyDecision: {
+            id: string;
+            labId: string;
+            jobId: string | null;
+            agentId: string | null;
+            /** @enum {string} */
+            subject: "experiment" | "tool" | "job";
+            /** @description Experiment id, tool use id or job id. */
+            subjectId: string | null;
+            /** @description Known values: experiment.admit, shell.run, tool.use, sandbox.escape, request.tooLarge, interrupted.acknowledge. */
+            rule: string;
+            /** @enum {string} */
+            outcome: "allow" | "deny";
+            summary: string;
+            /** @description What the rule matched on. */
+            facts: {
+                [key: string]: unknown;
+            };
+            policy: {
+                id: string;
+                hash: string;
+            };
+            at: components["schemas"]["Timestamp"];
         };
         Capability: {
             allowed: boolean;
@@ -686,11 +1108,11 @@ export interface components {
          *     `signature` is base64 of the 64-byte Ed25519 signature over the UTF-8
          *     bytes of these ten lines joined by "\n" (no trailing newline):
          *
-         *       lab-authz-v2
-         *       <action>        approval.decision | job.retry | budget.set
-         *       <targetId>      approvalId | jobId | labId
+         *       lab-authz-v3
+         *       <action>        approval.decision | budget.set
+         *       <targetId>      approvalId | labId
          *       <bindingHash>   sha256 hex of the RFC 8785 canonical JSON of the binding
-         *       <outcome>       approved | denied | retry | set
+         *       <outcome>       approved | denied | set
          *       <actorId>       must equal X-Lab-Actor-Id
          *       <signedAt>      exactly as sent
          *       <expiresAt>     exactly as sent
@@ -699,8 +1121,8 @@ export interface components {
          *                       string when there is no note)
          *
          *     The binding is what is being authorized (see ApprovalBinding,
-         *     JobBinding, BudgetBinding). The Lab Manager publishes the binding and
-         *     its hash on Approval and Job; Runekeeper recomputes the hash from the
+         *     BudgetBinding). The Lab Manager publishes the binding and
+         *     its hash on Approval; Runekeeper recomputes the hash from the
          *     binding it shows the human and refuses to sign on a mismatch. For a
          *     budget change Runekeeper builds the binding itself.
          *
@@ -749,9 +1171,12 @@ export interface components {
          *     strings with exactly six fractional digits (JavaScript:
          *     `n.toFixed(6)`), so the hash never depends on how a JSON library
          *     prints a floating-point number. Null means not set.
+         *
+         *     No dollar figure appears in a binding other than BudgetBinding. The
+         *     notional model cost is an agent-side estimate and gates nothing a
+         *     signature covers, so it is not signed.
          */
         BindingLimits: {
-            costUsd: string | null;
             wallClockMinutes: string | null;
             maxTurns?: number | null;
         };
@@ -766,9 +1191,10 @@ export interface components {
             role: components["schemas"]["AgentRole"];
             jobId: string | null;
             /**
-             * @description For an approval raised by a job, exactly that job's
-             *     `experimentId` (null when the job belongs to no experiment). A
-             *     client that rebuilds the binding takes it from the job record.
+             * @description Kind `permission`: exactly the requesting job's `experimentId`
+             *     (null when the job belongs to no experiment); a client that
+             *     rebuilds the binding takes it from the job record. Kind
+             *     `experiment`: `request.experimentId`, and `jobId` is null.
              */
             experimentId: string | null;
             requestHash: string;
@@ -776,33 +1202,29 @@ export interface components {
             limits: components["schemas"]["BindingLimits"];
             estimate: components["schemas"]["BindingLimits"];
             expiresAt: components["schemas"]["Timestamp"];
-        };
-        /** @description What a human authorizes by retrying an interrupted job. */
-        JobBinding: {
-            /** @constant */
-            contractVersion: "1.0";
-            jobId: string;
-            labId: string;
-            agentId: string;
-            /** @enum {string} */
-            kind: "message" | "task";
-            title: string;
-            experimentId: string | null;
-            instructionsHash: string;
-            limits: components["schemas"]["BindingLimits"];
+            /**
+             * @description `Health.policy.hash` when the approval was requested; null in
+             *     manual mode without a policy file. A decision is refused (409,
+             *     and the approval is cancelled) if the policy in force differs.
+             */
+            policyHash: string | null;
         };
         /**
-         * @description What a human authorizes by changing a lab's budget. Built by
-         *     Runekeeper. `previousLimits` must equal the limits in force when the
-         *     call arrives; an authorization made against a stale view does not
-         *     verify (403 `signature_invalid`). Refetch the snapshot and sign again.
+         * @description What a human authorizes by setting a lab's spending limit. Built by
+         *     Runekeeper. `previousSpendLimitUsd` must equal the limit in force
+         *     when the call arrives, and `policyHash` must equal
+         *     `Health.policy.hash` (null without a policy): an authorization made
+         *     against a stale view, or under another policy, does not verify (403
+         *     `signature_invalid`). Amounts are decimal strings with exactly six
+         *     fractional digits.
          */
         BudgetBinding: {
             /** @constant */
             contractVersion: "1.0";
             labId: string;
-            previousLimits: components["schemas"]["BindingLimits"];
-            limits: components["schemas"]["BindingLimits"];
+            previousSpendLimitUsd: string;
+            spendLimitUsd: string;
+            policyHash: string | null;
         };
         Actor: {
             id: string;
@@ -818,6 +1240,9 @@ export interface components {
             status: components["schemas"]["LabStatus"];
             cycleStage: components["schemas"]["CycleStage"];
             pendingApprovalCount: number;
+            openEscalationCount: number;
+            /** @description True when the host policy lets this lab advance without a human approving each step. */
+            autonomous: boolean;
             lastActivityAt: components["schemas"]["Timestamp"];
         };
         Lab: components["schemas"]["LabSummary"] & {
@@ -826,8 +1251,9 @@ export interface components {
             priorities: string[];
             createdAt: components["schemas"]["Timestamp"];
         };
-        /** @description Always explicit; there is no unlimited budget. */
+        /** @deprecated */
         BudgetLimits: {
+            /** @description Money only: the signed spending limit. */
             costUsd: number;
             wallClockMinutes: number;
         };
@@ -837,10 +1263,46 @@ export interface components {
             /** @default 10080 */
             experimentTtlMinutes: number;
         };
+        /**
+         * @description Three kinds of number that must never be mixed or summed. Each block
+         *     says where its numbers come from in `source`.
+         */
         Budget: {
+            /** @description Measured by the Lab Manager. Cannot be under-reported by an agent. This is the limit that binds. */
+            runtime: {
+                limitWallClockMinutes: number;
+                usedWallClockMinutes: number;
+                /** @constant */
+                source: "managerMeasured";
+            };
+            /** @description Money beyond what the owner already pays for. */
+            spend: {
+                /** @description Set only by a signed `budget.set`. Default 0. */
+                signedLimitUsd: number;
+                /** @description Charges the Lab Manager verified itself. Null, not 0, while metering is `none`: nothing can be verified. */
+                verifiedChargesUsd: number | null;
+                remainingUsd: number | null;
+                /** @enum {string} */
+                metering: "none" | "active";
+                /** @constant */
+                source: "managerVerified";
+            };
+            /**
+             * @description Reported by Claude Code on the agent side. Never a charge and
+             *     never verified. `notionalModelCostUsd` is what the same usage
+             *     would cost at API prices; under a subscription nothing is owed
+             *     for it.
+             */
+            estimates: {
+                notionalModelCostUsd: number;
+                tokens: number;
+                /** @constant */
+                source: "agentReported";
+            };
             limits: components["schemas"]["BudgetLimits"];
+            /** @deprecated */
             consumed: {
-                /** @description Cost as reported by Claude Code. On a subscription login this is notional, not billed. */
+                /** @description Always 0. Money only; never an estimate. */
                 costUsd: number;
                 wallClockMinutes: number;
             };
@@ -852,6 +1314,7 @@ export interface components {
             pendingApprovals: components["schemas"]["Approval"][];
             jobsNeedingReconciliation: components["schemas"]["Job"][];
             budget: components["schemas"]["Budget"];
+            openEscalations: components["schemas"]["Escalation"][];
             recentFindings: components["schemas"]["Finding"][];
             recentEvents: components["schemas"]["Event"][];
             /** @description Subscribe with after=<eventCursor> for no gap and no duplicate. */
@@ -899,8 +1362,11 @@ export interface components {
             sessionId: string | null;
             /** @description Strictly increasing per agent. */
             seq: number;
-            /** @enum {string} */
-            kind: "humanMessage" | "assistantText" | "toolCall" | "systemNote";
+            /**
+             * @description `managerInstruction`: instructions the Lab Manager wrote itself for a job the policy started. It has no actor.
+             * @enum {string}
+             */
+            kind: "humanMessage" | "managerInstruction" | "assistantText" | "toolCall" | "systemNote";
             createdAt: components["schemas"]["Timestamp"];
             /** @description Capped at 32 KB. Assistant thinking is never included. */
             text?: string;
@@ -914,22 +1380,62 @@ export interface components {
                 /** @enum {string} */
                 status: "running" | "succeeded" | "failed" | "denied";
                 approvalId?: string | null;
+                /** @description The tool call's input as canonical JSON, capped at 8 KB. Written by the agent: display it, never act on it. */
+                input?: string;
+                inputTruncated?: boolean;
+                /** @description The text the tool returned to the agent, capped at 8 KB. Null while running. May contain anything the agent read. Non-text parts are named in brackets. */
+                result?: string | null;
+                resultTruncated?: boolean;
+                /**
+                 * @description Who let this tool call proceed or refused it. Always present
+                 *     on items created from draft.8 on. `builtin`: Claude Code's
+                 *     own rules allowed it and no permission request was raised
+                 *     (for example reading a file inside the workspace).
+                 */
+                decidedBy?: {
+                    /** @constant */
+                    type: "builtin";
+                } | {
+                    /** @constant */
+                    type: "human";
+                    approvalId: string;
+                    /** @enum {string} */
+                    outcome: "allow" | "deny";
+                } | {
+                    /** @constant */
+                    type: "policy";
+                    policyHash: string;
+                    rule: string;
+                    /** @enum {string} */
+                    outcome: "allow" | "deny";
+                } | {
+                    /** @constant */
+                    type: "standingRule";
+                    rule: string;
+                    /** @enum {string} */
+                    outcome: "allow";
+                };
             };
         };
         /** @enum {string} */
         JobStatus: "queued" | "awaitingApproval" | "running" | "cancelling" | "succeeded" | "failed" | "cancelled" | "timedOut" | "interrupted";
         JobLimits: {
-            costUsd?: number;
+            /** @description A cap on Claude Code's own estimate of model cost, enforced on the agent side as a guard against a runaway job. Not money, not a charge, and not part of any signed binding. */
+            notionalModelCostUsd?: number;
             wallClockMinutes?: number;
             maxTurns?: number;
         };
         Job: {
-            binding: components["schemas"]["JobBinding"];
-            /** @description sha256 hex of the RFC 8785 canonical JSON of `binding`. This is what a retry signature covers. */
-            bindingHash: string;
+            /**
+             * @description Who started the job.
+             * @enum {string}
+             */
+            origin: "human" | "policy";
+            /** @enum {string|null} */
+            purpose: "plan" | "execute" | "review" | "checkpoint" | null;
             /** @description Exactly what the agent was asked to do. For kind `message`, the message text. Always complete on `GET /v1/jobs/{id}`; capped at 2 KB elsewhere (compare `instructionsHash`). */
             instructions: string;
-            /** @description sha256 hex of the UTF-8 bytes of the complete instructions. Part of the job's binding. */
+            /** @description sha256 hex of the UTF-8 bytes of the complete instructions. */
             instructionsHash: string;
             id: string;
             labId: string;
@@ -943,8 +1449,13 @@ export interface components {
             reconciliation?: {
                 /** @enum {string} */
                 resolution: "acknowledge" | "retry";
-                actor: components["schemas"]["Actor"];
-                note?: string;
+                /** @description Null when the policy acknowledged it. */
+                actor: components["schemas"]["Actor"] | null;
+                policy?: {
+                    id: string;
+                    hash: string;
+                };
+                note?: string | null;
                 at: components["schemas"]["Timestamp"];
                 retryJobId?: string | null;
             } | null;
@@ -954,7 +1465,16 @@ export interface components {
             experimentId?: string | null;
             limits: components["schemas"]["JobLimits"];
             usage: {
+                /**
+                 * @deprecated
+                 * @description Same as notionalModelCostUsd. Not a charge. Kept for one release for a draft.6 client; removed in the next draft.
+                 */
                 costUsd: number;
+                /** @description Agent-reported estimate at API prices. Not a charge. */
+                notionalModelCostUsd: number;
+                /** @description Agent-reported. */
+                tokens: number;
+                /** @description Measured by the Lab Manager. */
                 wallClockSeconds: number;
                 turns: number;
             };
@@ -1011,7 +1531,9 @@ export interface components {
                 };
             } | {
                 experimentId: string;
-                /** @description The approval is bound to this content hash. */
+                title: string;
+                hypothesis: string | null;
+                protocolVersion: number;
                 protocolHash: string;
             } | {
                 requestedLimits: components["schemas"]["BudgetLimits"];
@@ -1020,7 +1542,8 @@ export interface components {
                 description: string;
             };
             estimate: {
-                costUsd?: number | null;
+                /** @description Agent-reported estimate. Not money. */
+                notionalModelCostUsd?: number | null;
                 wallClockMinutes?: number | null;
                 notes?: string | null;
             };
@@ -1035,9 +1558,11 @@ export interface components {
                 decidedAt: components["schemas"]["Timestamp"];
             } | null;
         };
+        /** @description Stored, immutable content addressed by the SHA-256 of its bytes. */
         ArtifactRef: {
-            path: string;
-            commit: string;
+            hash: string;
+            /** @description Bytes. */
+            size: number;
         };
         ResearchRecord: {
             id: string;
@@ -1046,58 +1571,249 @@ export interface components {
             status: string;
             createdAt: components["schemas"]["Timestamp"];
             updatedAt: components["schemas"]["Timestamp"];
+            /** @description The record's body, when it has one. */
             artifact: components["schemas"]["ArtifactRef"] | null;
         };
+        /** @description Fields common to records submitted through an agent's outbox or written by a human action. */
+        AgentRecord: components["schemas"]["ResearchRecord"] & {
+            /** @enum {string} */
+            kind: "result" | "review" | "finding" | "handoff" | "decision" | "escalation" | "checkpoint";
+            experimentId: string | null;
+            /** @description The job whose outbox the record came from. */
+            jobId: string | null;
+            /** @description The submitting agent's role; null for a record written by a human action. */
+            role: components["schemas"]["AgentRole"] | null;
+            actor?: components["schemas"]["Actor"];
+        };
+        /** @enum {string} */
+        QuestionStatus: "open" | "active" | "answered" | "dropped";
         Question: components["schemas"]["ResearchRecord"] & {
+            status?: components["schemas"]["QuestionStatus"];
             /** @enum {string} */
             priority: "low" | "medium" | "high";
-            /** @enum {string} */
-            status?: "open" | "active" | "answered" | "dropped";
-            createdBy?: components["schemas"]["Actor"];
+            body: string | null;
+            createdBy: components["schemas"]["Actor"];
         };
-        /** @enum {string} */
-        ExperimentStatus: "draft" | "protocolRegistered" | "awaitingApproval" | "approved" | "running" | "executed" | "underReview" | "accepted" | "rejected" | "abandoned";
+        /**
+         * @description protocolRegistered -> approved -> running -> executed -> underReview
+         *     -> reviewed. In manual mode `awaitingApproval` sits between the first
+         *     two. `blocked`: the proposal declares a paid resource or credential.
+         *     `abandoned` from any state that is not final. Denial, expiry or a
+         *     failed attempt return it to protocolRegistered; a revision registers
+         *     a new version and is admitted or sent for approval again. A review
+         *     without a valid verdict returns it to executed. `draft` is reserved.
+         * @enum {string}
+         */
+        ExperimentStatus: "draft" | "protocolRegistered" | "awaitingApproval" | "approved" | "running" | "executed" | "underReview" | "reviewed" | "blocked" | "abandoned";
+        ProtocolVersion: {
+            version: number;
+            hash: string;
+            registeredAt: components["schemas"]["Timestamp"];
+            artifact: components["schemas"]["ArtifactRef"];
+        };
         Experiment: components["schemas"]["ResearchRecord"] & {
             status?: components["schemas"]["ExperimentStatus"];
-            questionId?: string | null;
+            questionId: string | null;
             hypothesis: string | null;
-            protocol: {
-                version: number;
-                hash: string;
-                registeredAt: components["schemas"]["Timestamp"];
-                artifact: components["schemas"]["ArtifactRef"];
-            } | null;
+            /** @description The current version. */
+            protocol: components["schemas"]["ProtocolVersion"];
+            /** @description Set while an approval for exactly this hash is in force or was used for the recorded execution. */
+            approvedProtocolHash: string | null;
+            /** @description The most recent approval raised for this experiment. */
+            approvalId: string | null;
+            /** @description While the status is `approved`, the moment the approval lapses; otherwise null. */
+            approvedUntil: components["schemas"]["Timestamp"] | null;
+            /** @description The limits an execution runs under. `wallClockMinutes` and `maxTurns` are bound into a human approval; the notional model cost is not. */
+            limits: {
+                /** @description Cap on the agent-side estimate. Not money. */
+                notionalModelCostUsd: number;
+                wallClockMinutes: number;
+                maxTurns: number;
+            };
+            /** @description The proposing agent's own estimate. Agent-reported. */
+            estimate: {
+                notionalModelCostUsd: number | null;
+                wallClockMinutes: number | null;
+                notes: string | null;
+            };
             /** @enum {string|null} */
             reviewVerdict: "supported" | "notSupported" | "inconclusive" | "methodologyProblem" | null;
+            /** @description How the current protocol came to be allowed to run. Exactly one shape, or null while it is not. */
+            admission: null | {
+                /** @constant */
+                type: "human";
+                approvalId: string;
+            } | {
+                /** @constant */
+                type: "policy";
+                decisionId: string;
+                policyId: string;
+                policyHash: string;
+                rule: string;
+                at: components["schemas"]["Timestamp"];
+            };
+            /** @description Executions of the current protocol version that ended without a result. */
+            attempts: number;
+            /** @description The policy will not run it again by itself: it was interrupted, or used up its attempts. The Advisor must revise or abandon it. */
+            needsDecision: boolean;
+            /** @description What the proposing agent says the experiment needs beyond what the lab already has. Agent-reported. */
+            requires: {
+                paidResources: string[];
+                credentials: string[];
+            };
+            /** @enum {string|null} */
+            blockedReason: "paid_resources_unavailable" | null;
+            /** @description The Lab Manager's own copy of the experiment's working directory, taken when the execution ended. Null if the directory did not exist. */
+            snapshot: null | {
+                /** @description sha256 of the tar archive, computed by the Lab Manager from the bytes it received. */
+                hash: string;
+                size: number;
+                /** @description What git reported in the Executor's directory. Reported by the agent side; the repository is inside the snapshot. */
+                commit: string | null;
+                takenAt: components["schemas"]["Timestamp"];
+            };
+            /** @description As it was when the review verdict was recorded. Null before that. */
+            reviewIndependence: components["schemas"]["ReviewIndependence"] | null;
+            /** @description A person's optional opinion. Unsigned; never display it as a signature. */
+            assessment: null | {
+                /** @enum {string} */
+                outcome: "agree" | "disagree";
+                note?: string | null;
+                actor?: components["schemas"]["Actor"];
+                at?: components["schemas"]["Timestamp"];
+                /** @constant */
+                authentication?: "unsigned";
+            };
+            proposedBy: {
+                agentId: string;
+                role: components["schemas"]["AgentRole"];
+            };
         };
         ExperimentDetail: components["schemas"]["Experiment"] & {
+            protocolVersions: components["schemas"]["ProtocolVersion"][];
             jobs: components["schemas"]["Job"][];
             approvals: components["schemas"]["Approval"][];
-            results: components["schemas"]["ArtifactRef"][];
-            review: components["schemas"]["ArtifactRef"] | null;
+            results: components["schemas"]["Result"][];
+            review: components["schemas"]["Review"] | null;
         };
-        Finding: components["schemas"]["ResearchRecord"] & {
-            summary?: string;
-            supportingExperimentIds: string[];
+        /** @description What the Executor recorded for one execution. The protocol hash is assigned by the Lab Manager, not claimed by the agent. */
+        Result: components["schemas"]["AgentRecord"] & {
+            protocolVersion: number;
+            protocolHash: string;
+        };
+        /** @description A verdict the Lab Manager accepted because it cites exactly the protocol, results and snapshot issued for review. */
+        Review: components["schemas"]["AgentRecord"] & {
             /** @enum {string} */
+            verdict: "supported" | "notSupported" | "inconclusive" | "methodologyProblem";
+            protocolHash: string;
+            resultHashes: string[];
+            snapshotHash: string | null;
+            independence: components["schemas"]["ReviewIndependence"];
+        };
+        Finding: components["schemas"]["AgentRecord"] & {
+            summary: string;
+            supportingExperimentIds: string[];
+            /** @description The review verdict of each cited experiment, or null where there is none yet. A finding may rest on a negative verdict. */
+            supportingVerdicts: {
+                [key: string]: string | null;
+            };
+            /**
+             * @description `reviewed` only when it cites at least one experiment and every cited experiment has a recorded review. Read `supportingVerdicts` for what the reviews said.
+             * @enum {string}
+             */
             reviewStatus: "unreviewed" | "reviewed" | "disputed";
         };
-        Handoff: components["schemas"]["ResearchRecord"] & {
+        Handoff: components["schemas"]["AgentRecord"] & {
             fromRole: components["schemas"]["AgentRole"];
             toRole: components["schemas"]["AgentRole"];
-            jobId?: string | null;
+        };
+        ResearchDecision: components["schemas"]["AgentRecord"] & {
+            /**
+             * @description Present when the entry records owner feedback, an abandonment or a question's resolution.
+             * @enum {string}
+             */
+            outcome?: "agree" | "disagree" | "abandoned" | "answered" | "dropped";
+            reviewVerdict?: string | null;
+            questionId?: string;
+            /** @enum {string} */
+            source?: "human";
+            /**
+             * @description Present on owner feedback. Nothing in the decision log is signed.
+             * @constant
+             */
+            authentication?: "unsigned";
+        };
+        /**
+         * @description Something a person should look at: a stop condition the Lab Manager
+         *     met (`source: manager`) or a request from an agent. Resolving one is
+         *     an acknowledgement only.
+         */
+        Escalation: components["schemas"]["AgentRecord"] & {
+            /** @enum {string} */
+            status?: "open" | "resolved";
+            /** @enum {string} */
+            reason: "unauthorized_charge" | "security_boundary" | "runtime_exhausted" | "no_open_questions" | "repeated_failures" | "no_progress" | "disk_low" | "human_decision";
+            /** @enum {string} */
+            source: "manager" | "agent";
+            resolution?: {
+                actor: components["schemas"]["Actor"];
+                note?: string | null;
+                at: components["schemas"]["Timestamp"];
+            };
+        };
+        /**
+         * @description A progress report. `source: agent`: the Orchestrator's narrative,
+         *     with the Lab Manager's own measurements attached as `facts`.
+         *     `source: manager`: facts only, written when the Orchestrator
+         *     produced nothing. A checkpoint is for visibility; it gates nothing.
+         */
+        Checkpoint: components["schemas"]["AgentRecord"] & {
+            /** @enum {string} */
+            source: "agent" | "manager";
+            facts: {
+                at: components["schemas"]["Timestamp"];
+                experimentsReviewed: number;
+                experiments: {
+                    [key: string]: unknown;
+                }[];
+                runtime: {
+                    [key: string]: unknown;
+                };
+                /** @description Job counts by status. */
+                jobs: {
+                    [key: string]: number;
+                };
+                /** @description Agent-reported. */
+                estimates: {
+                    [key: string]: unknown;
+                };
+                spend: {
+                    [key: string]: unknown;
+                };
+                /** @description What ran without a person, by rule. */
+                policyDecisions: {
+                    [key: string]: {
+                        allow: number;
+                        deny: number;
+                    };
+                };
+                openQuestions: {
+                    [key: string]: unknown;
+                }[];
+            };
         };
         Artifact: {
-            path: string;
-            commit: string;
+            hash: string;
+            size: number;
             contentType: string;
             /** @enum {string} */
-            encoding: "utf8" | "base64";
+            encoding: "utf8";
             content: string;
-            truncated: boolean;
+            /** @constant */
+            truncated: false;
         };
         /** @enum {string} */
-        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.statusChanged" | "agent.stateChanged" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "approval.requested" | "approval.resolved" | "question.created" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged";
+        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.statusChanged" | "agent.stateChanged" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged";
         ManagerStartedData: {
             serviceVersion: string;
             interruptedJobs: {
@@ -1107,7 +1823,7 @@ export interface components {
         };
         BudgetThresholdData: {
             /** @enum {string} */
-            metric: "costUsd" | "wallClockMinutes";
+            metric: "wallClockMinutes";
             /** @description Fraction of the limit, e.g. 0.8. */
             threshold: number;
             consumed: number;
@@ -1127,9 +1843,14 @@ export interface components {
              *     id. By type: lab.* -> Lab · agent.* -> Agent · transcript.* ->
              *     TranscriptItem · job.* -> Job · approval.* -> Approval
              *     (approval.resolved also fires for expired and cancelled) ·
-             *     question.created -> Question · experiment.updated -> Experiment ·
-             *     finding.recorded -> Finding · decision.recorded -> ResearchRecord ·
-             *     handoff.recorded -> Handoff · budget.updated -> Budget (on job end
+             *     question.created, question.updated -> Question ·
+             *     experiment.updated -> Experiment · result.recorded -> Result ·
+             *     review.recorded -> Review · finding.recorded -> Finding ·
+             *     decision.recorded -> ResearchDecision · handoff.recorded -> Handoff ·
+             *     escalation.recorded, escalation.resolved -> Escalation ·
+             *     checkpoint.recorded -> Checkpoint · policy.decided ->
+             *     PolicyDecision (experiment and job decisions only; tool
+             *     decisions are on the transcript item and in the list) · budget.updated -> Budget (on job end
              *     and at most every 30 seconds while a job runs) ·
              *     budget.thresholdCrossed -> BudgetThresholdData · manager.started ->
              *     ManagerStartedData · manager.healthChanged -> Health.
@@ -1160,6 +1881,7 @@ export interface components {
     };
     parameters: {
         LabId: string;
+        ExperimentId: string;
         AgentId: string;
         JobId: string;
         ApprovalId: string;
@@ -1318,20 +2040,81 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    limits: components["schemas"]["BudgetLimits"];
+                    spendLimitUsd: number;
                     note?: string;
                     authorization: components["schemas"]["SignedAuthorization"];
                 };
             };
         };
         responses: {
-            /** @description Limits updated; `lab.updated` and `budget.updated` are emitted with the actor. */
+            /** @description Limit updated; `budget.updated` is emitted with the actor. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Budget"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setLabRuntimeLimit: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                labId: components["parameters"]["LabId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    wallClockMinutes: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Limit updated; `budget.updated` is emitted with the actor. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listPolicyDecisions: {
+        parameters: {
+            query?: {
+                subject?: "experiment" | "tool" | "job";
+                before?: string;
+                limit?: components["parameters"]["Limit"];
+            };
+            header?: never;
+            path: {
+                labId: components["parameters"]["LabId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of policy decisions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["PolicyDecision"][];
+                        nextCursor: components["schemas"]["Cursor"];
+                    };
                 };
             };
             default: components["responses"]["Error"];
@@ -1689,6 +2472,79 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    listAgentFiles: {
+        parameters: {
+            query?: {
+                path?: string;
+            };
+            header?: never;
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Up to 500 entries, sorted by name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        agentId: string;
+                        path: string;
+                        truncated: boolean;
+                        entries: {
+                            name: string;
+                            /**
+                             * @description `other` includes symbolic links; they are listed, never followed out of the workspace.
+                             * @enum {string}
+                             */
+                            type: "file" | "directory" | "other";
+                            size: number;
+                            modifiedAt: string | null;
+                        }[];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    readAgentFile: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The file's text, or binary true with null content. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        agentId: string;
+                        path: string;
+                        size: number;
+                        /** @enum {string} */
+                        encoding: "utf8";
+                        content: string | null;
+                        truncated: boolean;
+                        binary: boolean;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     listJobs: {
         parameters: {
             query?: {
@@ -1827,8 +2683,6 @@ export interface operations {
                     /** @enum {string} */
                     resolution: "acknowledge" | "retry";
                     note?: string;
-                    /** @description Required when resolution is `retry`. */
-                    authorization?: components["schemas"]["SignedAuthorization"];
                 };
             };
         };
@@ -2018,8 +2872,39 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Created. */
+            /** @description Created with status `open`. */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Question"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setQuestionStatus: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    status: components["schemas"]["QuestionStatus"];
+                };
+            };
+        };
+        responses: {
+            /** @description The question. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2060,19 +2945,245 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                experimentId: string;
+                experimentId: components["parameters"]["ExperimentId"];
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Experiment with its jobs and approvals. */
+            /** @description Experiment detail. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["ExperimentDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    requestExperimentApproval: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                experimentId: components["parameters"]["ExperimentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The experiment, now `awaitingApproval`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Experiment"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    executeExperiment: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                experimentId: components["parameters"]["ExperimentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The experiment and the job that was started. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        experiment: components["schemas"]["Experiment"];
+                        job: components["schemas"]["Job"];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    reviewExperiment: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                experimentId: components["parameters"]["ExperimentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The experiment and the job that was started. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        experiment: components["schemas"]["Experiment"];
+                        job: components["schemas"]["Job"];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    assessExperiment: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                experimentId: components["parameters"]["ExperimentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    outcome: "agree" | "disagree";
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The experiment with the assessment recorded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Experiment"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    abandonExperiment: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                experimentId: components["parameters"]["ExperimentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The abandoned experiment. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Experiment"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listEscalations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                labId: components["parameters"]["LabId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Escalations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Escalation"][];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    resolveEscalation: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                escalationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    note?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The resolved escalation; `escalation.resolved` is emitted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Escalation"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listCheckpoints: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                labId: components["parameters"]["LabId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Checkpoints. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Checkpoint"][];
+                    };
                 };
             };
             default: components["responses"]["Error"];
@@ -2114,14 +3225,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Research decision log (not approval decisions). */
+            /** @description Decisions recorded by agents, and unsigned feedback and abandonments recorded by a person. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        items: components["schemas"]["ResearchRecord"][];
+                        items: components["schemas"]["ResearchDecision"][];
                     };
                 };
             };
@@ -2139,7 +3250,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Structured handoffs between agents. */
+            /** @description Handoffs. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2155,21 +3266,17 @@ export interface operations {
     };
     getArtifact: {
         parameters: {
-            query: {
-                /** @description Repository-relative path. Absolute paths and `..` segments are rejected. */
-                path: string;
-                /** @description Commit sha. Defaults to the head of `main`. */
-                ref?: string;
-            };
+            query?: never;
             header?: never;
             path: {
                 labId: components["parameters"]["LabId"];
+                hash: string;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description File content. */
+            /** @description The document. */
             200: {
                 headers: {
                     [name: string]: unknown;

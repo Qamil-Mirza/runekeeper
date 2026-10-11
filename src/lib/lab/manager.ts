@@ -6,12 +6,16 @@ import {
   type Lab,
   type LabAction,
   type LabAgent,
+  type LabBudget,
   type LabClientErrorCode,
   type LabConnectionStatus,
   type LabHealth,
+  type LabJob,
+  type LabJobPage,
   type LabSnapshot,
   type LabSummary,
   type LabTranscriptItem,
+  type LabTranscriptPage,
 } from "./types";
 
 /**
@@ -321,17 +325,108 @@ export async function runAgentAction(
   });
 }
 
-/** The newest transcript items, in ascending order. */
-export async function getAgentTranscript(
+/** Cursors are opaque to Runekeeper but must not be able to alter the path. */
+export function isValidCursor(cursor: unknown): cursor is string {
+  return typeof cursor === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(cursor);
+}
+
+function pageQuery(q: { before?: string; after?: string; limit?: number }, extra: Record<string, string> = {}) {
+  const params = new URLSearchParams(extra);
+  for (const name of ["before", "after"] as const) {
+    const cursor = q[name];
+    if (cursor === undefined) continue;
+    if (!isValidCursor(cursor)) {
+      throw new LabManagerError(400, "validation_failed", "Invalid cursor", false);
+    }
+    params.set(name, cursor);
+  }
+  params.set("limit", String(Math.min(Math.max(1, Math.trunc(q.limit ?? 50)), 200)));
+  return params.toString();
+}
+
+/**
+ * A page of transcript items in ascending order. Without a cursor, the
+ * newest; `before` pages back, `after` returns what was added since.
+ */
+export async function getAgentTranscriptPage(
   config: LabConfig,
   actor: LabActor,
   agentId: string,
-  limit = 20
-): Promise<LabTranscriptItem[]> {
-  const res = await call<{ items: LabTranscriptItem[] }>(config, {
+  q: { before?: string; after?: string; limit?: number } = {}
+): Promise<LabTranscriptPage> {
+  return call<LabTranscriptPage>(config, {
     method: "GET",
-    path: `/v1/agents/${assertId(agentId)}/transcript?limit=${Math.min(Math.max(1, Math.trunc(limit)), 200)}`,
+    path: `/v1/agents/${assertId(agentId)}/transcript?${pageQuery(q)}`,
     actor,
   });
-  return res.items;
+}
+
+/** Gives the agent one instruction. Refused with 409 while it is busy. */
+export async function sendAgentMessage(
+  config: LabConfig,
+  actor: LabActor,
+  idempotencyKey: string,
+  agentId: string,
+  text: string
+): Promise<{ job: LabJob; transcriptItem: LabTranscriptItem }> {
+  return call(config, {
+    method: "POST",
+    path: `/v1/agents/${assertId(agentId)}/messages`,
+    actor,
+    idempotencyKey,
+    body: { text },
+  });
+}
+
+// ─── Jobs ────────────────────────────────────────────────────────────────────
+
+/** Instructions and titled tasks alike, newest first. */
+export async function listJobs(
+  config: LabConfig,
+  actor: LabActor,
+  labId: string,
+  q: { agentId?: string; before?: string; limit?: number } = {}
+): Promise<LabJobPage> {
+  const extra: Record<string, string> = { kind: "all" };
+  if (q.agentId !== undefined) extra.agentId = assertId(q.agentId);
+  return call<LabJobPage>(config, {
+    method: "GET",
+    path: `/v1/labs/${assertId(labId)}/jobs?${pageQuery({ before: q.before, limit: q.limit }, extra)}`,
+    actor,
+  });
+}
+
+export async function getJob(config: LabConfig, actor: LabActor, jobId: string): Promise<LabJob> {
+  return call<LabJob>(config, { method: "GET", path: `/v1/jobs/${assertId(jobId)}`, actor });
+}
+
+export async function cancelJob(
+  config: LabConfig,
+  actor: LabActor,
+  idempotencyKey: string,
+  jobId: string
+): Promise<LabJob> {
+  return call<LabJob>(config, {
+    method: "POST",
+    path: `/v1/jobs/${assertId(jobId)}/cancel`,
+    actor,
+    idempotencyKey,
+  });
+}
+
+/** Total minutes agents may run in this lab. Not money, so not signed. */
+export async function setRuntimeLimit(
+  config: LabConfig,
+  actor: LabActor,
+  idempotencyKey: string,
+  labId: string,
+  wallClockMinutes: number
+): Promise<LabBudget> {
+  return call<LabBudget>(config, {
+    method: "POST",
+    path: `/v1/labs/${assertId(labId)}/runtime-limit`,
+    actor,
+    idempotencyKey,
+    body: { wallClockMinutes },
+  });
 }
