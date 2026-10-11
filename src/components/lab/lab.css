@@ -228,6 +228,10 @@
 .lab-entry-agent {
   border-left-color: var(--lab-ok);
 }
+.lab-entry-delegated {
+  border-left-color: var(--lab-warn);
+  background: color-mix(in srgb, var(--lab-warn) 6%, transparent);
+}
 .lab-entry-tool,
 .lab-entry-note {
   background: transparent;

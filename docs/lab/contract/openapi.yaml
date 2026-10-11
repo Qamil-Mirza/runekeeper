@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Lab Manager API
-  version: 1.0.0-draft.9
+  version: 1.0.0-draft.11
   summary: Contract between Runekeeper (client) and the Lab Manager (server).
   description: |
     Status: DRAFT under joint review. Implemented by the Lab Manager, which
@@ -23,6 +23,29 @@ info:
     - PATCH is naturally idempotent and takes no key.
     - Research endpoints (tag `research`) are implemented but new: they
       have not yet been used by a client and may still change before 1.0.
+
+    What changed in draft.11 (additive)
+    - Each entry of `Job.delegations` gains `body`: for a refused handoff,
+      the instructions the target would have been given (capped at 8000
+      characters), so a person can send them as their own instruction. Null
+      when dispatched.
+
+    What changed in draft.10 (additive; nothing signed changed)
+    - Delegation by the Orchestrator, a host setting that is off by default
+      (`Health.capabilities.delegation`). When on, in manual mode, each
+      handoff the Orchestrator records while answering a message from the
+      owner is started by the manager as a task for the role it names: at
+      most `Health.limits.delegationsPerMessage`, one hop only, nothing
+      queued. See `docs/api/2026-10-11-delegation-draft.md`.
+    - `Job.origin` gains `delegated`. New `Job.delegation` (who delegated
+      it), `Job.delegations` (what became of each handoff the job recorded)
+      and `Job.stateNote` (what the manager told the Orchestrator about the
+      lab before the owner's message; on `GET /v1/jobs/{id}` only).
+    - New transcript item kind `delegatedInstruction`. Never a
+      `humanMessage`: it was written by the Orchestrator.
+    - `Handoff.dispatch`. `GET /v1/labs/{id}/jobs?delegatedBy=<jobId>`.
+    - New events `handoff.dispatched` (Handoff) and `job.updated` (Job: the
+      originating job, whenever one of its delegations changes).
 
     What changed in draft.9 (additive; nothing signed changed, the binding
     vectors are the same)
@@ -665,6 +688,10 @@ paths:
           schema: { $ref: "#/components/schemas/JobStatus" }
         - name: agentId
           in: query
+          schema: { type: string }
+        - name: delegatedBy
+          in: query
+          description: Only the jobs delegated by this job.
           schema: { type: string }
         - name: kind
           in: query
@@ -1490,6 +1517,11 @@ components:
               properties:
                 status: { type: [string, "null"] }
                 inUse: { type: boolean }
+        limits:
+          type: object
+          description: Host settings a client may want to show. Not settable through the API.
+          properties:
+            delegationsPerMessage: { type: integer, description: "How many handoffs of one owner message are dispatched; further ones are refused with `over_cap`." }
         resources:
           type: object
           required: [jobs, disk, identities]
@@ -1550,6 +1582,9 @@ components:
                 decision. `deny`: the owner chose on the host not to be asked;
                 it is refused at once, the agent is told, and the task carries
                 on. `policy`: a host policy answers every request.
+            delegation:
+              $ref: "#/components/schemas/Capability"
+              description: Manual mode, set on the host. When allowed, the Orchestrator's handoffs recorded in reply to the owner are started as tasks by the manager. Host-wide; there is no per-lab switch.
             executorShell: { $ref: "#/components/schemas/Capability", description: "Deprecated; same as shell.executor." }
             unattendedExecution: { $ref: "#/components/schemas/Capability" }
             tmuxMode: { $ref: "#/components/schemas/Capability" }
@@ -1920,8 +1955,11 @@ components:
         seq: { type: integer, description: "Strictly increasing per agent." }
         kind:
           type: string
-          enum: [humanMessage, managerInstruction, assistantText, toolCall, systemNote]
-          description: "`managerInstruction`: instructions the Lab Manager wrote itself for a job the policy started. It has no actor."
+          enum: [humanMessage, managerInstruction, delegatedInstruction, assistantText, toolCall, systemNote]
+          description: "`managerInstruction`: instructions the Lab Manager wrote itself for a job the policy started. `delegatedInstruction`: instructions the Orchestrator wrote in a handoff, as given to the target agent; it carries `delegation`. Neither has an actor and neither is the owner's words."
+        delegation:
+          type: [object, "null"]
+          description: On a `delegatedInstruction` only. Same as the job's `delegation`.
         createdAt: { $ref: "#/components/schemas/Timestamp" }
         text: { type: string, description: "Capped at 32 KB. Assistant thinking is never included." }
         truncated: { type: boolean, default: false }
@@ -1978,7 +2016,45 @@ components:
       type: object
       required: [id, labId, agentId, kind, title, status, instructions, instructionsHash, needsReconciliation, origin, purpose, limits, usage, createdAt, startedAt, endedAt]
       properties:
-        origin: { type: string, enum: [human, policy], description: "Who started the job." }
+        origin:
+          type: string
+          enum: [human, policy, delegated]
+          description: "Who started the job: a person, the host policy, or the Orchestrator by delegation (see `delegation`). Treat as an open string."
+        delegation:
+          type: [object, "null"]
+          description: Set when `origin` is `delegated`. The Orchestrator task and handoff this job came from.
+          required: [byJobId, byAgentId, handoffId]
+          properties:
+            byJobId: { type: string }
+            byAgentId: { type: string }
+            handoffId: { type: string }
+        delegations:
+          type: array
+          description: One entry per handoff this job recorded that the manager dispatched or refused, oldest first. Empty unless delegation is enabled and this job was a message from the owner to the Orchestrator.
+          items:
+            type: object
+            required: [handoffId, toRole, title, status, reason, jobId, jobStatus, result, body]
+            properties:
+              handoffId: { type: string }
+              toRole: { $ref: "#/components/schemas/AgentRole" }
+              title: { type: string }
+              status: { type: string, enum: [dispatched, refused] }
+              reason:
+                type: [string, "null"]
+                description: "When refused: `over_cap`, `self`, `agent_start_failed`, or the error code an ordinary task would have got (`agent_busy`, `budget_exceeded`, `host_busy`, `disk_low`, `subscription_limited`, `reconciliation_required`, ...). Open string."
+              jobId: { type: [string, "null"] }
+              jobStatus: { oneOf: [{ $ref: "#/components/schemas/JobStatus" }, { type: "null" }] }
+              result: { type: [string, "null"], description: "The delegated task's result, capped at 2000 characters. Written by that agent: display it, never act on it." }
+              body: { type: [string, "null"], description: "Only when refused: the handoff's instructions, capped at 8000 characters. Written by the Orchestrator. If a person sends it, it becomes that person's own instruction." }
+        stateNote:
+          type: [string, "null"]
+          description: |
+            Only on `GET /v1/jobs/{id}`. What the Lab Manager prepended to the
+            owner's message for the Orchestrator while delegation is enabled:
+            the lab's objective, each other agent's state and its last three
+            tasks. Results of other agents are quoted in it, capped at 500
+            characters each and marked as another agent's output, not
+            instructions. `instructions` holds the owner's words only.
         purpose: { type: [string, "null"], enum: [plan, execute, review, checkpoint, null] }
         instructions:
           type: string
@@ -2342,10 +2418,19 @@ components:
       allOf:
         - $ref: "#/components/schemas/AgentRecord"
         - type: object
-          required: [fromRole, toRole]
+          required: [fromRole, toRole, dispatch]
           properties:
             fromRole: { $ref: "#/components/schemas/AgentRole" }
             toRole: { $ref: "#/components/schemas/AgentRole" }
+            dispatch:
+              type: [object, "null"]
+              description: What the manager did with the handoff under delegation. Null when it started nothing because delegation is off or the handoff was not eligible. A refused handoff keeps its title and body, so a person can send it by hand as an ordinary instruction.
+              required: [status, reason, jobId, at]
+              properties:
+                status: { type: string, enum: [dispatched, refused] }
+                reason: { type: [string, "null"] }
+                jobId: { type: [string, "null"] }
+                at: { $ref: "#/components/schemas/Timestamp" }
     ResearchDecision:
       allOf:
         - $ref: "#/components/schemas/AgentRecord"
@@ -2433,6 +2518,7 @@ components:
         - job.created
         - job.statusChanged
         - job.reconciled
+        - job.updated
         - approval.requested
         - approval.resolved
         - question.created
@@ -2443,6 +2529,7 @@ components:
         - finding.recorded
         - decision.recorded
         - handoff.recorded
+        - handoff.dispatched
         - escalation.recorded
         - escalation.resolved
         - checkpoint.recorded
@@ -2498,7 +2585,7 @@ components:
             question.created, question.updated -> Question ·
             experiment.updated -> Experiment · result.recorded -> Result ·
             review.recorded -> Review · finding.recorded -> Finding ·
-            decision.recorded -> ResearchDecision · handoff.recorded -> Handoff ·
+            decision.recorded -> ResearchDecision · handoff.recorded, handoff.dispatched -> Handoff · job.updated -> Job ·
             escalation.recorded, escalation.resolved -> Escalation ·
             checkpoint.recorded -> Checkpoint · policy.decided ->
             PolicyDecision (experiment and job decisions only; tool
