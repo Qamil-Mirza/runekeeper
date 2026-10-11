@@ -10,11 +10,13 @@ import {
   LabManagerError,
   createLab,
   cancelJob,
+  getAgent,
   getAgentTranscriptPage,
   getJob,
   listJobs,
   sendAgentMessage,
   setRuntimeLimit,
+  updateLab,
   getConnectionStatus,
   getLabSnapshot,
   isApiCompatible,
@@ -185,6 +187,8 @@ describe("over a unix socket", () => {
     await getJob(config, ACTOR, "job_1");
     await cancelJob(config, ACTOR, KEY, "job_1");
     await setRuntimeLimit(config, ACTOR, KEY, "lab_1", 120);
+    await updateLab(config, ACTOR, KEY, "lab_1", { objective: "Find it", priorities: ["a", "b"] });
+    await getAgent(config, ACTOR, "agt_1");
 
     assert.deepEqual(
       seen.map((s) => `${s.method} ${s.url}`),
@@ -196,11 +200,14 @@ describe("over a unix socket", () => {
         "GET /v1/jobs/job_1",
         "POST /v1/jobs/job_1/cancel",
         "POST /v1/labs/lab_1/runtime-limit",
+        "PATCH /v1/labs/lab_1",
+        "GET /v1/agents/agt_1",
       ]
     );
     assert.deepEqual(JSON.parse(seen[0].body), { text: "Summarise the notes." });
     assert.equal(seen[0].headers["idempotency-key"], KEY);
     assert.deepEqual(JSON.parse(seen[6].body), { wallClockMinutes: 120 });
+    assert.deepEqual(JSON.parse(seen[7].body), { objective: "Find it", priorities: ["a", "b"] });
   });
 
   it("refuses cursors that would change the request", async () => {

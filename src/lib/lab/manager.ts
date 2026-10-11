@@ -58,7 +58,7 @@ export function isValidIdempotencyKey(key: unknown): key is string {
 }
 
 interface CallOptions {
-  method: "GET" | "POST";
+  method: "GET" | "POST" | "PATCH";
   path: string;
   /** Omitted only for the unauthenticated health call. */
   actor?: LabActor;
@@ -306,7 +306,28 @@ export async function runLabAction(
   });
 }
 
+/** Changes the lab's goals. Only the fields given are changed. */
+export async function updateLab(
+  config: LabConfig,
+  actor: LabActor,
+  idempotencyKey: string,
+  labId: string,
+  input: { objective?: string; priorities?: string[] }
+): Promise<Lab> {
+  return call<Lab>(config, {
+    method: "PATCH",
+    path: `/v1/labs/${assertId(labId)}`,
+    actor,
+    idempotencyKey,
+    body: input,
+  });
+}
+
 // ─── Agents ──────────────────────────────────────────────────────────────────
+
+export async function getAgent(config: LabConfig, actor: LabActor, agentId: string): Promise<LabAgent> {
+  return call<LabAgent>(config, { method: "GET", path: `/v1/agents/${assertId(agentId)}`, actor });
+}
 
 export async function runAgentAction(
   config: LabConfig,

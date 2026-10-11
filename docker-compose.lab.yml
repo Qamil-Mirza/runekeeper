@@ -37,3 +37,4 @@ services:
       LAB_MANAGER_TOKEN_FILE: /run/secrets/service-token
       LAB_DECISION_KEY_FILE: /run/secrets/decision-private.pem
       LAB_OWNER_USER_IDS: ${LAB_OWNER_USER_IDS:?LAB_OWNER_USER_IDS is required}
+      LAB_RUNTIME_LIMIT: ${LAB_RUNTIME_LIMIT:-}
