@@ -17,6 +17,8 @@ import {
   sendAgentMessage,
   setRuntimeLimit,
   deleteLab,
+  listNetworkHosts,
+  setNetworkHost,
   updateLab,
   getConnectionStatus,
   getLabSnapshot,
@@ -218,6 +220,22 @@ describe("over a unix socket", () => {
 
     assert.deepEqual(seen.map((s) => `${s.method} ${s.url}`), ["DELETE /v1/labs/lab_1"]);
     assert.equal(seen[0].headers["idempotency-key"], KEY);
+  });
+
+  it("lists network hosts and blocks or trusts one by a plain host name", async () => {
+    const { config, seen } = await onUnixSocket((_s, res) => json(res, 200, { items: [], mode: "listOnly", listed: [] }));
+    await listNetworkHosts(config, ACTOR);
+    await setNetworkHost(config, ACTOR, KEY, "PyPI.org", "block");
+    await setNetworkHost(config, ACTOR, KEY, "files.pythonhosted.org", "trust");
+    for (const bad of ["a/../b", "example.com/block", "", "a b", "-x.com", "x".repeat(254)]) {
+      await assert.rejects(setNetworkHost(config, ACTOR, KEY, bad, "block"), { code: "validation_failed" });
+    }
+
+    assert.deepEqual(
+      seen.map((s) => `${s.method} ${s.url}`),
+      ["GET /v1/network/hosts", "POST /v1/network/hosts/pypi.org/block", "POST /v1/network/hosts/files.pythonhosted.org/trust"]
+    );
+    assert.equal(seen[1].headers["idempotency-key"], KEY);
   });
 
   it("refuses cursors that would change the request", async () => {

@@ -4,14 +4,14 @@ The files in this directory are unmodified copies from the Lab Manager repositor
 
 | | |
 |---|---|
-| Spec version | 1.0.0-draft.15 |
-| Source commit | `9fa649d` (branch `feat/m2-service-foundation` in the-lab) |
-| SHA-256 of `openapi.yaml` | `322dfa85e28f8ba46b013d32f88af6d8a98170307f79c54bde873f9fce0e22cf` |
+| Spec version | 1.0.0-draft.16 |
+| Source commit | `7ca0439` (branch `feat/m2-service-foundation` in the-lab) |
+| SHA-256 of `openapi.yaml` | `6f996b4364a12152fe459d5a25fc8d5412d5cf98015de798bc1d1983d18dd7a0` |
 | SHA-256 of `binding-vectors.json` | `810a758e1c1d47be04f80d70d55dcda0137e1f74d0e186ec7bcde950bd0605e7` |
 | Pinned on | 2026-10-10 |
 | Status | Agreed by both sessions. Additive over draft.8 to draft.11. |
 
-Previous pins: draft.14 at `9fd203a`, draft.13 at `7918f04`, draft.11 at `5ddfdf3`, draft.9 at `657f691`, draft.8 at `5108015`, draft.6 at `8b4dd31`, draft.3 at `8e63b7a62b26b275e6d8f5eb8a031e507a30cdc7`, draft.4 at `9b7d41f`, draft.5 at `a1b8f3b`. Draft.4 replaced the signed-authorization scheme (`lab-authz-v2`: bindings, expiry, nonce) and added `binding` and `bindingHash` to approvals and jobs. Draft.5 is non-breaking: it defines `keyId`, documents the reasons for a rejected signature, and states that both sides read the service token from a file. Draft.6 is non-breaking: an approval binding's `experimentId` is exactly the job's; experiment, budget and other approvals are never created by a draft manager and a client offers only `denied` for them; approving a budget request never changes a limit by itself. The test vectors are unchanged.
+Previous pins: draft.15 at `9fa649d`, draft.14 at `9fd203a`, draft.13 at `7918f04`, draft.11 at `5ddfdf3`, draft.9 at `657f691`, draft.8 at `5108015`, draft.6 at `8b4dd31`, draft.3 at `8e63b7a62b26b275e6d8f5eb8a031e507a30cdc7`, draft.4 at `9b7d41f`, draft.5 at `a1b8f3b`. Draft.4 replaced the signed-authorization scheme (`lab-authz-v2`: bindings, expiry, nonce) and added `binding` and `bindingHash` to approvals and jobs. Draft.5 is non-breaking: it defines `keyId`, documents the reasons for a rejected signature, and states that both sides read the service token from a file. Draft.6 is non-breaking: an approval binding's `experimentId` is exactly the job's; experiment, budget and other approvals are never created by a draft manager and a client offers only `denied` for them; approving a budget request never changes a limit by itself. The test vectors are unchanged.
 
 Draft.8 is breaking for signing: the signed text is `lab-authz-v3`, the only signed actions are `approval.decision` and `budget.set` (a lab's spending limit, with the host policy hash in the binding), and no binding carries a dollar figure except the spending limit. Job retry and experiment conclusions are no longer signed. It adds tool input and output in transcripts, read-only workspace files, a three-block budget (runtime, spend, estimates) and policy, subscription and resource status in health. `Budget.limits`, `Budget.consumed` and `Job.usage.costUsd` are kept, deprecated, for one release.
 
@@ -30,3 +30,5 @@ Draft.13 is additive: `DELETE /v1/labs/{labId}` removes a lab for good and retur
 Draft.14 is additive: three more host-set switches in `Health.capabilities`, each off by default and for manual mode only: `webFetch`, `skills` (from a directory on the host that agents cannot write) and `subagents`. A subagent's tool calls appear as ordinary items in the same agent's transcript and pass through the same rules.
 
 Draft.15 is additive: a sandboxed shell for manual mode behind a host-set switch, off by default. `Health.capabilities.shell.<role>` says whether a role has it and why not; `Health.limits.shellAllowedDomains` lists the only internet hosts a command can reach. A Bash tool call is decided by the standing rule `shell`; a command that asks to leave the sandbox is refused.
+
+Draft.16 is additive: the network of sandboxed shell commands (`GET /v1/network/hosts`, `POST /v1/network/hosts/{host}/block` and `/trust`, with trust on first use as a host-set switch `Health.capabilities.networkTofu`); `Health.shellVerification`, under which a shell is granted only after the host check passed for the running Claude Code and Lab Manager versions; and `Health.resources.tempFolders`.

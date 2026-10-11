@@ -14,6 +14,13 @@ const DEGRADED_REASONS: Record<string, string> = {
   storage_error: "The Lab Manager cannot write its storage",
 };
 
+const SHELL_REASONS: Record<string, string> = {
+  no_record: "it has not been run yet",
+  check_did_not_pass: "the last run did not pass",
+  manager_version_changed: "the Lab Manager was updated since",
+  claude_code_version_changed: "Claude Code was updated since",
+};
+
 function describe(status: LabConnectionStatus | null): {
   tone: LabTone;
   headline: string;
@@ -59,6 +66,7 @@ export function LabTopBar({
 }) {
   const { tone, headline, detail } = describe(status);
   const health = status?.health;
+  const shellCheck = health?.shellVerification;
 
   return (
     <header className="shrink-0 border-b border-[var(--lab-line)] bg-[color-mix(in_srgb,var(--lab-panel)_85%,transparent)]">
@@ -91,9 +99,15 @@ export function LabTopBar({
         </section>
       </div>
 
-      {(detail || failure) && (
+      {(detail || failure || shellCheck?.state === "unverified") && (
         <div className="px-3 sm:px-5 pb-3 flex flex-col gap-2">
           {detail && <Strip tone={tone}>{detail}</Strip>}
+          {shellCheck?.state === "unverified" && (
+            <Strip tone="warn">
+              Agents cannot run commands: the shell is withheld until the host check is re-run
+              {shellCheck.reason ? ` (${SHELL_REASONS[shellCheck.reason] ?? shellCheck.reason})` : ""}.
+            </Strip>
+          )}
           {failure && (
             <Strip tone="bad" role="alert">
               Could not refresh the connection status: {failure.message}

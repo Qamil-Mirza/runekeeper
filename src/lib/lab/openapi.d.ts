@@ -227,6 +227,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/network/hosts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Internet hosts sandboxed shell commands have reached or been forbidden.
+         * @description Host-wide, not per lab. `mode` is `trustOnFirstUse` or `listOnly`.
+         *     `listed` are the hosts the owner configured, always allowed unless
+         *     blocked. This governs only commands run through the shell; an
+         *     agent's WebSearch and WebFetch tools are separate.
+         */
+        get: operations["listNetworkHosts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/network/hosts/{host}/block": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Forbid a host to every command from now on, even one on the configured list. Unsigned. */
+        post: operations["blockNetworkHost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/network/hosts/{host}/trust": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Allow a host again, or ahead of its first use. Unsigned. */
+        post: operations["trustNetworkHost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/labs/{labId}/archive": {
         parameters: {
             query?: never;
@@ -1069,7 +1126,29 @@ export interface components {
                 /** @description The only internet hosts a sandboxed shell command can reach. Empty: commands have no network. This does not limit the agent's own WebSearch and WebFetch tools. */
                 shellAllowedDomains?: string[];
             };
+            /**
+             * @description `notRequired` when the shell switch is off. Otherwise the shell is
+             *     granted only in state `verified` (the host check passed for exactly
+             *     this Claude Code version and this manager version) or briefly
+             *     `verifying` (the check is running). `unverified` carries a reason:
+             *     `no_record`, `check_did_not_pass`, `manager_version_changed`,
+             *     `claude_code_version_changed`. The owner re-runs the check on the
+             *     host after an update.
+             */
+            shellVerification?: {
+                /** @enum {string} */
+                state: "notRequired" | "verified" | "verifying" | "unverified";
+                claudeVersion: string | null;
+                managerVersion: string;
+                verifiedAt: string | null;
+                reason: string | null;
+            };
             resources: {
+                /**
+                 * @description `shared`: agents of one OS identity share a temp folder and could pass files through it.
+                 * @enum {string}
+                 */
+                tempFolders?: "perAgent" | "shared";
                 /** @description One limit for the whole host. At the limit a new job is refused with 429 `host_busy`. */
                 jobs: {
                     running: number;
@@ -1129,6 +1208,8 @@ export interface components {
                 skills?: components["schemas"]["Capability"];
                 /** @description Manual mode, set on the host. Agents may start subagents inside their own Claude Code process. A subagent has the same tools, files and rules as the agent that started it, and counts against the same task limits. */
                 subagents?: components["schemas"]["Capability"];
+                /** @description Manual mode, set on the host. Trust on first use for the network of sandboxed shell commands. When off, commands reach only `limits.shellAllowedDomains`. */
+                networkTofu?: components["schemas"]["Capability"];
                 /** @description Manual mode, set on the host. When allowed, the Orchestrator's handoffs recorded in reply to the owner are started as tasks by the manager. Host-wide; there is no per-lab switch. */
                 delegation?: components["schemas"]["Capability"];
                 /** @description Deprecated; same as shell.executor. */
@@ -1341,6 +1422,25 @@ export interface components {
         LabStatus: "stopped" | "starting" | "running" | "paused" | "degraded";
         /** @enum {string} */
         CycleStage: "idle" | "question" | "hypothesis" | "design" | "protocolRegistered" | "awaitingApproval" | "execution" | "review" | "findings" | "stateUpdate" | "decision" | "escalated";
+        NetworkHost: {
+            host: string;
+            /** @enum {string} */
+            status: "trusted" | "blocked";
+            firstSeenAt: components["schemas"]["Timestamp"];
+            /** @description The agent whose command first asked for the host. All null when the owner added the host by hand, or when the lab was deleted since. */
+            firstUse: {
+                labId?: string | null;
+                agentId?: string | null;
+                role?: string | null;
+                jobId?: string | null;
+            };
+            /** @description Times a command asked for it and was allowed. Claude Code asks once per host per task, not per connection. */
+            uses: number;
+            lastUsedAt: string | null;
+            /** @description The person who last blocked or trusted it by hand; null when only first use decided. */
+            decidedBy: components["schemas"]["Actor"] | null;
+            decidedAt: string | null;
+        };
         LabDeletionReceipt: {
             labId: string;
             name: string;
@@ -1981,7 +2081,7 @@ export interface components {
             truncated: false;
         };
         /** @enum {string} */
-        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.deleted" | "lab.statusChanged" | "agent.stateChanged" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged";
+        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.deleted" | "network.hostTrusted" | "network.hostBlocked" | "lab.statusChanged" | "agent.stateChanged" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged";
         ManagerStartedData: {
             serviceVersion: string;
             interruptedJobs: {
@@ -2412,6 +2512,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Lab"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listNetworkHosts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["NetworkHost"][];
+                        /** @enum {string} */
+                        mode: "trustOnFirstUse" | "listOnly";
+                        listed: string[];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    blockNetworkHost: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                host: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The host. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkHost"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    trustNetworkHost: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                host: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The host. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkHost"];
                 };
             };
             default: components["responses"]["Error"];

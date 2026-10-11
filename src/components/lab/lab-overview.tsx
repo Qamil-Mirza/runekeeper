@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import type { LabHealth, LabJob, LabSnapshot } from "@/lib/lab/types";
 import { ROLE_LABELS, formatAgo } from "./agent-card";
 import { Chip, LabButton, Strip, toneClass, type LabTone } from "./lab-ui";
+import { NetworkHosts } from "./network-hosts";
 import type { LabFailure } from "./use-lab";
 
 const OPEN_STATUSES: ReadonlySet<LabJob["status"]> = new Set(["queued", "awaitingApproval", "running", "cancelling"]);
@@ -193,6 +194,11 @@ export function LabOverview({
     return agent ? ROLE_LABELS[agent.role] : "Agent";
   };
   const stage = snapshot.lab.cycleStage;
+  const capabilities = health?.capabilities;
+  // Shown when the host has the shell switched on, even while it is withheld.
+  const showNetwork =
+    capabilities?.networkTofu !== undefined &&
+    Object.values(capabilities.shell ?? {}).some((s) => s.allowed || s.reason !== "no_autonomy_policy");
 
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 order-last md:order-none">
@@ -285,6 +291,16 @@ export function LabOverview({
           </ul>
         )}
       </Tile>
+
+      {showNetwork && (
+        <Tile
+          title="Sites reached by commands"
+          note={capabilities?.networkTofu?.allowed ? "new sites allowed on first use" : "listed sites only"}
+          className="md:col-span-2 xl:col-span-3"
+        >
+          <NetworkHosts now={now} disabled={disabled} />
+        </Tile>
+      )}
     </div>
   );
 }

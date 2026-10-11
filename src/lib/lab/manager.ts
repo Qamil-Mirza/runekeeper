@@ -10,6 +10,9 @@ import {
   type LabClientErrorCode,
   type LabConnectionStatus,
   type LabDeletionReceipt,
+  type LabNetworkHost,
+  type LabNetworkHosts,
+  type NetworkHostAction,
   type LabHealth,
   type LabJob,
   type LabJobPage,
@@ -337,6 +340,39 @@ export async function deleteLab(
   return call<LabDeletionReceipt>(config, {
     method: "DELETE",
     path: `/v1/labs/${assertId(labId)}`,
+    actor,
+    idempotencyKey,
+  });
+}
+
+// ─── Network hosts ───────────────────────────────────────────────────────────
+
+const HOST_NAME = /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/i;
+
+/** A plain host name, so it cannot change the request path. */
+export function isValidHostName(host: unknown): host is string {
+  return typeof host === "string" && HOST_NAME.test(host);
+}
+
+/** The internet hosts sandboxed shell commands have reached or been forbidden. Host-wide. */
+export async function listNetworkHosts(config: LabConfig, actor: LabActor): Promise<LabNetworkHosts> {
+  return call<LabNetworkHosts>(config, { method: "GET", path: "/v1/network/hosts", actor });
+}
+
+/** Blocks a host for every command from now on, or allows it again. */
+export async function setNetworkHost(
+  config: LabConfig,
+  actor: LabActor,
+  idempotencyKey: string,
+  host: string,
+  action: NetworkHostAction
+): Promise<LabNetworkHost> {
+  if (!isValidHostName(host)) {
+    throw new LabManagerError(400, "validation_failed", "Invalid host", false);
+  }
+  return call<LabNetworkHost>(config, {
+    method: "POST",
+    path: `/v1/network/hosts/${encodeURIComponent(host.toLowerCase())}/${action}`,
     actor,
     idempotencyKey,
   });

@@ -4,6 +4,17 @@ import type { components } from "./openapi";
 // (docs/lab/contract/openapi.yaml). Regenerate with `npm run lab:types`.
 type Schemas = components["schemas"];
 
+/** An internet host a sandboxed shell command has reached, or that the owner blocked. */
+export type LabNetworkHost = Schemas["NetworkHost"];
+export interface LabNetworkHosts {
+  items: LabNetworkHost[];
+  mode: "trustOnFirstUse" | "listOnly";
+  /** Hosts set in the Lab Manager's configuration; allowed unless blocked. */
+  listed: string[];
+}
+export const NETWORK_HOST_ACTIONS = ["block", "trust"] as const;
+export type NetworkHostAction = (typeof NETWORK_HOST_ACTIONS)[number];
+
 /** What the Lab Manager reports it removed, and what it kept, when a lab is deleted. */
 export type LabDeletionReceipt = Schemas["LabDeletionReceipt"];
 
