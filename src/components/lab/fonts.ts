@@ -1,18 +1,19 @@
-import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
+import localFont from "next/font/local";
 
 // The Lab's own typefaces, exposed as CSS variables on the Lab's root only.
-const labSans = Space_Grotesk({
-  subsets: ["latin"],
+// Bundled files (src/fonts), so the build fetches nothing.
+const labSans = localFont({
+  src: "../../fonts/space-grotesk-latin.woff2",
   variable: "--font-lab-sans",
   display: "swap",
-  weight: ["400", "500", "600"],
+  weight: "300 700",
 });
 
-const labMono = JetBrains_Mono({
-  subsets: ["latin"],
+const labMono = localFont({
+  src: "../../fonts/jetbrains-mono-latin.woff2",
   variable: "--font-lab-mono",
   display: "swap",
-  weight: ["400", "500"],
+  weight: "100 800",
 });
 
 export const labFontClasses = `${labSans.variable} ${labMono.variable}`;
