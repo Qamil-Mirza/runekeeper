@@ -141,3 +141,10 @@ export function updateLabGoals(labId: string, goals: { objective: string; priori
 export function fetchLabJobs(labId: string) {
   return labFetch<LabJobPage>(`/api/lab/labs/${encodeURIComponent(labId)}/jobs`);
 }
+
+export function reconcileJob(jobId: string, resolution: "acknowledge" | "retry") {
+  return mutate<{ job: LabJob; retryJob?: LabJob }>(
+    `/api/lab/jobs/${encodeURIComponent(jobId)}/reconcile`,
+    { resolution }
+  );
+}

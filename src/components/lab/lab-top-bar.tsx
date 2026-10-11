@@ -14,11 +14,34 @@ const DEGRADED_REASONS: Record<string, string> = {
   storage_error: "The Lab Manager cannot write its storage",
 };
 
-const CAPABILITY_LABELS = {
-  executorShell: "Executor shell",
-  unattendedExecution: "Unattended execution",
-  tmuxMode: "tmux mode",
-} as const;
+type Capabilities = NonNullable<LabConnectionStatus["health"]>["capabilities"];
+
+/** How much the agents may do without asking, as set on the host. */
+function permissionChips(capabilities: Capabilities): { key: string; text: string; tone: LabTone; title?: string }[] {
+  const chips: { key: string; text: string; tone: LabTone; title?: string }[] = [];
+  const rule = (key: "workspaceWrites" | "webSearch", label: string) => {
+    const capability = capabilities[key];
+    // Absent on a Lab Manager older than these rules.
+    if (!capability) return;
+    chips.push({
+      key,
+      text: `${label} · ${capability.allowed ? "no approval needed" : "asks first"}`,
+      tone: capability.allowed ? "ok" : "off",
+      title: capability.reason ? DEGRADED_REASONS[capability.reason] ?? capability.reason.replace(/_/g, " ") : undefined,
+    });
+  };
+  rule("workspaceWrites", "File writes");
+  rule("webSearch", "Web search");
+  const uncovered = capabilities.uncoveredRequests;
+  if (uncovered) {
+    chips.push({
+      key: "uncovered",
+      text: `Anything else · ${uncovered === "deny" ? "refused" : uncovered === "ask" ? "asks first" : "host policy"}`,
+      tone: uncovered === "ask" ? "warn" : "off",
+    });
+  }
+  return chips;
+}
 
 function describe(status: LabConnectionStatus | null): {
   tone: LabTone;
@@ -65,6 +88,7 @@ export function LabTopBar({
 }) {
   const { tone, headline, detail } = describe(status);
   const health = status?.health;
+  const chips = health && status?.apiCompatible ? permissionChips(health.capabilities) : [];
 
   return (
     <header className="shrink-0 border-b border-[var(--lab-line)] bg-[color-mix(in_srgb,var(--lab-panel)_85%,transparent)]">
@@ -108,26 +132,13 @@ export function LabTopBar({
         </div>
       )}
 
-      {health && status?.apiCompatible && (
-        <ul className="px-3 sm:px-5 pb-2.5 flex flex-wrap gap-2" aria-label="Capabilities">
-          {(Object.keys(CAPABILITY_LABELS) as (keyof typeof CAPABILITY_LABELS)[]).map((key) => {
-            const capability = health.capabilities[key];
-            const reason = capability.reason
-              ? DEGRADED_REASONS[capability.reason] ?? capability.reason.replace(/_/g, " ")
-              : null;
-            return (
-              <li key={key} title={reason ?? undefined} className="max-w-full">
-                <Chip tone={capability.allowed ? "ok" : "off"}>
-                  <span className="whitespace-nowrap">
-                    {CAPABILITY_LABELS[key]} · {capability.allowed ? "on" : "off"}
-                  </span>
-                  {!capability.allowed && reason && (
-                    <span className="normal-case tracking-normal">({reason})</span>
-                  )}
-                </Chip>
-              </li>
-            );
-          })}
+      {chips.length > 0 && (
+        <ul className="px-3 sm:px-5 pb-2.5 flex flex-wrap gap-2" aria-label="What agents may do without asking">
+          {chips.map((chip) => (
+            <li key={chip.key} title={chip.title} className="max-w-full">
+              <Chip tone={chip.tone}>{chip.text}</Chip>
+            </li>
+          ))}
         </ul>
       )}
     </header>

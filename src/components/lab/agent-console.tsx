@@ -42,6 +42,12 @@ const TOOL_STATUS: Record<string, { label: string; tone: LabTone }> = {
   denied: { label: "denied", tone: "bad" },
 };
 
+const STANDING_RULES: Record<string, string> = {
+  recordWrites: "record files",
+  workspaceWrites: "files in its own workspace",
+  webSearch: "web search",
+};
+
 type DecidedBy = NonNullable<NonNullable<LabTranscriptItem["tool"]>["decidedBy"]>;
 
 /** Who let a tool call run. Never worded as approval unless a person decided. */
@@ -55,7 +61,9 @@ function decidedByLabel(decidedBy: DecidedBy | undefined): string {
     case "policy":
       return `${decidedBy.outcome === "allow" ? "allowed" : "denied"} by host policy (${decidedBy.rule})`;
     case "standingRule":
-      return `allowed by a standing rule (${decidedBy.rule})`;
+      return decidedBy.outcome === "deny"
+        ? "refused at once: no standing permission covers it, and you chose not to be asked"
+        : `allowed by a standing permission (${STANDING_RULES[decidedBy.rule] ?? decidedBy.rule})`;
   }
 }
 
@@ -141,6 +149,7 @@ function TaskRow({
   cancelling,
   failure,
   onCancel,
+  onReconcile,
 }: {
   job: LabJob;
   now: number;
@@ -148,6 +157,7 @@ function TaskRow({
   cancelling: boolean;
   failure?: LabFailure;
   onCancel: () => void;
+  onReconcile: (resolution: "acknowledge" | "retry") => void;
 }) {
   const [confirm, setConfirm] = useState(false);
   const status = JOB_STATUS[job.status];
@@ -172,9 +182,19 @@ function TaskRow({
         </p>
       )}
       {job.needsReconciliation && (
-        <p className="lab-strip lab-tone-warn text-[13px]">
-          Interrupted by a restart. Your next instruction continues the same session.
-        </p>
+        <>
+          <p className="lab-strip lab-tone-warn text-[13px]">
+            Interrupted by a restart, so it did not finish. Nothing was run again automatically.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <LabButton variant="primary" disabled={disabled || cancelling} onClick={() => onReconcile("retry")}>
+              {cancelling ? "Working…" : "Run again"}
+            </LabButton>
+            <LabButton disabled={disabled || cancelling} onClick={() => onReconcile("acknowledge")}>
+              Dismiss
+            </LabButton>
+          </div>
+        </>
       )}
       {CANCELLABLE.has(job.status) && (
         <div className="flex flex-wrap gap-2">
@@ -394,8 +414,8 @@ export function AgentConsole({
             )}
             {agent.state === "waitingOnHuman" && (
               <Strip tone="warn">
-                {role} asked to use a tool that needs your approval. Deciding approvals from Runekeeper is not
-                available yet; until it is, cancel the task under Tasks to release the agent.
+                {role} asked to use a tool that needs your approval, which Runekeeper cannot give. Cancel the task
+                under Tasks to release the agent. Standing permissions set on the host remove these requests.
               </Strip>
             )}
           </div>
@@ -467,6 +487,7 @@ export function AgentConsole({
                 cancelling={con.cancelling[job.id] === true}
                 failure={con.cancelFailures[job.id]}
                 onCancel={() => void con.cancel(job.id)}
+                onReconcile={(resolution) => void con.reconcile(job.id, resolution)}
               />
             ))}
           </ul>

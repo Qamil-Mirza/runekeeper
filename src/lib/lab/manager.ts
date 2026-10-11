@@ -435,6 +435,26 @@ export async function cancelJob(
   });
 }
 
+/**
+ * Resolves a job interrupted by a restart. `retry` starts a new job with the
+ * same instructions; `acknowledge` only clears the hold. Neither is signed.
+ */
+export async function reconcileJob(
+  config: LabConfig,
+  actor: LabActor,
+  idempotencyKey: string,
+  jobId: string,
+  resolution: "acknowledge" | "retry"
+): Promise<{ job: LabJob; retryJob?: LabJob }> {
+  return call(config, {
+    method: "POST",
+    path: `/v1/jobs/${assertId(jobId)}/reconcile`,
+    actor,
+    idempotencyKey,
+    body: { resolution },
+  });
+}
+
 /** Total minutes agents may run in this lab. Not money, so not signed. */
 export async function setRuntimeLimit(
   config: LabConfig,
