@@ -517,11 +517,16 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Send a human message to an agent. Creates a job of kind `message`.
-         * @description Accepted only when the agent is `idle`. In `starting`, `working` or
-         *     `waitingOnHuman` the call is 409 `agent_busy` (a session blocked on a
-         *     prompt cannot take input); in tmux mode it is 409 `tmux_mode_active`.
-         *     There is no message queue in v1.
+         * Send a human message to an agent, whether or not it is working.
+         * @description Idle agent: creates a job of kind `message` (`delivery: started`).
+         *     Working agent: the message is sent into the running task and
+         *     answered within it at the agent's next step, which can be minutes
+         *     away while a long command runs (`delivery: duringTask`). It changes
+         *     nothing about what the task is permitted to do. Otherwise busy
+         *     (starting, or a task that is ending): kept and delivered as the
+         *     agent's next turn, several kept messages together
+         *     (`delivery: queued`). A stopped agent still answers 409
+         *     `agent_not_running`; tmux mode 409 `tmux_mode_active`.
          */
         post: operations["sendAgentMessage"];
         delete?: never;
@@ -1621,7 +1626,13 @@ export interface components {
         };
         Lab: components["schemas"]["LabSummary"] & {
             approvalPolicy: components["schemas"]["ApprovalPolicy"];
+            /** @description The owner's own description of the lab. Given to every agent of the lab as the owner's words. */
+            brief: string | null;
+            /** @description Decided by the Orchestrator from the brief; the owner may override it. */
             objective: string | null;
+            /** @enum {string|null} */
+            objectiveSetBy: "owner" | "orchestrator" | null;
+            objectiveSetAt: components["schemas"]["Timestamp"] | null;
             priorities: string[];
             createdAt: components["schemas"]["Timestamp"];
         };
@@ -1720,9 +1731,22 @@ export interface components {
             tmuxAttachHint: string | null;
             currentJob: {
                 id: string;
+                /** @description The task's title, or the start of the message. */
                 title: string;
+                /** @enum {string} */
+                kind: "task" | "message";
+                /** @enum {string} */
+                origin: "human" | "policy" | "delegated";
+                startedAt: components["schemas"]["Timestamp"];
+            } | null;
+            /** @description What the running job is doing now, in one line the Lab Manager derives from its latest transcript item: a tool call and its summary, writing, or reading its instructions. Null when nothing runs. The summary of a command is the agent's own text. */
+            currentActivity: {
+                text: string;
+                at: components["schemas"]["Timestamp"];
             } | null;
             pendingApprovalCount: number;
+            /** @description Messages a person sent that wait for the agent to be free. */
+            queuedMessages: number;
             lastActivityAt: components["schemas"]["Timestamp"] | null;
             lastError: {
                 code: string;
@@ -1750,6 +1774,8 @@ export interface components {
             /** @default false */
             truncated: boolean;
             actor?: components["schemas"]["Actor"];
+            /** @description On a `humanMessage`: true while it waits for the agent to be free. */
+            queued?: boolean;
             tool?: {
                 name: string;
                 /** @description One line. */
@@ -1929,6 +1955,9 @@ export interface components {
                 agentId: string;
                 role: components["schemas"]["AgentRole"];
                 jobId: string | null;
+                labName: string | null;
+                sessionId: string | null;
+                jobTitle: string | null;
             };
             title: string;
             /** @description Exactly what is being approved, by kind. */
@@ -2229,7 +2258,7 @@ export interface components {
             truncated: false;
         };
         /** @enum {string} */
-        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.deleted" | "network.hostTrusted" | "network.hostBlocked" | "compute.run" | "compute.cancelRequested" | "lab.statusChanged" | "agent.stateChanged" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged";
+        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.deleted" | "network.hostTrusted" | "network.hostBlocked" | "compute.run" | "compute.cancelRequested" | "lab.statusChanged" | "agent.stateChanged" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged" | "agent.activity";
         ManagerStartedData: {
             serviceVersion: string;
             interruptedJobs: {
@@ -2373,6 +2402,8 @@ export interface operations {
             content: {
                 "application/json": {
                     name: string;
+                    /** @description The owner's description of the lab: what to investigate, methods, links. */
+                    brief?: string;
                     objective?: string;
                 };
             };
@@ -2452,6 +2483,8 @@ export interface operations {
             content: {
                 "application/json": {
                     name?: string;
+                    /** @description The owner's description of the lab: what to investigate, methods, links. */
+                    brief?: string;
                     objective?: string;
                     priorities?: string[];
                     approvalPolicy?: components["schemas"]["ApprovalPolicy"];
@@ -3078,8 +3111,11 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        job: components["schemas"]["Job"];
+                        /** @description The job that carries the message. Null while it is queued. */
+                        job: components["schemas"]["Job"] | null;
                         transcriptItem: components["schemas"]["TranscriptItem"];
+                        /** @enum {string} */
+                        delivery: "started" | "duringTask" | "queued";
                     };
                 };
             };

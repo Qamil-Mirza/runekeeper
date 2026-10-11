@@ -452,3 +452,203 @@
   .lab-root[data-leaving="true"] .lab-stage { animation: none; }
   .lab-light-pulse { animation: none; }
 }
+
+/* ── Agent avatars ───────────────────────────────────────────────────────
+   One drawing; data-state and data-role choose the parts and the motion. */
+.lab-avatar {
+  color: var(--tone, var(--lab-dim));
+  flex-shrink: 0;
+  overflow: visible;
+}
+.lab-avatar * {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+/* Parts placed by a transform attribute keep the drawing's own origin. */
+.lab-avatar .av-raw { transform-box: view-box; transform-origin: 0 0; }
+.lab-avatar .av-fill { fill: var(--lab-raised); }
+.lab-avatar .av-solid { fill: currentColor; }
+.lab-avatar .av-shadow { fill: currentColor; opacity: 0.14; }
+.lab-avatar .av-core { fill: currentColor; opacity: 0.85; }
+.lab-avatar .av-z { fill: currentColor; font-family: var(--font-lab-mono, monospace); font-weight: 700; }
+.lab-avatar .av-hat { color: var(--lab-warn); }
+.lab-avatar .av-plaster { color: var(--lab-warn); }
+.lab-avatar .av-barrier { color: var(--lab-warn); }
+.lab-avatar .av-alert { color: var(--lab-bad); }
+
+/* Hidden unless a state or role below shows them. */
+.lab-avatar .av-ghost,
+.lab-avatar .av-eyes-closed,
+.lab-avatar .av-eyes-off,
+.lab-avatar .av-eyes-x,
+.lab-avatar .av-arm-wave,
+.lab-avatar .av-arm-hammer,
+.lab-avatar .av-hat,
+.lab-avatar .av-plaster,
+.lab-avatar .av-crack,
+.lab-avatar .av-zzz,
+.lab-avatar .av-alert,
+.lab-avatar .av-sparks,
+.lab-avatar .av-barrier,
+.lab-avatar .av-prop {
+  display: none;
+}
+.lab-avatar[data-role="executor"] .av-hat { display: inline; }
+
+/* Not provisioned: the agent does not exist yet. */
+.lab-avatar[data-state="notProvisioned"] .av-bot,
+.lab-avatar[data-state="notProvisioned"] .av-shadow { display: none; }
+.lab-avatar[data-state="notProvisioned"] .av-ghost {
+  display: inline;
+  opacity: 0.45;
+  animation: av-ghost 3.2s ease-in-out infinite;
+}
+
+/* Starting: the agent forms, piece by piece. */
+.lab-avatar[data-state="starting"] .av-legs { animation: av-form 2.6s ease-out infinite; }
+.lab-avatar[data-state="starting"] .av-body,
+.lab-avatar[data-state="starting"] .av-arm-left,
+.lab-avatar[data-state="starting"] .av-arm-right { animation: av-form 2.6s ease-out 0.25s infinite both; }
+.lab-avatar[data-state="starting"] .av-head { animation: av-drop 2.6s cubic-bezier(0.3, 1.4, 0.5, 1) 0.5s infinite both; }
+.lab-avatar[data-state="starting"] .av-eyes-open { animation: av-boot 2.6s steps(1) infinite; }
+.lab-avatar[data-state="starting"] .av-antenna { fill: currentColor; animation: av-blink 0.5s steps(1) infinite; }
+
+/* Idle: asleep. */
+.lab-avatar[data-state="idle"] .av-eyes-open { display: none; }
+.lab-avatar[data-state="idle"] .av-eyes-closed,
+.lab-avatar[data-state="idle"] .av-zzz { display: inline; }
+.lab-avatar[data-state="idle"] .av-bot { animation: av-breathe 3.6s ease-in-out infinite; transform-origin: 50% 100%; }
+.lab-avatar[data-state="idle"] .av-z1 { animation: av-z 3.6s ease-out infinite; }
+.lab-avatar[data-state="idle"] .av-z2 { animation: av-z 3.6s ease-out 1.2s infinite both; }
+
+/* Working: each role at its own job. */
+.lab-avatar[data-state="working"] .av-eyes-open { animation: av-eyeblink 4s steps(1) infinite; }
+.lab-avatar[data-state="working"] .av-core { animation: av-blink 0.9s ease-in-out infinite alternate; }
+.lab-avatar[data-state="working"] .av-antenna { fill: currentColor; }
+.lab-avatar[data-state="working"][data-role="orchestrator"] .av-prop-orchestrator,
+.lab-avatar[data-state="working"][data-role="executor"] .av-prop-executor,
+.lab-avatar[data-state="working"][data-role="reviewer"] .av-prop-reviewer,
+.lab-avatar[data-state="working"][data-role="advisor"] .av-prop-advisor { display: inline; }
+.lab-avatar[data-state="working"] .av-head { animation: av-nod 2.4s ease-in-out infinite; }
+
+.lab-avatar .av-check { opacity: 0; }
+.lab-avatar[data-state="working"] .av-check1 { animation: av-tick 4.5s ease-out infinite; }
+.lab-avatar[data-state="working"] .av-check2 { animation: av-tick 4.5s ease-out 1.1s infinite both; }
+.lab-avatar[data-state="working"] .av-check3 { animation: av-tick 4.5s ease-out 2.2s infinite both; }
+.lab-avatar[data-state="working"][data-role="orchestrator"] .av-arm-right { transform: rotate(-38deg); transform-origin: 0% 0%; }
+
+.lab-avatar[data-state="working"][data-role="executor"] .av-arm-right { display: none; }
+.lab-avatar[data-state="working"][data-role="executor"] .av-arm-hammer {
+  display: inline;
+  transform-origin: 0% 100%;
+  animation: av-hammer 0.9s cubic-bezier(0.5, 0, 0.9, 0.4) infinite alternate;
+}
+.lab-avatar[data-state="working"] .av-brick1 { animation: av-brick 5.4s ease-out infinite; }
+.lab-avatar[data-state="working"] .av-brick2 { animation: av-brick 5.4s ease-out 1.3s infinite both; }
+.lab-avatar[data-state="working"] .av-brick3 { animation: av-brick 5.4s ease-out 2.6s infinite both; }
+
+.lab-avatar[data-state="working"] .av-lens { animation: av-scan 3.4s ease-in-out infinite; }
+.lab-avatar[data-state="working"][data-role="reviewer"] .av-arm-right { transform: rotate(-30deg); transform-origin: 0% 0%; }
+
+.lab-avatar[data-state="working"] .av-bulb { animation: av-glow 2.2s ease-in-out infinite; }
+.lab-avatar[data-state="working"] .av-rays { animation: av-blink 2.2s ease-in-out infinite; }
+.lab-avatar[data-state="working"] .av-dot1 { animation: av-blink 1.4s ease-in-out infinite alternate; }
+.lab-avatar[data-state="working"] .av-dot2 { animation: av-blink 1.4s ease-in-out 0.4s infinite alternate both; }
+
+/* Needs you: waving for attention. */
+.lab-avatar[data-state="waitingOnHuman"] .av-arm-right { display: none; }
+.lab-avatar[data-state="waitingOnHuman"] .av-arm-wave {
+  display: inline;
+  transform-origin: 0% 100%;
+  animation: av-wave 0.7s ease-in-out infinite alternate;
+}
+.lab-avatar[data-state="waitingOnHuman"] .av-alert { display: inline; animation: av-pop 1.4s ease-in-out infinite; }
+
+/* Stopped: switched off, patched up, behind a barrier. */
+.lab-avatar[data-state="stopped"] .av-eyes-open { display: none; }
+.lab-avatar[data-state="stopped"] .av-eyes-off,
+.lab-avatar[data-state="stopped"] .av-plaster,
+.lab-avatar[data-state="stopped"] .av-barrier { display: inline; }
+.lab-avatar[data-state="stopped"] .av-bot { opacity: 0.7; }
+.lab-avatar[data-state="stopped"] .av-head { transform: rotate(-9deg) translateY(1.5px); transform-origin: 50% 100%; }
+.lab-avatar[data-state="stopped"] .av-core { opacity: 0.2; }
+
+/* Crashed. */
+.lab-avatar[data-state="crashed"] .av-eyes-open { display: none; }
+.lab-avatar[data-state="crashed"] .av-eyes-x,
+.lab-avatar[data-state="crashed"] .av-crack,
+.lab-avatar[data-state="crashed"] .av-sparks { display: inline; }
+.lab-avatar[data-state="crashed"] .av-bot { animation: av-shake 2.8s linear infinite; }
+.lab-avatar[data-state="crashed"] .av-sparks { animation: av-spark 1.1s steps(1) infinite; }
+.lab-avatar[data-state="crashed"] .av-head { transform: rotate(7deg); transform-origin: 50% 100%; }
+
+@keyframes av-ghost { 50% { opacity: 0.2; } }
+@keyframes av-form {
+  0% { opacity: 0; transform: scale(0.4); }
+  18%, 88% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: none; }
+}
+@keyframes av-drop {
+  0% { opacity: 0; transform: translateY(-14px); }
+  18%, 88% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: none; }
+}
+@keyframes av-boot { 0%, 45% { opacity: 0; } 46%, 52% { opacity: 1; } 53%, 58% { opacity: 0; } 59%, 100% { opacity: 1; } }
+@keyframes av-blink { 0% { opacity: 1; } 50% { opacity: 0.25; } 100% { opacity: 1; } }
+@keyframes av-eyeblink { 0%, 93% { transform: none; } 94%, 97% { transform: scaleY(0.1); } 98% { transform: none; } }
+@keyframes av-breathe { 50% { transform: scaleY(0.965); } }
+@keyframes av-z { 0% { opacity: 0; transform: translate(-3px, 5px); } 30% { opacity: 1; } 100% { opacity: 0; transform: translate(4px, -7px); } }
+@keyframes av-nod { 50% { transform: translateY(1px) rotate(2deg); } }
+@keyframes av-tick { 0%, 8% { opacity: 0; transform: scale(0.3); } 16%, 80% { opacity: 1; transform: none; } 92%, 100% { opacity: 0; } }
+@keyframes av-hammer { from { transform: rotate(-22deg); } to { transform: rotate(38deg); } }
+@keyframes av-brick { 0%, 6% { opacity: 0; transform: translateY(-9px); } 14%, 82% { opacity: 1; transform: none; } 94%, 100% { opacity: 0; } }
+@keyframes av-scan { 0%, 100% { transform: translate(0, 0); } 35% { transform: translate(5px, 6px); } 70% { transform: translate(-1px, 10px); } }
+@keyframes av-glow { 50% { opacity: 0.45; } }
+@keyframes av-wave { from { transform: rotate(-16deg); } to { transform: rotate(20deg); } }
+@keyframes av-pop { 50% { transform: translateY(-2px) scale(1.07); } }
+@keyframes av-shake { 0%, 86%, 100% { transform: none; } 88% { transform: translateX(-1.5px); } 91% { transform: translateX(1.5px); } 94% { transform: translateX(-1px); } }
+@keyframes av-spark { 0%, 60% { opacity: 0; } 61%, 70% { opacity: 1; } 71%, 80% { opacity: 0; } 81%, 90% { opacity: 1; } 91% { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .lab-avatar, .lab-avatar * { animation: none !important; }
+  .lab-avatar .av-check { opacity: 1; }
+}
+
+.lab-modal-plain {
+  max-width: 38rem;
+  background: var(--lab-panel);
+}
+.lab-count {
+  min-width: 1.4rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--lab-bad);
+  color: #10060a;
+  font-family: var(--font-lab-mono, monospace);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1.4rem;
+  text-align: center;
+}
+
+/* Rented machines: one card each, scrolled sideways. */
+.lab-carousel {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding-bottom: 6px;
+  align-items: stretch;
+}
+.lab-run-card {
+  flex: 0 0 min(19rem, 82%);
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  min-width: 0;
+  background: var(--lab-raised);
+  border: 1px solid var(--lab-line);
+  border-top: 2px solid var(--tone);
+}

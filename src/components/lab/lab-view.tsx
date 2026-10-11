@@ -7,6 +7,8 @@ import { AgentConsole } from "./agent-console";
 import { DeleteLab } from "./delete-lab";
 import { labFontClasses } from "./fonts";
 import { LabOverview } from "./lab-overview";
+import { NeedsYou, needsYouCount } from "./needs-you";
+import { SitesPage } from "./sites-page";
 import { LAB_STATUS_TONE, LabRail } from "./lab-rail";
 import { LabTopBar } from "./lab-top-bar";
 import { Chip, LabButton, Strip } from "./lab-ui";
@@ -38,6 +40,10 @@ export function LabView({ onExit }: { onExit: () => void }) {
   }, []);
   // null until the owner picks: the central chat when the host allows delegation.
   const [viewChoice, setViewChoice] = useState<"chat" | "agents" | null>(null);
+  // A page about every lab, shown instead of the selected lab.
+  const [page, setPage] = useState<"lab" | "needsYou" | "sites">("lab");
+  // An agent to open once its lab has loaded, when coming from another page.
+  const [wanted, setWanted] = useState<{ labId: string; agentId: string } | null>(null);
   const [warp, setWarp] = useState<"in" | "out" | null>("in");
   const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -67,11 +73,12 @@ export function LabView({ onExit }: { onExit: () => void }) {
       if (e.key !== "Escape" || e.defaultPrevented || typing) return;
       // Escape steps back one level: out of an agent first, then out of the Lab.
       if (openAgentId) setOpenAgentId(null);
+      else if (page !== "lab") setPage("lab");
       else leave();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [leave, openAgentId]);
+  }, [leave, openAgentId, page]);
 
   const { snapshot, status } = lab;
   // Shown data is stale when the manager is gone or the last refresh failed.
@@ -89,6 +96,18 @@ export function LabView({ onExit }: { onExit: () => void }) {
   // The runtime limit is shown only when Runekeeper is set to leave it to the owner.
   const runtime = status?.features?.runtimeLimit ? snapshot?.budget.runtime : undefined;
   const runtimeLeft = runtime ? runtime.limitWallClockMinutes - runtime.usedWallClockMinutes : null;
+  useEffect(() => {
+    if (!wanted || snapshot?.lab.id !== wanted.labId) return;
+    setOpenAgentId(wanted.agentId);
+    setWanted(null);
+  }, [wanted, snapshot?.lab.id]);
+
+  const capabilities = status?.health?.capabilities;
+  // Offered when the host has the shell switched on, even while it is withheld.
+  const showSites =
+    capabilities?.networkTofu !== undefined &&
+    Object.values(capabilities.shell ?? {}).some((s) => s.allowed || s.reason !== "no_autonomy_policy");
+
   const openAgent = snapshot?.agents.find((a) => a.id === openAgentId) ?? null;
   const orchestrator = snapshot?.agents.find((a) => a.role === "orchestrator") ?? null;
   const centralChat = status?.health?.capabilities.delegation?.allowed === true && orchestrator !== null;
@@ -120,18 +139,44 @@ export function LabView({ onExit }: { onExit: () => void }) {
             labsFailure={lab.labsFailure}
             createPending={lab.pending.create !== undefined}
             createFailure={lab.actionFailures.create}
-            onSelect={lab.selectLab}
-            onCreate={lab.createLab}
+            onSelect={(labId) => {
+              setPage("lab");
+              if (labId !== lab.selectedLabId) lab.selectLab(labId);
+            }}
+            onCreate={(name, brief) => {
+              setPage("lab");
+              return lab.createLab(name, brief);
+            }}
+            page={page}
+            onPage={setPage}
+            needsYou={needsYouCount(lab.labs)}
+            showSites={showSites}
           />
 
           <main className="lab-scroll flex-1 min-w-0 min-h-0 overflow-y-auto px-3 sm:px-5 py-5 flex flex-col">
-            {lab.selectedLabId && !snapshot && lab.snapshotFailure && (
+            {page === "needsYou" && (
+              <NeedsYou
+                labs={lab.labs}
+                current={snapshot}
+                now={now}
+                onOpen={(labId, agentId) => {
+                  setPage("lab");
+                  if (labId !== lab.selectedLabId) lab.selectLab(labId);
+                  if (agentId) setWanted({ labId, agentId });
+                }}
+              />
+            )}
+            {page === "sites" && (
+              <SitesPage now={now} disabled={controlsDisabled} firstUse={capabilities?.networkTofu?.allowed === true} />
+            )}
+
+            {page === "lab" && lab.selectedLabId && !snapshot && lab.snapshotFailure && (
               <Strip tone="bad" role="alert">
                 Could not load this lab: {lab.snapshotFailure.message}
               </Strip>
             )}
 
-            {!snapshot && !lab.snapshotFailure && (
+            {page === "lab" && !snapshot && !lab.snapshotFailure && (
               <p className="lab-eyebrow py-10 text-center">
                 {lab.connected
                   ? lab.selectedLabId
@@ -141,7 +186,7 @@ export function LabView({ onExit }: { onExit: () => void }) {
               </p>
             )}
 
-            {snapshot && (
+            {page === "lab" && snapshot && (
               <section
                 className={cn("flex flex-col gap-4 w-full max-w-[1400px]", (openAgent || view === "chat") && "flex-1 min-h-[34rem]")}
                 aria-label={`Lab ${snapshot.lab.name}`}
@@ -154,6 +199,15 @@ export function LabView({ onExit }: { onExit: () => void }) {
                           {snapshot.lab.name}
                         </h3>
                         <Chip tone={LAB_STATUS_TONE[snapshot.lab.status]}>{snapshot.lab.status}</Chip>
+                        <DeleteLab
+                          labId={snapshot.lab.id}
+                          name={snapshot.lab.name}
+                          stopped={snapshot.lab.status === "stopped"}
+                          disabled={controlsDisabled}
+                          pending={lab.pending.delete !== undefined}
+                          failure={lab.actionFailures.delete}
+                          onDelete={lab.deleteLab}
+                        />
                       </div>
                       <p className="lab-eyebrow mt-2">
                         stage {snapshot.lab.cycleStage}
@@ -289,6 +343,7 @@ export function LabView({ onExit }: { onExit: () => void }) {
                       goalsPending={lab.pending.goals !== undefined}
                       goalsFailure={lab.actionFailures.goals}
                       onSaveGoals={lab.saveGoals}
+                      onSaveBrief={lab.saveBrief}
                       onOpenAgent={openAgentWith}
                     />
                     <p className="lab-eyebrow">Agents · {snapshot.agents.length}</p>
@@ -297,6 +352,8 @@ export function LabView({ onExit }: { onExit: () => void }) {
                         <AgentCard
                           key={agent.id}
                           agent={agent}
+                          job={lab.labJobs?.find((j) => j.agentId === agent.id && (j.status === "running" || j.status === "awaitingApproval" || j.status === "cancelling"))}
+                          lastItem={lab.activity[agent.id]}
                           now={now}
                           disabled={controlsDisabled}
                           pendingAction={lab.pending[agent.id]}
@@ -307,15 +364,6 @@ export function LabView({ onExit }: { onExit: () => void }) {
                         />
                       ))}
                     </div>
-                    <DeleteLab
-                      labId={snapshot.lab.id}
-                      name={snapshot.lab.name}
-                      stopped={snapshot.lab.status === "stopped"}
-                      disabled={controlsDisabled}
-                      pending={lab.pending.delete !== undefined}
-                      failure={lab.actionFailures.delete}
-                      onDelete={lab.deleteLab}
-                    />
                   </>
                 )}
               </section>

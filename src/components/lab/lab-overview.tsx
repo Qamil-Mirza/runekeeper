@@ -2,11 +2,10 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import type { LabHealth, LabJob, LabSnapshot } from "@/lib/lab/types";
+import { MAX_BRIEF_LENGTH, type LabHealth, type LabJob, type LabSnapshot } from "@/lib/lab/types";
 import { ROLE_LABELS, formatAgo } from "./agent-card";
 import { ComputePanel } from "./compute-panel";
 import { Chip, LabButton, Strip, toneClass, type LabTone } from "./lab-ui";
-import { NetworkHosts } from "./network-hosts";
 import type { LabFailure } from "./use-lab";
 
 const OPEN_STATUSES: ReadonlySet<LabJob["status"]> = new Set(["queued", "awaitingApproval", "running", "cancelling"]);
@@ -136,9 +135,17 @@ function Goals({
   }
 
   const empty = !lab.objective && lab.priorities.length === 0;
+  // A Lab Manager from before draft.20 has no Orchestrator-set objective.
+  const orchestratorDecides = lab.objectiveSetBy !== undefined;
   return (
     <>
-      {empty && <p className="text-[13.5px] text-[var(--lab-dim)]">No objective or goals set for this lab yet.</p>}
+      {empty && (
+        <p className="text-[13.5px] text-[var(--lab-dim)]">
+          {orchestratorDecides
+            ? "Not decided yet. The Orchestrator decides the objective and goals from your description on its first turn."
+            : "No objective or goals set for this lab yet."}
+        </p>
+      )}
       {lab.objective && <p className="whitespace-pre-wrap break-words">{lab.objective}</p>}
       {lab.priorities.length > 0 && (
         <ol className="flex flex-col gap-1.5 text-[13.5px]">
@@ -152,10 +159,94 @@ function Goals({
       )}
       <div>
         <LabButton onClick={open} disabled={disabled} className="!min-h-[28px] !px-2">
-          {empty ? "Set goals" : "Edit goals"}
+          {orchestratorDecides ? "Override" : empty ? "Set goals" : "Edit goals"}
         </LabButton>
       </div>
     </>
+  );
+}
+
+/** The owner's description of the lab, which every agent is given. */
+function Brief({
+  lab,
+  disabled,
+  pending,
+  onSave,
+}: {
+  lab: LabSnapshot["lab"];
+  disabled: boolean;
+  pending: boolean;
+  onSave: (brief: string) => Promise<boolean>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [text, setText] = useState("");
+  useEffect(() => {
+    setEditing(false);
+    setExpanded(false);
+  }, [lab.id]);
+  const tooLong = text.length > MAX_BRIEF_LENGTH;
+
+  if (editing) {
+    return (
+      <form
+        className="flex flex-col gap-2 border-t border-[var(--lab-line)] pt-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (tooLong || pending) return;
+          void onSave(text.trim()).then((saved) => saved && setEditing(false));
+        }}
+      >
+        <label htmlFor="lab-brief-edit" className="lab-eyebrow !text-[10.5px]">
+          Your description, given to every agent
+        </label>
+        <textarea
+          id="lab-brief-edit"
+          className="lab-input lab-textarea"
+          rows={8}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          disabled={disabled || pending}
+        />
+        {tooLong && <p className="text-[12.5px] text-[var(--lab-bad)]">Too long by {text.length - MAX_BRIEF_LENGTH} characters.</p>}
+        <div className="flex gap-2">
+          <LabButton type="submit" variant="primary" disabled={disabled || pending || tooLong}>
+            {pending ? "Saving…" : "Save description"}
+          </LabButton>
+          <LabButton variant="quiet" onClick={() => setEditing(false)}>
+            Cancel
+          </LabButton>
+        </div>
+      </form>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2 border-t border-[var(--lab-line)] pt-3">
+      <p className="lab-eyebrow !text-[10.5px]">Your description, given to every agent</p>
+      {lab.brief ? (
+        <p className={cn("text-[13.5px] whitespace-pre-wrap break-words", !expanded && "line-clamp-4")}>{lab.brief}</p>
+      ) : (
+        <p className="text-[13.5px] text-[var(--lab-dim)]">None written.</p>
+      )}
+      <div className="flex gap-2">
+        {lab.brief && lab.brief.length > 240 && (
+          <LabButton variant="quiet" className="!min-h-[28px] !px-2" onClick={() => setExpanded(!expanded)}>
+            {expanded ? "Show less" : "Show all"}
+          </LabButton>
+        )}
+        <LabButton
+          className="!min-h-[28px] !px-2"
+          disabled={disabled}
+          onClick={() => {
+            setText(lab.brief ?? "");
+            setEditing(true);
+          }}
+        >
+          {lab.brief ? "Edit description" : "Write a description"}
+        </LabButton>
+      </div>
+    </div>
   );
 }
 
@@ -173,8 +264,10 @@ export function LabOverview({
   goalsPending,
   goalsFailure,
   onSaveGoals,
+  onSaveBrief,
   onOpenAgent,
 }: {
+  onSaveBrief: (brief: string) => Promise<boolean>;
   snapshot: LabSnapshot;
   health: LabHealth | null;
   /** The lab's newest tasks; null until loaded. */
@@ -197,21 +290,12 @@ export function LabOverview({
   const stage = snapshot.lab.cycleStage;
   // The compute tile takes a full row once rented compute is connected.
   const computeActive = health?.spend.metering === "active" && snapshot.budget.compute !== undefined;
-  const capabilities = health?.capabilities;
-  // Shown when the host has the shell switched on, even while it is withheld.
-  const showNetwork =
-    capabilities?.networkTofu !== undefined &&
-    Object.values(capabilities.shell ?? {}).some((s) => s.allowed || s.reason !== "no_autonomy_policy");
 
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 order-last md:order-none">
-      <Tile title="Tokens used" note="reported by Claude Code">
+      <Tile title="Tokens used">
         <p className="lab-mono text-[30px] leading-none tracking-tight">
           {estimates ? formatTokens(estimates.tokens) : "—"}
-        </p>
-        <p className="text-[12.5px] text-[var(--lab-dim)]">
-          All finished tasks in this lab, counting cached tokens in full, so it runs well above what your usage
-          limits weigh. An estimate, not a charge.
         </p>
       </Tile>
 
@@ -270,8 +354,23 @@ export function LabOverview({
         />
       </Tile>
 
-      <Tile title="Lab objective" note="for you · not yet shown to agents" className="xl:col-span-2">
+      <Tile
+        title="Lab objective"
+        note={
+          snapshot.lab.objectiveSetBy === undefined
+            ? "for you · not yet shown to agents"
+            : snapshot.lab.objectiveSetBy === "orchestrator"
+              ? `decided by the Orchestrator · ${formatAgo(snapshot.lab.objectiveSetAt, now)}`
+              : snapshot.lab.objectiveSetBy === "owner"
+                ? `set by you · ${formatAgo(snapshot.lab.objectiveSetAt, now)}`
+                : "the Orchestrator decides this"
+        }
+        className="xl:col-span-2"
+      >
         <Goals lab={snapshot.lab} disabled={disabled} pending={goalsPending} failure={goalsFailure} onSave={onSaveGoals} />
+        {snapshot.lab.brief !== undefined && (
+          <Brief lab={snapshot.lab} disabled={disabled} pending={goalsPending} onSave={onSaveBrief} />
+        )}
       </Tile>
 
       <Tile title="Work queue" note={stage !== "idle" ? `phase · ${stage}` : undefined}>
@@ -303,16 +402,6 @@ export function LabOverview({
           </ul>
         )}
       </Tile>
-
-      {showNetwork && (
-        <Tile
-          title="Sites reached by commands"
-          note={capabilities?.networkTofu?.allowed ? "new sites allowed on first use" : "listed sites only"}
-          className="md:col-span-2 xl:col-span-3"
-        >
-          <NetworkHosts now={now} disabled={disabled} />
-        </Tile>
-      )}
     </div>
   );
 }

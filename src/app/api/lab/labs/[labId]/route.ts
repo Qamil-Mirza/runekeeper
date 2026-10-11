@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { labError, readJsonObject, withLabOwner } from "@/lib/lab/route";
 import { LabManagerError, deleteLab, getLabSnapshot, isValidLabId, updateLab } from "@/lib/lab/manager";
 
+import { MAX_BRIEF_LENGTH } from "@/lib/lab/types";
+
 export const dynamic = "force-dynamic";
 
 export function GET(req: Request, { params }: { params: Promise<{ labId: string }> }) {
@@ -19,6 +21,13 @@ export function PATCH(req: Request, { params }: { params: Promise<{ labId: strin
     if (!isValidLabId(labId)) return labError(404, "not_found", "Not found");
 
     const body = await readJsonObject(req);
+    // The owner's brief is changed by itself, apart from the goals.
+    if (typeof body?.brief === "string" && body.objective === undefined && body.priorities === undefined) {
+      if (body.brief.length > MAX_BRIEF_LENGTH) {
+        return labError(400, "validation_failed", `The description must be at most ${MAX_BRIEF_LENGTH} characters`);
+      }
+      return NextResponse.json(await updateLab(config, actor, idempotencyKey, labId, { brief: body.brief.trim() }));
+    }
     const objective = body?.objective;
     const priorities = body?.priorities;
     if (

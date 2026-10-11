@@ -18,6 +18,7 @@ import {
   type LabHealth,
   type LabJob,
   type LabJobPage,
+  type LabMessageReceipt,
   type LabSnapshot,
   type LabSummary,
   type LabTranscriptItem,
@@ -274,7 +275,7 @@ export function createLab(
   config: LabConfig,
   actor: LabActor,
   idempotencyKey: string,
-  input: { name: string; objective?: string }
+  input: { name: string; objective?: string; brief?: string }
 ): Promise<LabSnapshot> {
   return call<LabSnapshot>(config, {
     method: "POST",
@@ -312,13 +313,13 @@ export async function runLabAction(
   });
 }
 
-/** Changes the lab's goals. Only the fields given are changed. */
+/** Changes the lab's goals or the owner's brief. Only the fields given are changed. */
 export async function updateLab(
   config: LabConfig,
   actor: LabActor,
   idempotencyKey: string,
   labId: string,
-  input: { objective?: string; priorities?: string[] }
+  input: { objective?: string; priorities?: string[]; brief?: string }
 ): Promise<Lab> {
   return call<Lab>(config, {
     method: "PATCH",
@@ -461,14 +462,14 @@ export async function getAgentTranscriptPage(
   });
 }
 
-/** Gives the agent one instruction. Refused with 409 while it is busy. */
+/** Sends the agent a message. A working agent reads it at its next step, or it waits for the agent to be free. */
 export async function sendAgentMessage(
   config: LabConfig,
   actor: LabActor,
   idempotencyKey: string,
   agentId: string,
   text: string
-): Promise<{ job: LabJob; transcriptItem: LabTranscriptItem }> {
+): Promise<LabMessageReceipt> {
   return call(config, {
     method: "POST",
     path: `/v1/agents/${assertId(agentId)}/messages`,

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as labApi from "@/lib/lab/client";
 import { LabApiError } from "@/lib/lab/client";
-import type { LabAgent, LabJob, LabTranscriptItem } from "@/lib/lab/types";
+import type { LabAgent, LabJob, LabTranscriptItem, MessageDelivery } from "@/lib/lab/types";
 import type { LabFailure } from "./use-lab";
 
 const ACTIVE_POLL_MS = 2_000;
@@ -145,18 +145,18 @@ export function useAgentConsole(labId: string, agent: LabAgent, enabled: boolean
     }
   }, [earlier, loadingEarlier]);
 
-  /** Resolves true when the Lab Manager accepted the instruction. */
+  /** Resolves with what became of the message, or null when the Lab Manager refused it. */
   const send = useCallback(
-    async (text: string): Promise<boolean> => {
+    async (text: string): Promise<MessageDelivery | null> => {
       const id = agentRef.current;
       setSending(true);
       setSendFailure(null);
       try {
-        await labApi.sendAgentMessage(id, text);
-        return true;
+        const receipt = await labApi.sendAgentMessage(id, text);
+        return receipt.delivery ?? "started";
       } catch (err) {
         if (agentRef.current === id) setSendFailure(toFailure(err));
-        return false;
+        return null;
       } finally {
         setSending(false);
         void refresh();

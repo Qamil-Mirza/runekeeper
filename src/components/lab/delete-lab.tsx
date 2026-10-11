@@ -5,8 +5,9 @@ import { LabButton, Strip } from "./lab-ui";
 import type { LabFailure } from "./use-lab";
 
 /**
- * Permanent deletion of one lab. It cannot be undone, so the owner confirms
- * in a dialog that names the lab; the server checks that name again.
+ * Permanent deletion of one lab: a small button beside the lab's name. It
+ * cannot be undone, so the owner confirms in a dialog that names the lab;
+ * the server checks that name again.
  */
 export function DeleteLab({
   labId,
@@ -31,16 +32,15 @@ export function DeleteLab({
   useEffect(() => setOpen(false), [labId]);
 
   return (
-    <section className="lab-danger-zone p-4 flex flex-wrap items-center justify-between gap-3" aria-label="Delete this lab">
-      <div className="min-w-0">
-        <h4 className="lab-eyebrow !text-[var(--lab-bad)]">Delete this lab</h4>
-        <p className="mt-1 text-[13.5px]">
-          Permanently removes <span className="font-medium">{name}</span>, its agents, conversations and files. This
-          cannot be undone.
-        </p>
-      </div>
-      <LabButton variant="danger" onClick={() => setOpen(true)} disabled={disabled}>
-        Delete lab…
+    <>
+      <LabButton
+        variant="danger"
+        className="!min-h-[26px] !px-2 !text-[11.5px]"
+        onClick={() => setOpen(true)}
+        disabled={disabled}
+        aria-label={`Delete the lab ${name}`}
+      >
+        Delete
       </LabButton>
 
       {open && (
@@ -86,6 +86,6 @@ export function DeleteLab({
           </div>
         </div>
       )}
-    </section>
+    </>
   );
 }

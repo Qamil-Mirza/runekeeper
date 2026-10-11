@@ -5,6 +5,7 @@ import * as labApi from "@/lib/lab/client";
 import { LabApiError } from "@/lib/lab/client";
 import type { LabAgent, LabComputeBudget, LabComputeRun, LabHealth, LabJob } from "@/lib/lab/types";
 import { ROLE_LABELS, formatAgo } from "./agent-card";
+import { cn } from "@/lib/utils";
 import { Chip, LabButton, Strip, type LabTone } from "./lab-ui";
 
 const ACTIVE_POLL_MS = 4_000;
@@ -232,105 +233,116 @@ export function ComputePanel({
       {runs?.length === 0 && <p className="text-[13.5px]">No GPU rented, and no runs yet in this lab.</p>}
 
       {runs && runs.length > 0 && (
-        <ul className="flex flex-col divide-y divide-[var(--lab-line)]">
+        <ul className="lab-carousel lab-scroll" aria-label="Rented machines, newest first">
           {runs.map((run) => {
             const status = STATUS[run.status];
-            const task = taskOf(run.jobId);
             const open = expanded === run.id;
             const live = LIVE.has(run.status);
             const using = taskOf(run.usedByJobId);
             const gpu = `${run.request.gpuCount > 1 ? `${run.request.gpuCount} × ` : ""}${run.request.gpuType}`;
             return (
-              <li key={run.id} className="py-3 flex flex-col gap-1.5">
-                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-                  <p className="min-w-0 text-[14px] font-medium break-words">{run.title}</p>
-                  <div className="flex items-center gap-2">
-                    <Chip tone={status.tone}>{status.label}</Chip>
-                    {CANCELLABLE.has(run.status) && (
-                      <>
-                        <LabButton
-                          variant={confirm === run.id ? "danger" : "default"}
-                          className="!min-h-[28px] !px-2"
-                          disabled={disabled || pending !== null}
-                          onClick={() => (confirm === run.id ? void cancel(run.id) : setConfirm(run.id))}
-                        >
-                          {pending === run.id ? "Cancelling…" : confirm === run.id ? "Confirm cancel" : "Cancel run"}
-                        </LabButton>
-                        {confirm === run.id && (
-                          <LabButton variant="quiet" className="!min-h-[28px] !px-2" onClick={() => setConfirm(null)}>
-                            Keep
-                          </LabButton>
-                        )}
-                      </>
-                    )}
-                  </div>
+              <li key={run.id} className={cn("lab-run-card", `lab-tone-${status.tone}`)}>
+                <div className="flex items-center justify-between gap-2">
+                  <Chip tone={status.tone}>{status.label}</Chip>
+                  <span className="lab-mono text-[11.5px] text-[var(--lab-faint)]">
+                    {run.endedAt ? `ended ${formatAgo(run.endedAt, now)}` : formatAgo(run.requestedAt, now)}
+                  </span>
                 </div>
 
-                <p className="lab-mono text-[12.5px] break-words">
-                  {gpu} · {run.request.cloud} cloud
-                  {run.usdPerHour !== null && ` · ${usd(run.usdPerHour)}/hour`}
-                  {run.status !== "refused" && ` · ${live ? `${usd(run.costUsd)} so far` : `cost ${usd(run.costUsd)}`}`}
-                  {run.providerBilledUsd !== null && ` · ${provider} billed ${usd(run.providerBilledUsd)}`}
+                <p className="text-[14px] font-medium break-words line-clamp-2" title={run.title}>
+                  {run.title}
                 </p>
 
+                <div>
+                  <p className="lab-mono text-[15px] leading-tight break-words">{gpu}</p>
+                  <p className="lab-mono text-[12.5px] text-[var(--lab-dim)]">
+                    {run.usdPerHour !== null ? `${usd(run.usdPerHour)}/hour` : "price not read"}
+                    {run.status !== "refused" && ` · ${live ? `${usd(run.costUsd)} so far` : `cost ${usd(run.costUsd)}`}`}
+                  </p>
+                </div>
+
                 <p className="text-[12.5px] text-[var(--lab-dim)] break-words">
+                  Rented by the{" "}
                   <button type="button" className="underline underline-offset-2" onClick={() => onOpenAgent(run.agentId)}>
                     {roleOf(run.agentId)}
                   </button>
-                  {task && <> · for “{task.length > 120 ? `${task.slice(0, 120)}…` : task}”</>}
-                  {" · "}
-                  {run.startedAt && live
-                    ? `rented ${minutesBetween(run.startedAt, now)} of at most ${run.request.maxMinutes} min${
-                        run.status === "starting" ? ", charged while it starts" : ""
-                      }`
-                    : run.endedAt
-                      ? `ended ${formatAgo(run.endedAt, now)}`
-                      : `requested ${formatAgo(run.requestedAt, now)}`}
-                  {live && run.deadline && ` · removed by ${new Date(run.deadline).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} whatever happens`}
+                  {run.status === "running" && run.upAt && <> · up {minutesBetween(run.upAt, now)} min</>}
+                  {run.status === "starting" && run.startedAt && (
+                    <> · starting, charged for {minutesBetween(run.startedAt, now)} min</>
+                  )}
+                  {live && <> of at most {run.request.maxMinutes}</>}
                 </p>
 
-                {run.status === "running" && (
-                  <p className="text-[12.5px] text-[var(--lab-dim)] break-words">
-                    The agent has one turn to use it
-                    {using && <> (“{using.length > 120 ? `${using.slice(0, 120)}…` : using}”)</>}; the GPU is removed
-                    when that turn ends.
-                  </p>
-                )}
-
                 {run.reason && (
-                  <p className="text-[12.5px] text-[var(--lab-bad)] break-words">
-                    {run.status === "refused" ? "Refused: " : ""}
+                  <p className="text-[12.5px] text-[var(--lab-bad)] break-words line-clamp-3" title={reasonText(run.reason)}>
                     {reasonText(run.reason)}
                   </p>
                 )}
 
-                <div>
-                  <button
-                    type="button"
-                    className="lab-eyebrow !text-[10.5px] underline underline-offset-2"
-                    aria-expanded={open}
-                    onClick={() => setExpanded(open ? null : run.id)}
-                  >
-                    {open ? "Hide what was rented" : "What was rented"}
-                  </button>
-                </div>
                 {open && (
-                  <div className="flex flex-col gap-1.5">
-                    <p className="text-[11.5px] text-[var(--lab-faint)]">Written by the agent.</p>
+                  <div className="flex flex-col gap-1.5 border-t border-[var(--lab-line)] pt-2">
+                    <p className="text-[11.5px] text-[var(--lab-faint)]">What was rented, written by the agent.</p>
                     <pre className="lab-pre">
                       {run.request.args.length > 0 ? run.request.args.join(" ") : "(the image's own start command)"}
                     </pre>
                     <p className="lab-mono text-[12px] text-[var(--lab-dim)] break-all">
-                      image {run.request.image} · serves on port {run.request.port} · disk {run.request.diskGb} GB
+                      image {run.request.image} · port {run.request.port} · disk {run.request.diskGb} GB ·{" "}
+                      {run.request.cloud} cloud
                     </p>
+                    {run.providerBilledUsd !== null && (
+                      <p className="text-[12px] text-[var(--lab-dim)]">
+                        {provider} billed {usd(run.providerBilledUsd)} for it.
+                      </p>
+                    )}
+                    {run.status === "running" && (
+                      <p className="text-[12px] text-[var(--lab-dim)] break-words">
+                        The agent has one turn to use it{using && <> (“{using.length > 90 ? `${using.slice(0, 90)}…` : using}”)</>}
+                        ; the GPU is removed when that turn ends.
+                      </p>
+                    )}
+                    {live && run.deadline && (
+                      <p className="text-[12px] text-[var(--lab-dim)]">
+                        Removed by{" "}
+                        {new Date(run.deadline).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} whatever
+                        happens.
+                      </p>
+                    )}
                     {run.url && (
                       <p className="text-[12px] text-[var(--lab-dim)] break-all">
-                        Address while it is up: <span className="lab-mono select-all">{run.url}</span>. Anyone with
-                        the address can reach it; the password for the server behind it is given only to the agent.
+                        Address while it is up: <span className="lab-mono select-all">{run.url}</span>. Anyone with the
+                        address can reach it; the password for the server behind it is given only to the agent.
                       </p>
                     )}
                   </div>
                 )}
+
+                <div className="flex flex-wrap items-center gap-2 mt-auto pt-1">
+                  <LabButton
+                    variant="quiet"
+                    className="!min-h-[28px] !px-2"
+                    aria-expanded={open}
+                    onClick={() => setExpanded(open ? null : run.id)}
+                  >
+                    {open ? "Less" : "Details"}
+                  </LabButton>
+                  {CANCELLABLE.has(run.status) && (
+                    <>
+                      <LabButton
+                        variant={confirm === run.id ? "danger" : "default"}
+                        className="!min-h-[28px] !px-2"
+                        disabled={disabled || pending !== null}
+                        onClick={() => (confirm === run.id ? void cancel(run.id) : setConfirm(run.id))}
+                      >
+                        {pending === run.id ? "Cancelling…" : confirm === run.id ? "Confirm cancel" : "Cancel run"}
+                      </LabButton>
+                      {confirm === run.id && (
+                        <LabButton variant="quiet" className="!min-h-[28px] !px-2" onClick={() => setConfirm(null)}>
+                          Keep
+                        </LabButton>
+                      )}
+                    </>
+                  )}
+                </div>
               </li>
             );
           })}
