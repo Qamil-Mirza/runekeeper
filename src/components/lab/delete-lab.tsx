@@ -36,18 +36,25 @@ export function DeleteLab({
 
   if (!open) {
     return (
-      <div>
-        <LabButton variant="quiet" onClick={() => setOpen(true)} disabled={disabled} className="!min-h-[28px] !px-2">
+      <section className="lab-danger-zone p-4 flex flex-wrap items-center justify-between gap-3" aria-label="Delete this lab">
+        <div className="min-w-0">
+          <h4 className="lab-eyebrow !text-[var(--lab-bad)]">Delete this lab</h4>
+          <p className="mt-1 text-[13.5px]">
+            Permanently removes <span className="font-medium">{name}</span>, its agents, conversations and files.
+            This cannot be undone.
+          </p>
+        </div>
+        <LabButton variant="danger" onClick={() => setOpen(true)} disabled={disabled}>
           Delete lab…
         </LabButton>
-      </div>
+      </section>
     );
   }
 
   const matches = typed === name;
   return (
     <form
-      className="lab-panel p-4 flex flex-col gap-3 lab-tone-bad"
+      className="lab-danger-zone p-4 flex flex-col gap-3"
       aria-label={`Delete lab ${name}`}
       onSubmit={(e) => {
         e.preventDefault();

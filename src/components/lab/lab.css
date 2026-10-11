@@ -113,6 +113,12 @@
   border: 1px solid var(--lab-line);
 }
 
+.lab-danger-zone {
+  border: 1px solid var(--lab-bad);
+  border-left-width: 3px;
+  background: color-mix(in srgb, var(--lab-bad) 9%, var(--lab-panel));
+}
+
 .lab-card {
   position: relative;
   background: color-mix(in srgb, var(--lab-panel) 92%, transparent);
