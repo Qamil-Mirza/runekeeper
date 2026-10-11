@@ -242,6 +242,10 @@ function composerBlock(agent: LabAgent, disabled: boolean, runtimeLeft: number |
     case "waitingOnHuman":
       return "The agent is waiting for your decision on a tool request.";
   }
+  if (agent.blockedBy?.reason === "reconciliation") {
+    return "A task was interrupted by a restart. Choose Run again or Dismiss under Tasks first.";
+  }
+  if (agent.blockedBy?.reason === "labPaused") return "The lab is paused.";
   if (runtimeLeft !== null && runtimeLeft <= 0) {
     return "This lab has no runtime left. Raise its runtime limit to continue.";
   }
