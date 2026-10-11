@@ -13,19 +13,18 @@ const QUIET_POLL_MS = 15_000;
 const STATUS: Record<LabComputeRun["status"], { label: string; tone: LabTone }> = {
   requested: { label: "Requested", tone: "off" },
   refused: { label: "Refused", tone: "bad" },
-  starting: { label: "Starting", tone: "warn" },
-  running: { label: "Running", tone: "accent" },
-  collecting: { label: "Collecting results", tone: "accent" },
+  starting: { label: "Starting up", tone: "warn" },
+  running: { label: "Up", tone: "accent" },
   removing: { label: "Removing the GPU", tone: "warn" },
-  succeeded: { label: "Succeeded", tone: "ok" },
+  finished: { label: "Finished", tone: "ok" },
   failed: { label: "Failed", tone: "bad" },
   timedOut: { label: "Timed out", tone: "bad" },
   cancelled: { label: "Cancelled", tone: "off" },
 };
 
 /** States in which something is, or may still be, rented. */
-const LIVE: ReadonlySet<LabComputeRun["status"]> = new Set(["requested", "starting", "running", "collecting", "removing"]);
-const CANCELLABLE: ReadonlySet<LabComputeRun["status"]> = new Set(["requested", "starting", "running", "collecting"]);
+const LIVE: ReadonlySet<LabComputeRun["status"]> = new Set(["requested", "starting", "running", "removing"]);
+const CANCELLABLE: ReadonlySet<LabComputeRun["status"]> = new Set(["requested", "starting", "running"]);
 
 const REASONS: Record<string, string> = {
   no_limit_set: "no compute limit is set for this lab",
@@ -36,8 +35,8 @@ const REASONS: Record<string, string> = {
   compute_unavailable: "rented compute is not available right now",
   lab_archived: "the lab is archived",
   manager_restarted: "the Lab Manager restarted",
-  input: "the run's input could not be prepared",
-  start: "the run could not be started",
+  start: "the machine could not be started",
+  price_changed: "the provider's price was higher than the one quoted",
 };
 
 const UNAVAILABLE: Record<string, string> = {
@@ -77,7 +76,8 @@ function Figure({ label, value, note }: { label: string; value: string; note?: s
  * Rented GPU compute for one lab. Money is labelled by who counted it: the
  * Lab Manager's own count (price × time, by its clock) is what the limit is
  * held against; the provider's figures are shown beside it and never as the
- * same thing. Titles, commands and GPU requests are written by agents.
+ * same thing. A rented machine is a server the agent calls for one turn; it is
+ * removed when that turn ends. Titles and requests are written by agents.
  */
 export function ComputePanel({
   labId,
@@ -238,6 +238,7 @@ export function ComputePanel({
             const task = taskOf(run.jobId);
             const open = expanded === run.id;
             const live = LIVE.has(run.status);
+            const using = taskOf(run.usedByJobId);
             const gpu = `${run.request.gpuCount > 1 ? `${run.request.gpuCount} × ` : ""}${run.request.gpuType}`;
             return (
               <li key={run.id} className="py-3 flex flex-col gap-1.5">
@@ -279,12 +280,22 @@ export function ComputePanel({
                   {task && <> · for “{task.length > 120 ? `${task.slice(0, 120)}…` : task}”</>}
                   {" · "}
                   {run.startedAt && live
-                    ? `running ${minutesBetween(run.startedAt, now)} of at most ${run.request.maxMinutes} min`
+                    ? `rented ${minutesBetween(run.startedAt, now)} of at most ${run.request.maxMinutes} min${
+                        run.status === "starting" ? ", charged while it starts" : ""
+                      }`
                     : run.endedAt
                       ? `ended ${formatAgo(run.endedAt, now)}`
                       : `requested ${formatAgo(run.requestedAt, now)}`}
                   {live && run.deadline && ` · removed by ${new Date(run.deadline).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} whatever happens`}
                 </p>
+
+                {run.status === "running" && (
+                  <p className="text-[12.5px] text-[var(--lab-dim)] break-words">
+                    The agent has one turn to use it
+                    {using && <> (“{using.length > 120 ? `${using.slice(0, 120)}…` : using}”)</>}; the GPU is removed
+                    when that turn ends.
+                  </p>
+                )}
 
                 {run.reason && (
                   <p className="text-[12.5px] text-[var(--lab-bad)] break-words">
@@ -300,18 +311,24 @@ export function ComputePanel({
                     aria-expanded={open}
                     onClick={() => setExpanded(open ? null : run.id)}
                   >
-                    {open ? "Hide what it runs" : "What it runs"}
+                    {open ? "Hide what was rented" : "What was rented"}
                   </button>
                 </div>
                 {open && (
                   <div className="flex flex-col gap-1.5">
                     <p className="text-[11.5px] text-[var(--lab-faint)]">Written by the agent.</p>
-                    <pre className="lab-pre">{run.request.command}</pre>
+                    <pre className="lab-pre">
+                      {run.request.args.length > 0 ? run.request.args.join(" ") : "(the image's own start command)"}
+                    </pre>
                     <p className="lab-mono text-[12px] text-[var(--lab-dim)] break-all">
-                      image {run.request.image} · from {run.request.directory} · disk {run.request.diskGb} GB
-                      {run.exitCode !== null && ` · exit code ${run.exitCode}`}
-                      {run.resultsDirectory && ` · results in ${run.resultsDirectory}`}
+                      image {run.request.image} · serves on port {run.request.port} · disk {run.request.diskGb} GB
                     </p>
+                    {run.url && (
+                      <p className="text-[12px] text-[var(--lab-dim)] break-all">
+                        Address while it is up: <span className="lab-mono select-all">{run.url}</span>. Anyone with
+                        the address can reach it; the password for the server behind it is given only to the agent.
+                      </p>
+                    )}
                   </div>
                 )}
               </li>

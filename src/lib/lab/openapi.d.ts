@@ -1519,17 +1519,19 @@ export interface components {
             /** @description Agent-written. */
             title: string;
             /**
-             * @description `removing`: the outcome is decided and the broker has not yet confirmed that nothing paid is left; still held against the limit.
+             * @description `starting`: rented and being charged, its container not up yet. `running`: up. `removing`: the outcome is decided and the broker has not yet confirmed that nothing paid is left; still held against the limit. `finished`: the turn it was rented for ended and it was removed.
              * @enum {string}
              */
-            status: "requested" | "refused" | "starting" | "running" | "collecting" | "removing" | "succeeded" | "failed" | "timedOut" | "cancelled";
-            /** @description Why it was refused or failed. Begins with one of: `no_limit_set`, `limit_expired`, `over_limit`, `over_balance`, `gpu_unavailable`, `compute_unavailable`, `lab_archived`, `manager_restarted`, `input`, `start`; otherwise free text. */
+            status: "requested" | "refused" | "starting" | "running" | "removing" | "finished" | "failed" | "timedOut" | "cancelled";
+            /** @description Why it was refused or failed. Begins with one of: `no_limit_set`, `limit_expired`, `over_limit`, `over_balance`, `gpu_unavailable`, `compute_unavailable`, `lab_archived`, `manager_restarted`, `start`, `price_changed`; otherwise free text. */
             reason: string | null;
             /** @description What the agent asked for. Agent-written. */
             request: {
-                directory: string;
                 image: string;
-                command: string;
+                /** @description The container's start command, one argument each. Empty: the image's own. */
+                args: string[];
+                /** @description The HTTP port the container serves on. */
+                port: number;
                 gpuType: string;
                 gpuCount: number;
                 /** @enum {string} */
@@ -1543,13 +1545,22 @@ export interface components {
             /** @description By the Lab Manager's clock: so far while it runs, final once it ended. Not the provider's bill. */
             costUsd: number;
             providerBilledUsd: number | null;
-            exitCode: number | null;
-            /** @description Where the run's output was put in the agent's files, if it came back. */
-            resultsDirectory: string | null;
+            /** @description Where the machine's port is reached from the internet while it is up. Null before it is up and after it is removed. Open to anyone who has it; the password that protects the server behind it is given only to the agent. */
+            url: string | null;
+            /** @description The turn the agent was given to use the machine. It is removed when that turn ends. */
+            usedByJobId: string | null;
             /** Format: date-time */
             requestedAt: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When it was rented. It is charged from here.
+             */
             startedAt: string | null;
+            /**
+             * Format: date-time
+             * @description When its container was first seen up.
+             */
+            upAt: string | null;
             /**
              * Format: date-time
              * @description When what was rented is removed whatever state it is in.
