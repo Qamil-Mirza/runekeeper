@@ -9,6 +9,7 @@ import type {
   LabJob,
   LabJobPage,
   LabSnapshot,
+  LabDeletionReceipt,
   LabSummary,
   LabTranscriptItem,
   LabTranscriptPage,
@@ -51,7 +52,7 @@ async function labFetch<T>(url: string, init?: RequestInit): Promise<T> {
   );
 }
 
-function mutate<T>(url: string, body?: unknown, method: "POST" | "PATCH" = "POST"): Promise<T> {
+function mutate<T>(url: string, body?: unknown, method: "POST" | "PATCH" | "DELETE" = "POST"): Promise<T> {
   return labFetch<T>(url, {
     method,
     headers: {
@@ -85,6 +86,11 @@ export function createLab(input: { name: string; objective?: string }) {
 
 export function fetchLabSnapshot(labId: string) {
   return labFetch<LabSnapshot>(`/api/lab/labs/${encodeURIComponent(labId)}`);
+}
+
+/** Permanently deletes a lab; `confirmName` must be the lab's exact name. */
+export function deleteLab(labId: string, confirmName: string) {
+  return mutate<LabDeletionReceipt>(`/api/lab/labs/${encodeURIComponent(labId)}`, { confirmName }, "DELETE");
 }
 
 export function runLabAction(labId: string, action: LabAction) {

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Lab Manager API
-  version: 1.0.0-draft.11
+  version: 1.0.0-draft.13
   summary: Contract between Runekeeper (client) and the Lab Manager (server).
   description: |
     Status: DRAFT under joint review. Implemented by the Lab Manager, which
@@ -23,6 +23,15 @@ info:
     - PATCH is naturally idempotent and takes no key.
     - Research endpoints (tag `research`) are implemented but new: they
       have not yet been used by a client and may still change before 1.0.
+
+    What changed in draft.13 (additive)
+    - `DELETE /v1/labs/{labId}`: deletes a lab for good. New error code
+      `lab_not_stopped` (409). New event `lab.deleted`.
+
+    What changed in draft.12 (additive)
+    - Labs can be archived: `POST /v1/labs/{labId}/archive` and
+      `/unarchive`. Nothing is deleted. `GET /v1/labs` leaves archived labs
+      out; `?archived=true` lists only those. `LabSummary.archivedAt`.
 
     What changed in draft.11 (additive)
     - Each entry of `Job.delegations` gains `body`: for a refused handoff,
@@ -235,9 +244,14 @@ paths:
       tags: [labs]
       operationId: listLabs
       summary: List labs.
+      parameters:
+        - name: archived
+          in: query
+          description: "`true`: only archived labs. Default: only labs that are not archived."
+          schema: { type: boolean, default: false }
       responses:
         "200":
-          description: All labs.
+          description: The labs.
           content:
             application/json:
               schema:
@@ -317,6 +331,48 @@ paths:
               schema: { $ref: "#/components/schemas/Lab" }
         default: { $ref: "#/components/responses/Error" }
 
+    delete:
+      tags: [labs]
+      operationId: deleteLab
+      summary: Delete a lab for good. Cannot be undone.
+      description: |
+        Unsigned; takes an `Idempotency-Key` like a POST, and a repeat with
+        the same key returns the first receipt.
+
+        Refused with 409 `lab_not_stopped` while any agent is starting, idle,
+        working or waiting, or any task is running (`details.agents` lists the
+        roles, `details.jobs` the job ids). The delete stops nothing itself:
+        stop the lab first. Interrupted tasks awaiting reconciliation do not
+        block it. Refused with 503 `manager_degraded`, and nothing is deleted,
+        when the agent worker cannot be reached or the files cannot be removed.
+
+        **Removed:** the lab; its agents; jobs and their logs; transcripts;
+        approvals; questions, experiments and their protocol versions;
+        results, reviews, findings, handoffs, decisions, escalations and
+        checkpoints; delegations; policy decisions; stored snapshots; each
+        agent's workspace directory on disk; and the session files Claude
+        Code keeps for those agents, so their conversations cannot be resumed
+        or recovered. The lab's past events leave the event history.
+
+        **Kept:** a tombstone (lab id, name, who deleted it, when, and the
+        counts in the receipt), and every signed authorization recorded for
+        the lab, which remains verifiable by itself. Stored text that
+        another lab's record also uses is kept for that lab.
+
+        Afterwards the lab, its agents and its jobs are 404. Any lab may be
+        deleted, including the last one. Emits `lab.deleted` with the receipt,
+        on the stream without a lab filter.
+      parameters:
+        - $ref: "#/components/parameters/LabId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: The receipt.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LabDeletionReceipt" }
+        "409": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
   /v1/labs/{labId}/budget:
     post:
       tags: [labs]
@@ -447,6 +503,45 @@ paths:
       summary: Cancel running jobs and stop all agents.
       parameters: *labActionParams
       responses: *labActionResponses
+
+  /v1/labs/{labId}/archive:
+    post:
+      tags: [labs]
+      operationId: archiveLab
+      summary: Put a lab away. Deletes nothing.
+      description: |
+        The lab disappears from `GET /v1/labs` and takes no work: starting an
+        agent, sending a message or starting a task is 409 `conflict` with
+        `details.archived`. Everything stays readable by id: transcript,
+        jobs, records and the agents' files. Refused with 409 `conflict`
+        unless every agent is stopped and no task is running; stop the lab
+        first. Archiving an archived lab changes nothing. Emits `lab.updated`.
+      parameters:
+        - $ref: "#/components/parameters/LabId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: The lab, with `archivedAt` set.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Lab" }
+        "409": { $ref: "#/components/responses/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /v1/labs/{labId}/unarchive:
+    post:
+      tags: [labs]
+      operationId: unarchiveLab
+      summary: Bring an archived lab back.
+      parameters:
+        - $ref: "#/components/parameters/LabId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: The lab, with `archivedAt` null. It is stopped; start it as usual.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Lab" }
+        default: { $ref: "#/components/responses/Error" }
 
   /v1/labs/{labId}/agents:
     get:
@@ -1447,6 +1542,7 @@ components:
         - protocol_changed
         - claude_code_failed
         - manager_degraded
+        - lab_not_stopped
         - rate_limited
         - internal_error
     ErrorResponse:
@@ -1806,6 +1902,28 @@ components:
     CycleStage:
       type: string
       enum: [idle, question, hypothesis, design, protocolRegistered, awaitingApproval, execution, review, findings, stateUpdate, decision, escalated]
+    LabDeletionReceipt:
+      type: object
+      required: [labId, name, deletedAt, removed, kept]
+      properties:
+        labId: { type: string }
+        name: { type: string }
+        deletedAt: { $ref: "#/components/schemas/Timestamp" }
+        removed:
+          type: object
+          required: [agents, jobs, transcriptItems, records, workspaces]
+          properties:
+            agents: { type: integer }
+            jobs: { type: integer }
+            transcriptItems: { type: integer }
+            records: { type: integer, description: "Questions, experiments and every kind of research record." }
+            workspaces: { type: integer, description: "Workspace directories that existed and were removed." }
+        kept:
+          type: object
+          required: [tombstone, signedAuthorizations]
+          properties:
+            tombstone: { type: boolean }
+            signedAuthorizations: { type: integer }
     LabSummary:
       type: object
       required: [id, name, status, cycleStage, pendingApprovalCount, openEscalationCount, autonomous, lastActivityAt]
@@ -1818,6 +1936,7 @@ components:
         openEscalationCount: { type: integer }
         autonomous: { type: boolean, description: "True when the host policy lets this lab advance without a human approving each step." }
         lastActivityAt: { $ref: "#/components/schemas/Timestamp" }
+        archivedAt: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }], description: "Set while the lab is archived." }
     Lab:
       allOf:
         - $ref: "#/components/schemas/LabSummary"
@@ -2511,6 +2630,7 @@ components:
         - manager.started
         - lab.created
         - lab.updated
+        - lab.deleted
         - lab.statusChanged
         - agent.stateChanged
         - transcript.itemAdded

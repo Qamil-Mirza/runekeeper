@@ -4,6 +4,9 @@ import type { components } from "./openapi";
 // (docs/lab/contract/openapi.yaml). Regenerate with `npm run lab:types`.
 type Schemas = components["schemas"];
 
+/** What the Lab Manager reports it removed, and what it kept, when a lab is deleted. */
+export type LabDeletionReceipt = Schemas["LabDeletionReceipt"];
+
 export type LabHealth = Schemas["Health"];
 export type LabCapability = Schemas["Capability"];
 export type LabSummary = Schemas["LabSummary"];

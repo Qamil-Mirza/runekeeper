@@ -228,6 +228,27 @@ export function useLab() {
     [runAction]
   );
 
+  /** Resolves true when the lab was deleted. */
+  const deleteLab = useCallback(
+    async (confirmName: string) => {
+      const labId = selectedRef.current;
+      if (!labId) return false;
+      let deleted = false;
+      await runAction("delete", "Deleting", async () => {
+        await labApi.deleteLab(labId, confirmName);
+        deleted = true;
+        if (selectedRef.current !== labId) return;
+        setLabs((items) => items?.filter((l) => l.id !== labId) ?? items);
+        setSelectedLabId(null);
+        setSnapshot(null);
+        setSnapshotAt(null);
+        setLabJobs(null);
+      });
+      return deleted;
+    },
+    [runAction]
+  );
+
   const labAction = useCallback(
     (action: LabAction) => {
       const labId = selectedRef.current;
@@ -291,6 +312,7 @@ export function useLab() {
     actionFailures,
     systemNotes,
     createLab,
+    deleteLab,
     labAction,
     agentAction,
     setRuntimeLimit,

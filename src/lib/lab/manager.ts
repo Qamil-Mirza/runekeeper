@@ -9,6 +9,7 @@ import {
   type LabBudget,
   type LabClientErrorCode,
   type LabConnectionStatus,
+  type LabDeletionReceipt,
   type LabHealth,
   type LabJob,
   type LabJobPage,
@@ -58,7 +59,7 @@ export function isValidIdempotencyKey(key: unknown): key is string {
 }
 
 interface CallOptions {
-  method: "GET" | "POST" | "PATCH";
+  method: "GET" | "POST" | "PATCH" | "DELETE";
   path: string;
   /** Omitted only for the unauthenticated health call. */
   actor?: LabActor;
@@ -320,6 +321,24 @@ export async function updateLab(
     actor,
     idempotencyKey,
     body: input,
+  });
+}
+
+/**
+ * Permanently deletes a lab with its agents, tasks, conversations, records
+ * and workspace files. Refused while any agent is up or a task is running.
+ */
+export async function deleteLab(
+  config: LabConfig,
+  actor: LabActor,
+  idempotencyKey: string,
+  labId: string
+): Promise<LabDeletionReceipt> {
+  return call<LabDeletionReceipt>(config, {
+    method: "DELETE",
+    path: `/v1/labs/${assertId(labId)}`,
+    actor,
+    idempotencyKey,
   });
 }
 
