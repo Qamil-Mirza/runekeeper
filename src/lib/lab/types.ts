@@ -68,4 +68,6 @@ export interface LabConnectionStatus {
   health: LabHealth | null;
   error: LabErrorBody["error"] | null;
   checkedAt: string;
+  /** Optional parts of the Lab screen, switched by Runekeeper's own settings. */
+  features?: { runtimeLimit: boolean };
 }

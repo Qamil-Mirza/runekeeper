@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { AgentCard, formatAgo } from "./agent-card";
 import { AgentConsole } from "./agent-console";
 import { labFontClasses } from "./fonts";
+import { LabOverview } from "./lab-overview";
 import { LAB_STATUS_TONE, LabRail } from "./lab-rail";
 import { LabTopBar } from "./lab-top-bar";
 import { Chip, LabButton, Strip } from "./lab-ui";
@@ -73,7 +74,8 @@ export function LabView({ onExit }: { onExit: () => void }) {
   useEffect(() => setConfirmStop(false), [labStatus, lab.selectedLabId]);
   useEffect(() => setOpenAgentId(null), [lab.selectedLabId]);
 
-  const runtime = snapshot?.budget.runtime;
+  // The runtime limit is shown only when Runekeeper is set to leave it to the owner.
+  const runtime = status?.features?.runtimeLimit ? snapshot?.budget.runtime : undefined;
   const runtimeLeft = runtime ? runtime.limitWallClockMinutes - runtime.usedWallClockMinutes : null;
   const openAgent = snapshot?.agents.find((a) => a.id === openAgentId) ?? null;
 
@@ -229,6 +231,17 @@ export function LabView({ onExit }: { onExit: () => void }) {
                   />
                 ) : (
                   <>
+                    <LabOverview
+                      snapshot={snapshot}
+                      health={status?.health ?? null}
+                      jobs={lab.labJobs}
+                      now={now}
+                      disabled={controlsDisabled}
+                      goalsPending={lab.pending.goals !== undefined}
+                      goalsFailure={lab.actionFailures.goals}
+                      onSaveGoals={lab.saveGoals}
+                      onOpenAgent={setOpenAgentId}
+                    />
                     <p className="lab-eyebrow">Agents · {snapshot.agents.length}</p>
                     <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
                       {snapshot.agents.map((agent) => (

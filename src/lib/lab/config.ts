@@ -123,3 +123,12 @@ export function isLabOwner(
   if (!userId) return false;
   return config.ownerUserIds.has(userId.toLowerCase());
 }
+
+/**
+ * Whether the per-lab runtime limit is shown and left to the owner. Off by
+ * default: Runekeeper then keeps the limit at the host's maximum so it never
+ * stops an instruction, and the Lab screen does not mention it.
+ */
+export function runtimeLimitEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  return env.LAB_RUNTIME_LIMIT?.trim() === "1";
+}

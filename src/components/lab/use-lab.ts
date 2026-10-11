@@ -7,6 +7,7 @@ import type {
   AgentAction,
   LabAction,
   LabConnectionStatus,
+  LabJob,
   LabSnapshot,
   LabSummary,
   LabTranscriptItem,
@@ -15,6 +16,7 @@ import type {
 const STATUS_POLL_MS = 10_000;
 const LABS_POLL_MS = 15_000;
 const SNAPSHOT_POLL_MS = 3_000;
+const JOBS_POLL_MS = 6_000;
 
 export interface LabFailure {
   code: string;
@@ -80,6 +82,8 @@ export function useLab() {
   const [snapshotFailure, setSnapshotFailure] = useState<LabFailure | null>(null);
   const [snapshotAt, setSnapshotAt] = useState<number | null>(null);
 
+  const [labJobs, setLabJobs] = useState<LabJob[] | null>(null);
+
   // Keyed by agent id, or "lab" for lab-level actions.
   const [pending, setPending] = useState<Record<string, string>>({});
   const [actionFailures, setActionFailures] = useState<Record<string, LabFailure>>({});
@@ -136,7 +140,19 @@ export function useLab() {
     }
   }, []);
 
+  const refreshJobs = useCallback(async () => {
+    const labId = selectedRef.current;
+    if (!labId) return;
+    try {
+      const page = await labApi.fetchLabJobs(labId);
+      if (selectedRef.current === labId) setLabJobs(page.items);
+    } catch {
+      // The work queue is a convenience; the snapshot carries the failure.
+    }
+  }, []);
+
   usePolling(refreshStatus, STATUS_POLL_MS, true);
+  usePolling(refreshJobs, JOBS_POLL_MS, connected && selectedLabId !== null);
   usePolling(refreshLabs, LABS_POLL_MS, connected);
   usePolling(refreshSnapshot, SNAPSHOT_POLL_MS, connected && selectedLabId !== null);
 
@@ -167,6 +183,7 @@ export function useLab() {
 
   const selectLab = useCallback((labId: string) => {
     setSelectedLabId(labId);
+    setLabJobs(null);
     setSnapshot(null);
     setSnapshotAt(null);
     setSnapshotFailure(null);
@@ -194,9 +211,10 @@ export function useLab() {
         // the manager says next.
         void refreshSnapshot();
         void refreshLabs();
+        void refreshJobs();
       }
     },
-    [refreshLabs, refreshSnapshot, refreshStatus]
+    [refreshJobs, refreshLabs, refreshSnapshot, refreshStatus]
   );
 
   const createLab = useCallback(
@@ -242,6 +260,22 @@ export function useLab() {
     [runAction]
   );
 
+  /** Resolves true when the goals were saved. */
+  const saveGoals = useCallback(
+    async (goals: { objective: string; priorities: string[] }) => {
+      const labId = selectedRef.current;
+      if (!labId) return false;
+      let saved = false;
+      await runAction("goals", "Saving", async () => {
+        const lab = await labApi.updateLabGoals(labId, goals);
+        setSnapshot((s) => (s && s.lab.id === labId ? { ...s, lab: { ...s.lab, ...lab } } : s));
+        saved = true;
+      });
+      return saved;
+    },
+    [runAction]
+  );
+
   return {
     status,
     statusFailure,
@@ -260,6 +294,8 @@ export function useLab() {
     labAction,
     agentAction,
     setRuntimeLimit,
+    labJobs,
+    saveGoals,
     retry: useCallback(() => {
       void refreshStatus();
       void refreshLabs();

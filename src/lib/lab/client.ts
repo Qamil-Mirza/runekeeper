@@ -51,9 +51,9 @@ async function labFetch<T>(url: string, init?: RequestInit): Promise<T> {
   );
 }
 
-function mutate<T>(url: string, body?: unknown): Promise<T> {
+function mutate<T>(url: string, body?: unknown, method: "POST" | "PATCH" = "POST"): Promise<T> {
   return labFetch<T>(url, {
-    method: "POST",
+    method,
     headers: {
       "Content-Type": "application/json",
       // One key per user action, so a retried click cannot act twice.
@@ -131,4 +131,13 @@ export function setRuntimeLimit(labId: string, wallClockMinutes: number) {
   return mutate<LabBudget>(`/api/lab/labs/${encodeURIComponent(labId)}/runtime-limit`, {
     wallClockMinutes,
   });
+}
+
+export function updateLabGoals(labId: string, goals: { objective: string; priorities: string[] }) {
+  return mutate<Lab>(`/api/lab/labs/${encodeURIComponent(labId)}`, goals, "PATCH");
+}
+
+/** The lab's newest tasks across all agents, newest first. */
+export function fetchLabJobs(labId: string) {
+  return labFetch<LabJobPage>(`/api/lab/labs/${encodeURIComponent(labId)}/jobs`);
 }
