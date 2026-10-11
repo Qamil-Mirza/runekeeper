@@ -25,6 +25,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // On initial sign-in, persist tokens
       if (account && user) {
         token.userId = user.id;
+        // When this session was established by a completed sign-in. Consequential
+        // actions can require it to be recent; it lives only in the signed token.
+        token.authTime = Math.floor(Date.now() / 1000);
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token;
         token.expiresAt = account.expires_at;
@@ -56,6 +59,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.userId as string;
       }
       (session as any).accessToken = token.accessToken;
+      (session as any).authTime = token.authTime;
       return session;
     },
   },

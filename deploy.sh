@@ -4,6 +4,14 @@ set -euo pipefail
 ENV_FILE=".env.production"
 COMPOSE_FILE="docker-compose.prod.yml"
 
+# The Lab is opt-in: its override is applied only when the env file sets
+# LAB_SOCK_GID. Without that line this script behaves exactly as before.
+COMPOSE_FILES=(-f "$COMPOSE_FILE")
+if grep -qE '^LAB_SOCK_GID=[0-9]+$' "$ENV_FILE"; then
+  COMPOSE_FILES+=(-f docker-compose.lab.yml)
+  echo "==> Lab override enabled (docker-compose.lab.yml)"
+fi
+
 echo "==> Pulling latest code..."
 git pull origin main
 
@@ -15,10 +23,10 @@ echo "==> Building APP_VERSION=$APP_VERSION"
 # applied before the new app container starts serving — additive schema changes
 # are backward-compatible, so the currently-running app tolerates them.
 echo "==> Starting database..."
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d db
+docker compose --env-file "$ENV_FILE" "${COMPOSE_FILES[@]}" up -d db
 
 echo "==> Waiting for database to be ready..."
-until docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec db pg_isready -U runekeeper 2>/dev/null; do
+until docker compose --env-file "$ENV_FILE" "${COMPOSE_FILES[@]}" exec db pg_isready -U runekeeper 2>/dev/null; do
   sleep 1
 done
 
@@ -34,7 +42,7 @@ npx drizzle-kit push
 # Build and (re)start the app only after the schema is in place, so the new
 # code never queries a column that doesn't exist yet.
 echo "==> Building and starting application..."
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build
+docker compose --env-file "$ENV_FILE" "${COMPOSE_FILES[@]}" up -d --build
 
 echo "==> Deploy complete!"
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps
+docker compose --env-file "$ENV_FILE" "${COMPOSE_FILES[@]}" ps

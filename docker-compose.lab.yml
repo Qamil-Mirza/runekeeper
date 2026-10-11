@@ -1,0 +1,39 @@
+# Not in use until the production env file sets LAB_SOCK_GID: deploy.sh then
+# adds this file. Setting that line needs the owner's approval.
+#
+# Adds The Lab to the app container. It is an override, layered on top of the
+# production file:
+#
+#   docker compose --env-file .env.production \
+#     -f docker-compose.prod.yml -f docker-compose.lab.yml up -d app
+#
+# What it changes, and nothing else:
+#   - mounts the Lab Manager's socket DIRECTORY read-only (the directory, not
+#     the socket file, so a socket re-created after a manager restart stays
+#     visible; read-only, because connecting needs no write access);
+#   - mounts the Lab secrets directory read-only at /run/secrets. This is a
+#     plain bind mount on purpose: the files keep the owner and mode they have
+#     on the host (owner = the container's uid, mode 0400). Compose's own
+#     `secrets:` uid/gid/mode settings are not relied on;
+#   - adds the dedicated socket group, by numeric gid, as a supplementary
+#     group of the container process. That group is the only thing that grants
+#     access to the socket;
+#   - passes the Lab settings. No secret is passed through the environment:
+#     the app reads the token and the signing key from the mounted files.
+#
+# LAB_SOCK_GID and LAB_OWNER_USER_IDS have no default on purpose: compose
+# refuses to start without them. LAB_SOCKET_DIR and LAB_SECRETS_DIR exist so
+# the rehearsal script can point these same lines at test directories; leave
+# them unset in production.
+services:
+  app:
+    volumes:
+      - ${LAB_SOCKET_DIR:-/run/lab-manager}:/run/lab-manager:ro
+      - ${LAB_SECRETS_DIR:-/etc/lab-runekeeper}:/run/secrets:ro
+    group_add:
+      - "${LAB_SOCK_GID:?LAB_SOCK_GID must be the numeric gid of the host's lab-sock group}"
+    environment:
+      LAB_MANAGER_URL: unix:/run/lab-manager/api.sock
+      LAB_MANAGER_TOKEN_FILE: /run/secrets/service-token
+      LAB_DECISION_KEY_FILE: /run/secrets/decision-private.pem
+      LAB_OWNER_USER_IDS: ${LAB_OWNER_USER_IDS:?LAB_OWNER_USER_IDS is required}

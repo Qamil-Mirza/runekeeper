@@ -1,0 +1,11 @@
+# Used only by scripts/lab/rehearse-deployment.sh. Moves the published ports
+# so a rehearsal can run beside a local dev server and database. It changes
+# nothing else about the production compose file.
+services:
+  db:
+    ports: !override
+      - "127.0.0.1:35432:5432"
+  app:
+    ports: !override
+      - "127.0.0.1:33000:3000"
+      - "127.0.0.1:33001:3001"

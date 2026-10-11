@@ -1,0 +1,1585 @@
+openapi: 3.1.0
+info:
+  title: Lab Manager API
+  version: 1.0.0-draft.6
+  summary: Contract between Runekeeper (client) and the Lab Manager (server).
+  description: |
+    Status: DRAFT under joint review. Nothing is implemented.
+
+    This file is the source of truth for the contract. Both repositories
+    generate TypeScript types from it, and the Lab Manager validates its
+    responses against it in tests. `docs/api/v1-draft.md` explains the
+    reasoning; where the two differ, this file wins.
+
+    Conventions
+    - JSON, camelCase. Ids are opaque strings with a type prefix. Times are
+      ISO-8601 UTC.
+    - Mutations return quickly with the new or pending state; completion is
+      reported on the event stream.
+    - Every POST accepts `Idempotency-Key`. Same key and body returns the
+      original response; same key with a different body is 409
+      `idempotency_conflict`. Keys are kept for 24 hours.
+    - PATCH is naturally idempotent and takes no key.
+    - Research endpoints (tag `research`) are provisional; their shapes are
+      deferred until the agent write path is designed. Milestone 1 needs none
+      of them.
+
+    Authorization
+    - The bearer token authenticates Runekeeper's server. Both sides read it
+      from a file, never from an environment variable. During a rotation the
+      Lab Manager accepts two tokens at once.
+    - Every authenticated request, including reads and the event stream,
+      must carry `X-Lab-Actor-Id` and `X-Lab-Actor-Email`. The Lab Manager
+      checks the actor id against its own allowlist (`LAB_ALLOWED_ACTOR_IDS`)
+      and refuses to start when that allowlist is empty. A missing or
+      unlisted actor is 403 `actor_not_allowed`.
+    - Calls that authorize execution or spend (approval decisions, retrying
+      an interrupted job, changing budget limits) additionally carry a signed
+      `Authorization` object; see the `SignedAuthorization` schema. Runekeeper
+      holds the Ed25519 private key; the Lab Manager holds only the public
+      key, verifies before acting, and stores the signed record.
+
+    Status semantics
+    - Lab status is derived from its agents: `stopped` when none is up,
+      `running` when at least one is, `degraded` when one has crashed,
+      `paused` only when a human paused it.
+    - Starting an agent consumes no budget and runs no model call. It
+      provisions the workspace and runs a preflight with the real Claude Code
+      binary; the result is recorded as a `systemNote` transcript item.
+    - `capabilities.*.reason` is a free string. Values in use:
+      `agent_isolation_missing`, `isolation_unverified`,
+      `isolation_check_failed`, `sandbox_unavailable`,
+      `not_approved_by_owner`, `not_enabled_in_this_build`, `not_implemented`.
+servers:
+  - url: http://127.0.0.1:7717
+    description: Native development (loopback TCP).
+  - url: http://lab-manager
+    description: >-
+      Production. HTTP over the Unix domain socket /run/lab-manager/api.sock;
+      the host name is a placeholder.
+security:
+  - serviceToken: []
+    actorId: []
+    actorEmail: []
+tags:
+  - name: health
+  - name: labs
+  - name: agents
+  - name: jobs
+  - name: approvals
+  - name: research
+  - name: events
+
+paths:
+  /v1/health:
+    get:
+      tags: [health]
+      operationId: getHealth
+      summary: Liveness, API version and degraded reasons. Unauthenticated; answers from memory.
+      security: []
+      responses:
+        "200":
+          description: Service is up (possibly degraded).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+
+  /v1/labs:
+    get:
+      tags: [labs]
+      operationId: listLabs
+      summary: List labs.
+      responses:
+        "200":
+          description: All labs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/LabSummary" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [labs]
+      operationId: createLab
+      summary: Create a lab, its repository, agent workspaces and four unprovisioned agents.
+      description: |
+        A new lab has zero budget limits and cannot run any job until a
+        signed `setLabBudget` call. Creating a lab therefore authorizes no
+        spend.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 120 }
+                objective: { type: string, maxLength: 4000 }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LabSnapshot" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/labs/{labId}:
+    parameters:
+      - $ref: "#/components/parameters/LabId"
+    get:
+      tags: [labs]
+      operationId: getLabSnapshot
+      summary: Everything the dashboard needs in one call, with the event cursor it was taken at.
+      responses:
+        "200":
+          description: Snapshot.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LabSnapshot" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [labs]
+      operationId: updateLab
+      summary: Update name, objective, priorities or approval policy. Budget limits have their own signed endpoint.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              minProperties: 1
+              properties:
+                name: { type: string, minLength: 1, maxLength: 120 }
+                objective: { type: string, maxLength: 4000 }
+                priorities:
+                  type: array
+                  maxItems: 20
+                  items: { type: string, maxLength: 500 }
+                approvalPolicy: { $ref: "#/components/schemas/ApprovalPolicy" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Lab" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/labs/{labId}/budget:
+    post:
+      tags: [labs]
+      operationId: setLabBudget
+      summary: Set the lab's budget limits. Signed, because it authorizes spend.
+      description: The signature covers a BudgetBinding, which includes the limits in force before the change.
+      parameters:
+        - $ref: "#/components/parameters/LabId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [limits, authorization]
+              properties:
+                limits: { $ref: "#/components/schemas/BudgetLimits" }
+                note: { type: string, maxLength: 2000 }
+                authorization: { $ref: "#/components/schemas/SignedAuthorization" }
+      responses:
+        "200":
+          description: Limits updated; `lab.updated` and `budget.updated` are emitted with the actor.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Budget" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/labs/{labId}/start:
+    post:
+      tags: [labs]
+      operationId: startLab
+      summary: Provision any missing sessions and start all agents.
+      parameters: &labActionParams
+        - $ref: "#/components/parameters/LabId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses: &labActionResponses
+        "202":
+          description: Accepted; progress is reported on the event stream.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Lab" }
+        default: { $ref: "#/components/responses/Error" }
+  /v1/labs/{labId}/pause:
+    post:
+      tags: [labs]
+      operationId: pauseLab
+      summary: Stop dispatching new jobs; running jobs finish.
+      parameters: *labActionParams
+      responses: *labActionResponses
+  /v1/labs/{labId}/resume:
+    post:
+      tags: [labs]
+      operationId: resumeLab
+      summary: Resume dispatching.
+      parameters: *labActionParams
+      responses: *labActionResponses
+  /v1/labs/{labId}/stop:
+    post:
+      tags: [labs]
+      operationId: stopLab
+      summary: Cancel running jobs and stop all agents.
+      parameters: *labActionParams
+      responses: *labActionResponses
+
+  /v1/labs/{labId}/agents:
+    get:
+      tags: [agents]
+      operationId: listAgents
+      summary: List a lab's agents.
+      parameters:
+        - $ref: "#/components/parameters/LabId"
+      responses:
+        "200":
+          description: The lab's agents.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Agent" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/agents/{agentId}:
+    get:
+      tags: [agents]
+      operationId: getAgent
+      summary: Get one agent.
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+      responses:
+        "200":
+          description: Agent.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Agent" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/agents/{agentId}/start:
+    post:
+      tags: [agents]
+      operationId: startAgent
+      summary: Provision the session if needed and become idle.
+      parameters: &agentActionParams
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses: &agentActionResponses
+        "202":
+          description: Accepted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Agent" }
+        default: { $ref: "#/components/responses/Error" }
+  /v1/agents/{agentId}/stop:
+    post:
+      tags: [agents]
+      operationId: stopAgent
+      summary: Cancel the current job and become stopped.
+      parameters: *agentActionParams
+      responses: *agentActionResponses
+  /v1/agents/{agentId}/restart:
+    post:
+      tags: [agents]
+      operationId: restartAgent
+      summary: Stop, then start with the same session.
+      parameters: *agentActionParams
+      responses: *agentActionResponses
+  /v1/agents/{agentId}/resume:
+    post:
+      tags: [agents]
+      operationId: resumeAgent
+      summary: Recover a crashed or stopped agent, optionally with a fresh session seeded from repository state.
+      parameters: *agentActionParams
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                newSession: { type: boolean, default: false }
+      responses: *agentActionResponses
+  /v1/agents/{agentId}/mode:
+    post:
+      tags: [agents]
+      operationId: setAgentMode
+      summary: Switch between manager-driven and tmux (human-driven) operation. Stops the other driver.
+      description: |
+        In tmux mode, permission prompts are answered at the terminal and do
+        not appear in the approval queue. The switch is recorded as an event
+        with the actor and is refused with 412 `isolation_required` unless
+        `capabilities.tmuxMode.allowed`. Not part of milestone 1.
+      parameters: *agentActionParams
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode: { $ref: "#/components/schemas/AgentMode" }
+      responses: *agentActionResponses
+
+  /v1/agents/{agentId}/messages:
+    post:
+      tags: [agents]
+      operationId: sendAgentMessage
+      summary: Send a human message to an agent. Creates a job of kind `message`.
+      description: |
+        Accepted only when the agent is `idle`. In `starting`, `working` or
+        `waitingOnHuman` the call is 409 `agent_busy` (a session blocked on a
+        prompt cannot take input); in tmux mode it is 409 `tmux_mode_active`.
+        There is no message queue in v1.
+      parameters: *agentActionParams
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, minLength: 1, maxLength: 20000 }
+      responses:
+        "202":
+          description: Accepted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [job, transcriptItem]
+                properties:
+                  job: { $ref: "#/components/schemas/Job" }
+                  transcriptItem: { $ref: "#/components/schemas/TranscriptItem" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/agents/{agentId}/transcript:
+    get:
+      tags: [agents]
+      operationId: getAgentTranscript
+      summary: Structured transcript. Without a cursor, returns the newest items.
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/Before"
+        - $ref: "#/components/parameters/After"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: A page of transcript items, in ascending `seq` order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TranscriptItem" }
+                  nextCursor: { $ref: "#/components/schemas/Cursor" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/labs/{labId}/jobs:
+    get:
+      tags: [jobs]
+      operationId: listJobs
+      summary: List jobs, newest first.
+      parameters:
+        - $ref: "#/components/parameters/LabId"
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/JobStatus" }
+        - name: agentId
+          in: query
+          schema: { type: string }
+        - name: kind
+          in: query
+          description: Defaults to `task`; pass `message` or `all` to include human-message jobs.
+          schema: { type: string, enum: [task, message, all], default: task }
+        - $ref: "#/components/parameters/Before"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: A page of jobs, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Job" }
+                  nextCursor: { $ref: "#/components/schemas/Cursor" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [jobs]
+      operationId: createJob
+      summary: Dispatch a bounded task to an agent.
+      parameters: *labActionParams
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agentId, title, instructions]
+              properties:
+                agentId: { type: string }
+                title: { type: string, minLength: 1, maxLength: 200 }
+                instructions: { type: string, minLength: 1, maxLength: 20000 }
+                experimentId: { type: string }
+                limits: { $ref: "#/components/schemas/JobLimits" }
+      responses:
+        "202":
+          description: |
+            Queued, or `awaitingApproval` with `approvalId` set when the task
+            needs a human decision first. 412 is returned only when no
+            approval can help (`budget_exceeded`, `isolation_required`).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/jobs/{jobId}:
+    get:
+      tags: [jobs]
+      operationId: getJob
+      summary: Get one job.
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: Job.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/jobs/{jobId}/cancel:
+    post:
+      tags: [jobs]
+      operationId: cancelJob
+      summary: Cancel a queued or running job.
+      parameters: &jobActionParams
+        - $ref: "#/components/parameters/JobId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "202":
+          description: Cancelling.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/jobs/{jobId}/reconcile:
+    post:
+      tags: [jobs]
+      operationId: reconcileJob
+      summary: Resolve a job that was interrupted by a manager restart.
+      description: |
+        Interrupted jobs are never re-executed automatically. A human either
+        acknowledges the interruption or asks for a retry, which creates a NEW
+        job (returned as `retryJob`) with the same instructions and
+        `retryOfJobId` set. The new job inherits no approvals and must obtain
+        fresh ones. Until an
+        agent's interrupted job is reconciled, no new `task` job is dispatched
+        to that agent (`Agent.blockedBy` says so); human messages are still
+        accepted. `job.reconciled` and `agent.stateChanged` are emitted when
+        the hold clears.
+      parameters: *jobActionParams
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resolution]
+              properties:
+                resolution: { type: string, enum: [acknowledge, retry] }
+                note: { type: string, maxLength: 2000 }
+                authorization:
+                  $ref: "#/components/schemas/SignedAuthorization"
+                  description: Required when resolution is `retry`.
+      responses:
+        "200":
+          description: Reconciled.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [job]
+                properties:
+                  job: { $ref: "#/components/schemas/Job" }
+                  retryJob: { $ref: "#/components/schemas/Job" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/jobs/{jobId}/logs:
+    get:
+      tags: [jobs]
+      operationId: getJobLogs
+      summary: Paginated log lines. Without `after`, returns the tail.
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+        - $ref: "#/components/parameters/After"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: A page of log lines in ascending order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/LogLine" }
+                  nextCursor: { $ref: "#/components/schemas/Cursor" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/approvals:
+    get:
+      tags: [approvals]
+      operationId: listApprovals
+      summary: List approvals.
+      parameters:
+        - name: labId
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/ApprovalStatus" }
+        - name: kind
+          in: query
+          schema: { $ref: "#/components/schemas/ApprovalKind" }
+        - name: agentId
+          in: query
+          schema: { type: string }
+        - $ref: "#/components/parameters/Before"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: A page of approvals; pending first, then newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Approval" }
+                  nextCursor: { $ref: "#/components/schemas/Cursor" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/approvals/{approvalId}:
+    get:
+      tags: [approvals]
+      operationId: getApproval
+      summary: Get one approval with its complete request.
+      parameters:
+        - $ref: "#/components/parameters/ApprovalId"
+      responses:
+        "200":
+          description: Approval.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Approval" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/approvals/{approvalId}/decision:
+    post:
+      tags: [approvals]
+      operationId: decideApproval
+      summary: Record a human decision. The only way a decision is ever created.
+      description: |
+        Decisions are once-only and apply to exactly one request; there is no
+        "always allow" in v1. The signature binds the decision to the
+        approval's `requestHash`, so it cannot be replayed against a different
+        request. Fetch the approval by id first: only that response is
+        guaranteed to carry the complete request.
+      parameters:
+        - $ref: "#/components/parameters/ApprovalId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outcome, authorization]
+              properties:
+                outcome: { type: string, enum: [approved, denied] }
+                note: { type: string, maxLength: 2000, description: "On a denial, delivered to the agent as the reason." }
+                authorization: { $ref: "#/components/schemas/SignedAuthorization" }
+      responses:
+        "200":
+          description: Decision recorded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Approval" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/labs/{labId}/questions:
+    get:
+      tags: [research]
+      operationId: listQuestions
+      summary: List research questions.
+      parameters:
+        - $ref: "#/components/parameters/LabId"
+      responses:
+        "200":
+          description: Research questions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Question" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [research]
+      operationId: createQuestion
+      summary: The human assigns a research question or objective.
+      parameters: *labActionParams
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: { type: string, minLength: 1, maxLength: 300 }
+                body: { type: string, maxLength: 20000 }
+                priority: { type: string, enum: [low, medium, high], default: medium }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Question" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/labs/{labId}/experiments:
+    get:
+      tags: [research]
+      operationId: listExperiments
+      summary: List experiments.
+      parameters:
+        - $ref: "#/components/parameters/LabId"
+      responses:
+        "200":
+          description: Experiments.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Experiment" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/experiments/{experimentId}:
+    get:
+      tags: [research]
+      operationId: getExperiment
+      summary: Get one experiment.
+      parameters:
+        - name: experimentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Experiment with its jobs and approvals.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExperimentDetail" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/labs/{labId}/findings:
+    get:
+      tags: [research]
+      operationId: listFindings
+      summary: List findings.
+      parameters:
+        - $ref: "#/components/parameters/LabId"
+      responses:
+        "200":
+          description: Findings.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Finding" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/labs/{labId}/decisions:
+    get:
+      tags: [research]
+      operationId: listResearchDecisions
+      summary: List the research decision log.
+      parameters:
+        - $ref: "#/components/parameters/LabId"
+      responses:
+        "200":
+          description: Research decision log (not approval decisions).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ResearchRecord" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/labs/{labId}/handoffs:
+    get:
+      tags: [research]
+      operationId: listHandoffs
+      summary: List handoffs.
+      parameters:
+        - $ref: "#/components/parameters/LabId"
+      responses:
+        "200":
+          description: Structured handoffs between agents.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Handoff" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/labs/{labId}/artifacts:
+    get:
+      tags: [research]
+      operationId: getArtifact
+      summary: Read one file from the lab repository at a commit. Confined to the repository; size-capped.
+      parameters:
+        - $ref: "#/components/parameters/LabId"
+        - name: path
+          in: query
+          required: true
+          description: Repository-relative path. Absolute paths and `..` segments are rejected.
+          schema: { type: string, maxLength: 1024 }
+        - name: ref
+          in: query
+          description: Commit sha. Defaults to the head of `main`.
+          schema: { type: string, pattern: "^[0-9a-f]{7,40}$" }
+      responses:
+        "200":
+          description: File content.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Artifact" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/events:
+    get:
+      tags: [events]
+      operationId: streamEvents
+      summary: Ordered Server-Sent Events stream with replay.
+      description: |
+        Each SSE message has `id` (the cursor), `event` (the type) and a JSON
+        `data` payload matching `Event`. Cursors are strictly increasing across
+        the whole service and remain valid across manager restarts. A comment
+        line is sent every 15 seconds. Multiple concurrent consumers are
+        supported.
+
+        Resume with `after` or the `Last-Event-ID` header (the header wins).
+        With neither, the stream starts from now. A cursor older than
+        retention is refused with 410 `cursor_expired` before the stream
+        opens; the client refetches the snapshot and resubscribes from its
+        `eventCursor`.
+      parameters:
+        - name: after
+          in: query
+          schema: { type: string }
+        - name: Last-Event-ID
+          in: header
+          schema: { type: string }
+        - name: labId
+          in: query
+          schema: { type: string }
+      responses:
+        "200":
+          description: Event stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/events/history:
+    get:
+      tags: [events]
+      operationId: listEvents
+      summary: The same events, paginated backwards, for the activity view.
+      parameters:
+        - name: labId
+          in: query
+          schema: { type: string }
+        - name: type
+          in: query
+          schema: { $ref: "#/components/schemas/EventType" }
+        - $ref: "#/components/parameters/Before"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: A page of events, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Event" }
+                  nextCursor: { $ref: "#/components/schemas/Cursor" }
+        default: { $ref: "#/components/responses/Error" }
+
+components:
+  securitySchemes:
+    serviceToken:
+      type: http
+      scheme: bearer
+      description: Shared service secret held by Runekeeper's server. Never sent to a browser.
+    actorId:
+      type: apiKey
+      in: header
+      name: X-Lab-Actor-Id
+      description: Runekeeper `users.id` (uuid) of the acting human. Checked against the manager's allowlist and recorded.
+    actorEmail:
+      type: apiKey
+      in: header
+      name: X-Lab-Actor-Email
+      description: Email of the acting human. Recorded for audit; not an allowlist key.
+
+  parameters:
+    LabId: { name: labId, in: path, required: true, schema: { type: string } }
+    AgentId: { name: agentId, in: path, required: true, schema: { type: string } }
+    JobId: { name: jobId, in: path, required: true, schema: { type: string } }
+    ApprovalId: { name: approvalId, in: path, required: true, schema: { type: string } }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 128 }
+    Before:
+      name: before
+      in: query
+      description: Return items older than this cursor.
+      schema: { type: string }
+    After:
+      name: after
+      in: query
+      description: Return items newer than this cursor.
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+
+  responses:
+    Error:
+      description: |
+        Error envelope. Status mapping: 400 validation_failed · 401
+        unauthenticated · 403 actor_not_allowed, signature_invalid · 404
+        not_found · 409 conflict family · 410 cursor_expired, approval_expired ·
+        412 precondition family · 429 rate_limited · 502 claude_code_failed ·
+        503 manager_degraded. Every 412 carries actionable `details`:
+        `approvalId` for approval_required; `metric`, `limit` and `consumed`
+        for budget_exceeded; `capability` for isolation_required.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+
+  schemas:
+    Cursor:
+      type: [string, "null"]
+      description: Opaque. Null when there are no further items.
+    Timestamp: { type: string, format: date-time }
+
+    ErrorCode:
+      type: string
+      enum:
+        - validation_failed
+        - unauthenticated
+        - actor_not_allowed
+        - not_found
+        - conflict
+        - agent_already_running
+        - agent_not_running
+        - agent_busy
+        - tmux_mode_active
+        - job_not_cancellable
+        - job_not_interrupted
+        - reconciliation_required
+        - approval_already_decided
+        - signature_invalid
+        - idempotency_conflict
+        - cursor_expired
+        - approval_expired
+        - approval_required
+        - budget_exceeded
+        - isolation_required
+        - protocol_changed
+        - claude_code_failed
+        - manager_degraded
+        - rate_limited
+        - internal_error
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, retryable]
+          properties:
+            code: { $ref: "#/components/schemas/ErrorCode" }
+            message: { type: string }
+            retryable: { type: boolean }
+            details: { type: object, additionalProperties: true }
+
+    Health:
+      type: object
+      required: [status, apiVersion, serviceVersion, degraded, reasons, capabilities]
+      properties:
+        capabilities:
+          type: object
+          description: What this deployment currently permits, so the UI can disable controls up front.
+          required: [executorShell, unattendedExecution, tmuxMode]
+          properties:
+            executorShell: { $ref: "#/components/schemas/Capability" }
+            unattendedExecution: { $ref: "#/components/schemas/Capability" }
+            tmuxMode: { $ref: "#/components/schemas/Capability" }
+        status: { type: string, enum: [ok, degraded] }
+        apiVersion: { type: string, description: "major.minor; the major number changes on any breaking change." }
+        serviceVersion: { type: string }
+        degraded: { type: boolean }
+        reasons:
+          type: array
+          items:
+            type: string
+            enum: [claude_code_unavailable, claude_code_logged_out, tmux_unavailable, agent_isolation_missing, storage_error]
+
+    Capability:
+      type: object
+      required: [allowed, reason]
+      properties:
+        allowed: { type: boolean }
+        reason: { type: [string, "null"], description: "Why it is not allowed. A free string; see Status semantics." }
+    SignedAuthorization:
+      type: object
+      description: |
+        Proof that Runekeeper recorded one authenticated human action: who,
+        which action, on what, under which limits, and until when.
+
+        `signature` is base64 of the 64-byte Ed25519 signature over the UTF-8
+        bytes of these ten lines joined by "\n" (no trailing newline):
+
+          lab-authz-v2
+          <action>        approval.decision | job.retry | budget.set
+          <targetId>      approvalId | jobId | labId
+          <bindingHash>   sha256 hex of the RFC 8785 canonical JSON of the binding
+          <outcome>       approved | denied | retry | set
+          <actorId>       must equal X-Lab-Actor-Id
+          <signedAt>      exactly as sent
+          <expiresAt>     exactly as sent
+          <nonce>         exactly as sent
+          <noteHash>      sha256 hex of the UTF-8 bytes of `note` (of the empty
+                          string when there is no note)
+
+        The binding is what is being authorized (see ApprovalBinding,
+        JobBinding, BudgetBinding). The Lab Manager publishes the binding and
+        its hash on Approval and Job; Runekeeper recomputes the hash from the
+        binding it shows the human and refuses to sign on a mismatch. For a
+        budget change Runekeeper builds the binding itself.
+
+        The Lab Manager rejects with 403 `signature_invalid` when: the
+        signature does not verify; the actor differs from the header;
+        `expiresAt` is not after `signedAt` or is more than five minutes
+        after it; `signedAt` is more than one minute in the future; the
+        current time is after `expiresAt`; for an approval decision,
+        `expiresAt` is after the approval's own `expiresAt`; or the nonce or
+        the signature has been accepted before.
+
+        A 403 `signature_invalid` carries `details.reason`: `missing`,
+        `malformed`, `window_invalid`, `not_yet_valid`, `expired`,
+        `exceeds_target_expiry`, `replayed` or `binding_or_key_mismatch`. The
+        last covers both a stale view of what is being authorized and a wrong
+        key, which the verifier cannot tell apart: refetch, rebuild the
+        binding and sign once more; if it fails again, stop.
+
+        Replay protection: every accepted nonce and signature is stored
+        permanently with the authorization record and never accepted again. The one exception is an exact retry: the same
+        `Idempotency-Key` with the same body returns the original response.
+
+        Every accepted authorization is stored with its binding, so it can be
+        re-verified later with only the public key.
+
+        Test vectors (bindings, canonical JSON, hashes, signed text and
+        signatures made with a public test key): `docs/api/binding-vectors.json`.
+      required: [signedAt, expiresAt, nonce, signature]
+      properties:
+        signedAt: { $ref: "#/components/schemas/Timestamp" }
+        expiresAt: { $ref: "#/components/schemas/Timestamp" }
+        nonce: { type: string, pattern: "^[A-Za-z0-9_-]{22,128}$", description: "At least 16 random bytes, base64url without padding." }
+        signature: { type: string }
+        keyId:
+          type: string
+          pattern: "^[0-9a-f]{16}$"
+          description: |
+            Identifies the signing key: the first 16 hex characters of sha256
+            over the public key's SPKI DER encoding. Optional but recommended.
+            During a key rotation the Lab Manager accepts more than one key;
+            it tries the named key first and records the id of the key that
+            verified with the stored authorization.
+    BindingLimits:
+      type: object
+      description: |
+        Limits as written into a binding. Non-integer quantities are decimal
+        strings with exactly six fractional digits (JavaScript:
+        `n.toFixed(6)`), so the hash never depends on how a JSON library
+        prints a floating-point number. Null means not set.
+      required: [costUsd, wallClockMinutes]
+      properties:
+        costUsd: { type: [string, "null"], pattern: "^[0-9]+\\.[0-9]{6}$" }
+        wallClockMinutes: { type: [string, "null"], pattern: "^[0-9]+\\.[0-9]{6}$" }
+        maxTurns: { type: [integer, "null"] }
+    ApprovalBinding:
+      type: object
+      description: What a human authorizes by deciding an approval. Always complete, even where `request` is truncated.
+      required: [contractVersion, approvalId, kind, labId, agentId, role, jobId, experimentId, requestHash, limits, estimate, expiresAt]
+      properties:
+        contractVersion: { type: string, const: "1.0" }
+        approvalId: { type: string }
+        kind: { $ref: "#/components/schemas/ApprovalKind" }
+        labId: { type: string }
+        agentId: { type: string }
+        role: { $ref: "#/components/schemas/AgentRole" }
+        jobId: { type: [string, "null"] }
+        experimentId:
+          type: [string, "null"]
+          description: |
+            For an approval raised by a job, exactly that job's
+            `experimentId` (null when the job belongs to no experiment). A
+            client that rebuilds the binding takes it from the job record.
+        requestHash: { type: string }
+        limits: { $ref: "#/components/schemas/BindingLimits", description: "The limits the approved work runs under." }
+        estimate: { $ref: "#/components/schemas/BindingLimits" }
+        expiresAt: { $ref: "#/components/schemas/Timestamp" }
+    JobBinding:
+      type: object
+      description: What a human authorizes by retrying an interrupted job.
+      required: [contractVersion, jobId, labId, agentId, kind, title, experimentId, instructionsHash, limits]
+      properties:
+        contractVersion: { type: string, const: "1.0" }
+        jobId: { type: string }
+        labId: { type: string }
+        agentId: { type: string }
+        kind: { type: string, enum: [message, task] }
+        title: { type: string }
+        experimentId: { type: [string, "null"] }
+        instructionsHash: { type: string }
+        limits: { $ref: "#/components/schemas/BindingLimits" }
+    BudgetBinding:
+      type: object
+      description: |
+        What a human authorizes by changing a lab's budget. Built by
+        Runekeeper. `previousLimits` must equal the limits in force when the
+        call arrives; an authorization made against a stale view does not
+        verify (403 `signature_invalid`). Refetch the snapshot and sign again.
+      required: [contractVersion, labId, previousLimits, limits]
+      properties:
+        contractVersion: { type: string, const: "1.0" }
+        labId: { type: string }
+        previousLimits: { $ref: "#/components/schemas/BindingLimits" }
+        limits: { $ref: "#/components/schemas/BindingLimits" }
+    Actor:
+      type: object
+      required: [id, email]
+      properties:
+        id: { type: string }
+        email: { type: string }
+
+    LabStatus: { type: string, enum: [stopped, starting, running, paused, degraded] }
+    CycleStage:
+      type: string
+      enum: [idle, question, hypothesis, design, protocolRegistered, awaitingApproval, execution, review, findings, stateUpdate, decision, escalated]
+    LabSummary:
+      type: object
+      required: [id, name, status, cycleStage, pendingApprovalCount, lastActivityAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        status: { $ref: "#/components/schemas/LabStatus" }
+        cycleStage: { $ref: "#/components/schemas/CycleStage" }
+        pendingApprovalCount: { type: integer }
+        lastActivityAt: { $ref: "#/components/schemas/Timestamp" }
+    Lab:
+      allOf:
+        - $ref: "#/components/schemas/LabSummary"
+        - type: object
+          required: [objective, priorities, approvalPolicy, createdAt]
+          properties:
+            approvalPolicy: { $ref: "#/components/schemas/ApprovalPolicy" }
+            objective: { type: [string, "null"] }
+            priorities: { type: array, items: { type: string } }
+            createdAt: { $ref: "#/components/schemas/Timestamp" }
+    BudgetLimits:
+      type: object
+      description: Always explicit; there is no unlimited budget.
+      required: [costUsd, wallClockMinutes]
+      properties:
+        costUsd: { type: number, minimum: 0 }
+        wallClockMinutes: { type: number, minimum: 0 }
+    ApprovalPolicy:
+      type: object
+      required: [permissionTtlMinutes, experimentTtlMinutes]
+      properties:
+        permissionTtlMinutes: { type: integer, minimum: 1, maximum: 1440, default: 30 }
+        experimentTtlMinutes: { type: integer, minimum: 1, default: 10080 }
+    Budget:
+      type: object
+      required: [limits, consumed]
+      properties:
+        limits: { $ref: "#/components/schemas/BudgetLimits" }
+        consumed:
+          type: object
+          required: [costUsd, wallClockMinutes]
+          properties:
+            costUsd: { type: number, description: "Cost as reported by Claude Code. On a subscription login this is notional, not billed." }
+            wallClockMinutes: { type: number }
+    LabSnapshot:
+      type: object
+      required: [lab, agents, activeQuestion, pendingApprovals, jobsNeedingReconciliation, budget, recentFindings, recentEvents, eventCursor]
+      properties:
+        lab: { $ref: "#/components/schemas/Lab" }
+        agents: { type: array, items: { $ref: "#/components/schemas/Agent" } }
+        activeQuestion:
+          oneOf:
+            - $ref: "#/components/schemas/Question"
+            - type: "null"
+        pendingApprovals: { type: array, items: { $ref: "#/components/schemas/Approval" } }
+        jobsNeedingReconciliation: { type: array, items: { $ref: "#/components/schemas/Job" } }
+        budget: { $ref: "#/components/schemas/Budget" }
+        recentFindings: { type: array, maxItems: 5, items: { $ref: "#/components/schemas/Finding" } }
+        recentEvents: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/Event" } }
+        eventCursor: { type: string, description: "Subscribe with after=<eventCursor> for no gap and no duplicate." }
+
+    AgentRole: { type: string, enum: [advisor, executor, reviewer, orchestrator] }
+    AgentState: { type: string, enum: [notProvisioned, starting, idle, working, waitingOnHuman, stopped, crashed] }
+    AgentMode: { type: string, enum: [managed, tmux] }
+    Agent:
+      type: object
+      required: [id, labId, role, state, mode, sessionId, hasTmux, tmuxAttachHint, currentJob, blockedBy, pendingApprovalCount, lastActivityAt, lastError]
+      properties:
+        blockedBy:
+          type: [object, "null"]
+          description: Why no new task is dispatched to this agent.
+          required: [reason]
+          properties:
+            reason: { type: string, enum: [reconciliation, labPaused, isolationRequired] }
+            jobId: { type: [string, "null"] }
+        id: { type: string }
+        labId: { type: string }
+        role: { $ref: "#/components/schemas/AgentRole" }
+        state: { $ref: "#/components/schemas/AgentState" }
+        mode: { $ref: "#/components/schemas/AgentMode" }
+        sessionId: { type: [string, "null"], description: "Claude Code session uuid." }
+        hasTmux: { type: boolean }
+        tmuxAttachHint: { type: [string, "null"], description: "Display-only text. There is no terminal access over the API." }
+        currentJob:
+          type: [object, "null"]
+          required: [id, title]
+          properties:
+            id: { type: string }
+            title: { type: string }
+        pendingApprovalCount: { type: integer }
+        lastActivityAt: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
+        lastError:
+          type: [object, "null"]
+          required: [code, message, at]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            at: { $ref: "#/components/schemas/Timestamp" }
+
+    TranscriptItem:
+      type: object
+      required: [id, agentId, jobId, sessionId, seq, kind, createdAt]
+      properties:
+        id: { type: string }
+        agentId: { type: string }
+        jobId: { type: [string, "null"] }
+        sessionId: { type: [string, "null"] }
+        seq: { type: integer, description: "Strictly increasing per agent." }
+        kind: { type: string, enum: [humanMessage, assistantText, toolCall, systemNote] }
+        createdAt: { $ref: "#/components/schemas/Timestamp" }
+        text: { type: string, description: "Capped at 32 KB. Assistant thinking is never included." }
+        truncated: { type: boolean, default: false }
+        actor: { $ref: "#/components/schemas/Actor" }
+        tool:
+          type: object
+          required: [name, summary, status]
+          properties:
+            name: { type: string }
+            summary: { type: string, description: "One line." }
+            status: { type: string, enum: [running, succeeded, failed, denied] }
+            approvalId: { type: [string, "null"] }
+
+    JobStatus:
+      type: string
+      enum: [queued, awaitingApproval, running, cancelling, succeeded, failed, cancelled, timedOut, interrupted]
+    JobLimits:
+      type: object
+      properties:
+        costUsd: { type: number, minimum: 0 }
+        wallClockMinutes: { type: number, minimum: 1 }
+        maxTurns: { type: integer, minimum: 1 }
+    Job:
+      type: object
+      required: [id, labId, agentId, kind, title, status, instructions, instructionsHash, binding, bindingHash, needsReconciliation, limits, usage, createdAt, startedAt, endedAt]
+      properties:
+        binding: { $ref: "#/components/schemas/JobBinding" }
+        bindingHash: { type: string, description: "sha256 hex of the RFC 8785 canonical JSON of `binding`. This is what a retry signature covers." }
+        instructions:
+          type: string
+          description: Exactly what the agent was asked to do. For kind `message`, the message text. Always complete on `GET /v1/jobs/{id}`; capped at 2 KB elsewhere (compare `instructionsHash`).
+        instructionsHash:
+          type: string
+          description: sha256 hex of the UTF-8 bytes of the complete instructions. Part of the job's binding.
+        id: { type: string }
+        labId: { type: string }
+        agentId: { type: string }
+        kind: { type: string, enum: [message, task] }
+        title: { type: string }
+        status: { $ref: "#/components/schemas/JobStatus" }
+        needsReconciliation: { type: boolean, description: "True for an interrupted job until a human reconciles it." }
+        reconciliation:
+          type: [object, "null"]
+          required: [resolution, actor, at]
+          properties:
+            resolution: { type: string, enum: [acknowledge, retry] }
+            actor: { $ref: "#/components/schemas/Actor" }
+            note: { type: string }
+            at: { $ref: "#/components/schemas/Timestamp" }
+            retryJobId: { type: [string, "null"] }
+        retryOfJobId: { type: [string, "null"] }
+        approvalId: { type: [string, "null"], description: "Set while status is awaitingApproval." }
+        experimentId: { type: [string, "null"] }
+        limits: { $ref: "#/components/schemas/JobLimits" }
+        usage:
+          type: object
+          required: [costUsd, wallClockSeconds, turns]
+          properties:
+            costUsd: { type: number }
+            wallClockSeconds: { type: number }
+            turns: { type: integer }
+        createdAt: { $ref: "#/components/schemas/Timestamp" }
+        startedAt: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
+        endedAt: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
+        result: { type: [string, "null"], description: "Final assistant summary, when succeeded." }
+        error:
+          type: [object, "null"]
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+    LogLine:
+      type: object
+      required: [seq, at, stream, text]
+      properties:
+        seq: { type: integer }
+        at: { $ref: "#/components/schemas/Timestamp" }
+        stream: { type: string, enum: [stdout, stderr, manager] }
+        text: { type: string }
+
+    ApprovalKind: { type: string, enum: [permission, experiment, budget, other] }
+    ApprovalStatus: { type: string, enum: [pending, approved, denied, expired, cancelled] }
+    Approval:
+      type: object
+      required: [id, labId, kind, status, requestedBy, title, request, requestHash, requestTruncated, binding, bindingHash, estimate, createdAt, expiresAt, decision]
+      properties:
+        binding: { $ref: "#/components/schemas/ApprovalBinding" }
+        bindingHash: { type: string, description: "sha256 hex of the RFC 8785 canonical JSON of `binding`. This is what a decision signature covers." }
+        requestHash:
+          type: string
+          description: sha256 hex of the RFC 8785 canonical JSON of the COMPLETE request. Runekeeper may recompute it from the detail response.
+        requestTruncated:
+          type: boolean
+          description: |
+            True when this representation shortened `request` (lists, the
+            snapshot and events cap it at 2 KB). `GET /v1/approvals/{id}`
+            always returns the complete request with this false. A tool
+            request larger than 256 KB is never offered for approval: the
+            manager denies it automatically.
+        id: { type: string }
+        labId: { type: string }
+        kind: { $ref: "#/components/schemas/ApprovalKind" }
+        status: { $ref: "#/components/schemas/ApprovalStatus" }
+        requestedBy:
+          type: object
+          required: [agentId, role, jobId]
+          properties:
+            agentId: { type: string }
+            role: { $ref: "#/components/schemas/AgentRole" }
+            jobId: { type: [string, "null"] }
+        title: { type: string }
+        request:
+          description: Exactly what is being approved, by kind.
+          oneOf:
+            - title: PermissionRequest
+              type: object
+              required: [toolName, input]
+              properties:
+                toolName: { type: string }
+                input: { type: object, additionalProperties: true }
+            - title: ExperimentRequest
+              description: |
+                Provisional, and never created by a 1.0-draft manager. Before
+                experiment approvals are enabled, the approval detail must let
+                the client fetch the exact protocol text and verify that it
+                hashes to `protocolHash`, so a human never approves a bare
+                hash. Intended definition, to be fixed with the research
+                records: `protocolHash` is the SHA-256 of the exact bytes of
+                the protocol file as committed in the manager's canonical
+                repository; a protocol is immutable once hashed; a revision
+                is a new protocol version with a new hash and needs a new
+                approval; the request will carry that version. Until then a
+                client should offer only `denied` for this kind.
+              type: object
+              required: [experimentId, protocolHash]
+              properties:
+                experimentId: { type: string }
+                protocolHash: { type: string, description: "The approval is bound to this content hash." }
+            - title: BudgetRequest
+              description: |
+                Never created by a 1.0-draft manager. Approving one changes
+                no limit by itself, now or later: limits change only through
+                a signed `budget.set`, whose binding carries the previous and
+                the new limits. An approved budget request is a record that
+                the human agreed; the change is a separate signed act.
+              type: object
+              required: [requestedLimits]
+              properties:
+                requestedLimits: { $ref: "#/components/schemas/BudgetLimits" }
+                reason: { type: string }
+            - title: OtherRequest
+              description: Never created by a 1.0-draft manager. A client should offer only `denied`.
+              type: object
+              required: [description]
+              properties:
+                description: { type: string }
+        estimate:
+          type: object
+          properties:
+            costUsd: { type: [number, "null"] }
+            wallClockMinutes: { type: [number, "null"] }
+            notes: { type: [string, "null"] }
+        createdAt: { $ref: "#/components/schemas/Timestamp" }
+        expiresAt: { $ref: "#/components/schemas/Timestamp" }
+        decision:
+          type: [object, "null"]
+          required: [outcome, actor, decidedAt, authorization]
+          properties:
+            authorization: { $ref: "#/components/schemas/SignedAuthorization" }
+            outcome: { type: string, enum: [approved, denied] }
+            actor: { $ref: "#/components/schemas/Actor" }
+            note: { type: [string, "null"] }
+            decidedAt: { $ref: "#/components/schemas/Timestamp" }
+
+    ArtifactRef:
+      type: object
+      required: [path, commit]
+      properties:
+        path: { type: string }
+        commit: { type: string }
+    ResearchRecord:
+      type: object
+      required: [id, labId, title, status, createdAt, updatedAt, artifact]
+      properties:
+        id: { type: string }
+        labId: { type: string }
+        title: { type: string }
+        status: { type: string }
+        createdAt: { $ref: "#/components/schemas/Timestamp" }
+        updatedAt: { $ref: "#/components/schemas/Timestamp" }
+        artifact: { oneOf: [{ $ref: "#/components/schemas/ArtifactRef" }, { type: "null" }] }
+    Question:
+      allOf:
+        - $ref: "#/components/schemas/ResearchRecord"
+        - type: object
+          required: [priority]
+          properties:
+            priority: { type: string, enum: [low, medium, high] }
+            status: { type: string, enum: [open, active, answered, dropped] }
+            createdBy: { $ref: "#/components/schemas/Actor" }
+    ExperimentStatus:
+      type: string
+      enum: [draft, protocolRegistered, awaitingApproval, approved, running, executed, underReview, accepted, rejected, abandoned]
+    Experiment:
+      allOf:
+        - $ref: "#/components/schemas/ResearchRecord"
+        - type: object
+          required: [hypothesis, protocol, reviewVerdict]
+          properties:
+            status: { $ref: "#/components/schemas/ExperimentStatus" }
+            questionId: { type: [string, "null"] }
+            hypothesis: { type: [string, "null"] }
+            protocol:
+              type: [object, "null"]
+              required: [version, hash, registeredAt, artifact]
+              properties:
+                version: { type: integer }
+                hash: { type: string }
+                registeredAt: { $ref: "#/components/schemas/Timestamp" }
+                artifact: { $ref: "#/components/schemas/ArtifactRef" }
+            reviewVerdict: { type: [string, "null"], enum: [supported, notSupported, inconclusive, methodologyProblem, null] }
+    ExperimentDetail:
+      allOf:
+        - $ref: "#/components/schemas/Experiment"
+        - type: object
+          required: [jobs, approvals, results, review]
+          properties:
+            jobs: { type: array, items: { $ref: "#/components/schemas/Job" } }
+            approvals: { type: array, items: { $ref: "#/components/schemas/Approval" } }
+            results: { type: array, items: { $ref: "#/components/schemas/ArtifactRef" } }
+            review: { oneOf: [{ $ref: "#/components/schemas/ArtifactRef" }, { type: "null" }] }
+    Finding:
+      allOf:
+        - $ref: "#/components/schemas/ResearchRecord"
+        - type: object
+          required: [supportingExperimentIds, reviewStatus]
+          properties:
+            summary: { type: string }
+            supportingExperimentIds: { type: array, items: { type: string } }
+            reviewStatus: { type: string, enum: [unreviewed, reviewed, disputed] }
+    Handoff:
+      allOf:
+        - $ref: "#/components/schemas/ResearchRecord"
+        - type: object
+          required: [fromRole, toRole]
+          properties:
+            fromRole: { $ref: "#/components/schemas/AgentRole" }
+            toRole: { $ref: "#/components/schemas/AgentRole" }
+            jobId: { type: [string, "null"] }
+    Artifact:
+      type: object
+      required: [path, commit, contentType, encoding, content, truncated]
+      properties:
+        path: { type: string }
+        commit: { type: string }
+        contentType: { type: string }
+        encoding: { type: string, enum: [utf8, base64] }
+        content: { type: string }
+        truncated: { type: boolean }
+
+    EventType:
+      type: string
+      enum:
+        - manager.started
+        - lab.created
+        - lab.updated
+        - lab.statusChanged
+        - agent.stateChanged
+        - transcript.itemAdded
+        - transcript.itemUpdated
+        - job.created
+        - job.statusChanged
+        - job.reconciled
+        - approval.requested
+        - approval.resolved
+        - question.created
+        - experiment.updated
+        - finding.recorded
+        - decision.recorded
+        - handoff.recorded
+        - budget.updated
+        - budget.thresholdCrossed
+        - manager.healthChanged
+        - agent.modeChanged
+    ManagerStartedData:
+      type: object
+      required: [serviceVersion, interruptedJobs]
+      properties:
+        serviceVersion: { type: string }
+        interruptedJobs:
+          type: array
+          items:
+            type: object
+            required: [labId, jobId]
+            properties:
+              labId: { type: string }
+              jobId: { type: string }
+    BudgetThresholdData:
+      type: object
+      required: [metric, threshold, consumed, limit]
+      properties:
+        metric: { type: string, enum: [costUsd, wallClockMinutes] }
+        threshold: { type: number, description: "Fraction of the limit, e.g. 0.8." }
+        consumed: { type: number }
+        limit: { type: number }
+    Event:
+      type: object
+      required: [id, type, labId, at, data]
+      properties:
+        id: { type: string, description: "The cursor." }
+        type: { $ref: "#/components/schemas/EventType" }
+        labId:
+          type: [string, "null"]
+          description: Null for manager-level events, which are delivered to every subscriber, including those filtered by labId.
+        actor:
+          description: Present on events caused by a human action.
+          oneOf:
+            - $ref: "#/components/schemas/Actor"
+            - type: "null"
+        at: { $ref: "#/components/schemas/Timestamp" }
+        data:
+          type: object
+          additionalProperties: true
+          description: |
+            Always the full object, never a delta, so clients can replace by
+            id. By type: lab.* -> Lab · agent.* -> Agent · transcript.* ->
+            TranscriptItem · job.* -> Job · approval.* -> Approval
+            (approval.resolved also fires for expired and cancelled) ·
+            question.created -> Question · experiment.updated -> Experiment ·
+            finding.recorded -> Finding · decision.recorded -> ResearchRecord ·
+            handoff.recorded -> Handoff · budget.updated -> Budget (on job end
+            and at most every 30 seconds while a job runs) ·
+            budget.thresholdCrossed -> BudgetThresholdData · manager.started ->
+            ManagerStartedData · manager.healthChanged -> Health.

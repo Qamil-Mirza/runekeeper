@@ -10,6 +10,8 @@ interface SidebarProps {
   currentView: ViewId;
   onNavigate: (view: ViewId) => void;
   collapsed?: boolean;
+  /** The Lab is shown only to configured lab owners. */
+  showLab?: boolean;
 }
 
 const navItems: { id: ViewId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -20,8 +22,11 @@ const navItems: { id: ViewId; label: string; icon: React.ComponentType<{ classNa
   { id: "integrations", label: "Nexus", icon: NexusIcon },
 ];
 
-export function Sidebar({ currentView, onNavigate, collapsed }: SidebarProps) {
+const labNavItem: (typeof navItems)[number] = { id: "lab", label: "The Lab", icon: LabIcon };
+
+export function Sidebar({ currentView, onNavigate, collapsed, showLab }: SidebarProps) {
   const { user } = usePlanner();
+  const items = showLab ? [...navItems, labNavItem] : navItems;
 
   return (
     <aside
@@ -43,7 +48,7 @@ export function Sidebar({ currentView, onNavigate, collapsed }: SidebarProps) {
 
       {/* Navigation */}
       <nav className="flex-1 flex flex-col gap-1 px-2" role="navigation" aria-label="Main navigation">
-        {navItems.map((item) => (
+        {items.map((item) => (
           <button
             key={item.id}
             onClick={() => onNavigate(item.id)}
@@ -149,6 +154,16 @@ function NexusIcon({ className }: { className?: string }) {
       <line x1="15" y1="12" x2="18" y2="12" />
       <line x1="12" y1="15" x2="12" y2="18" />
       <line x1="9" y1="12" x2="6" y2="12" />
+    </svg>
+  );
+}
+
+function LabIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 3h6" />
+      <path d="M10 3v6l-5 9a2 2 0 001.8 3h10.4a2 2 0 001.8-3l-5-9V3" />
+      <line x1="7.5" y1="15" x2="16.5" y2="15" />
     </svg>
   );
 }

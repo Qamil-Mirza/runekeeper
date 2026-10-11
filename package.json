@@ -11,7 +11,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "test:lab": "npx tsx --test src/lib/lab/*.test.ts",
+    "lab:types": "npx --yes openapi-typescript@7.13.0 docs/lab/contract/openapi.yaml -o src/lib/lab/openapi.d.ts"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.1",
