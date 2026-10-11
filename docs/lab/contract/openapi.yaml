@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Lab Manager API
-  version: 1.0.0-draft.14
+  version: 1.0.0-draft.15
   summary: Contract between Runekeeper (client) and the Lab Manager (server).
   description: |
     Status: DRAFT under joint review. Implemented by the Lab Manager, which
@@ -23,6 +23,18 @@ info:
     - PATCH is naturally idempotent and takes no key.
     - Research endpoints (tag `research`) are implemented but new: they
       have not yet been used by a client and may still change before 1.0.
+
+    What changed in draft.15 (additive)
+    - A shell in manual mode, switched on by the owner on the host.
+      `Health.capabilities.shell.<role>` then reports `allowed: true` with
+      boundary `osIdentityAndCommandSandbox`; if the sandbox or the isolation
+      checks fail it reports why and agents run without a shell. Every
+      command runs inside Claude Code's sandbox: it can write only inside the
+      agent's workspace, cannot read the subscription token, other agents'
+      files or Claude Code's own state, and reaches only the domains in
+      `Health.limits.shellAllowedDomains` (empty: no network). A Bash tool
+      call shows `decidedBy` `standingRule`, rule `shell`; a command that
+      asks to leave the sandbox is refused with outcome `deny`.
 
     What changed in draft.14 (additive)
     - `Health.capabilities` gains `webFetch`, `skills` and `subagents`:
@@ -1628,6 +1640,7 @@ components:
           description: Host settings a client may want to show. Not settable through the API.
           properties:
             delegationsPerMessage: { type: integer, description: "How many handoffs of one owner message are dispatched; further ones are refused with `over_cap`." }
+            shellAllowedDomains: { type: array, items: { type: string }, description: "The only internet hosts a sandboxed shell command can reach. Empty: commands have no network. This does not limit the agent's own WebSearch and WebFetch tools." }
         resources:
           type: object
           required: [jobs, disk, identities]

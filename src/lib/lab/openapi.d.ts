@@ -1066,6 +1066,8 @@ export interface components {
             limits?: {
                 /** @description How many handoffs of one owner message are dispatched; further ones are refused with `over_cap`. */
                 delegationsPerMessage?: number;
+                /** @description The only internet hosts a sandboxed shell command can reach. Empty: commands have no network. This does not limit the agent's own WebSearch and WebFetch tools. */
+                shellAllowedDomains?: string[];
             };
             resources: {
                 /** @description One limit for the whole host. At the limit a new job is refused with 429 `host_busy`. */

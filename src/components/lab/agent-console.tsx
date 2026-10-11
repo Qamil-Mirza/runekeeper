@@ -47,6 +47,7 @@ const STANDING_RULES: Record<string, string> = {
   workspaceWrites: "files in its own workspace",
   webSearch: "web search",
   webFetch: "fetching web pages",
+  shell: "commands inside its sandbox",
 };
 
 type DecidedBy = NonNullable<NonNullable<LabTranscriptItem["tool"]>["decidedBy"]>;
@@ -62,6 +63,9 @@ function decidedByLabel(decidedBy: DecidedBy | undefined): string {
     case "policy":
       return `${decidedBy.outcome === "allow" ? "allowed" : "denied"} by host policy (${decidedBy.rule})`;
     case "standingRule":
+      if (decidedBy.outcome === "deny" && decidedBy.rule === "shell") {
+        return "refused: the command asked to run outside its sandbox";
+      }
       return decidedBy.outcome === "deny"
         ? "refused at once: no standing permission covers it, and you chose not to be asked"
         : `allowed by a standing permission (${STANDING_RULES[decidedBy.rule] ?? decidedBy.rule})`;
