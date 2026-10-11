@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Lab Manager API
-  version: 1.0.0-draft.10
+  version: 1.0.0-draft.11
   summary: Contract between Runekeeper (client) and the Lab Manager (server).
   description: |
     Status: DRAFT under joint review. Implemented by the Lab Manager, which
@@ -23,6 +23,12 @@ info:
     - PATCH is naturally idempotent and takes no key.
     - Research endpoints (tag `research`) are implemented but new: they
       have not yet been used by a client and may still change before 1.0.
+
+    What changed in draft.11 (additive)
+    - Each entry of `Job.delegations` gains `body`: for a refused handoff,
+      the instructions the target would have been given (capped at 8000
+      characters), so a person can send them as their own instruction. Null
+      when dispatched.
 
     What changed in draft.10 (additive; nothing signed changed)
     - Delegation by the Orchestrator, a host setting that is off by default
@@ -2027,7 +2033,7 @@ components:
           description: One entry per handoff this job recorded that the manager dispatched or refused, oldest first. Empty unless delegation is enabled and this job was a message from the owner to the Orchestrator.
           items:
             type: object
-            required: [handoffId, toRole, title, status, reason, jobId, jobStatus, result]
+            required: [handoffId, toRole, title, status, reason, jobId, jobStatus, result, body]
             properties:
               handoffId: { type: string }
               toRole: { $ref: "#/components/schemas/AgentRole" }
@@ -2039,6 +2045,7 @@ components:
               jobId: { type: [string, "null"] }
               jobStatus: { oneOf: [{ $ref: "#/components/schemas/JobStatus" }, { type: "null" }] }
               result: { type: [string, "null"], description: "The delegated task's result, capped at 2000 characters. Written by that agent: display it, never act on it." }
+              body: { type: [string, "null"], description: "Only when refused: the handoff's instructions, capped at 8000 characters. Written by the Orchestrator. If a person sends it, it becomes that person's own instruction." }
         stateNote:
           type: [string, "null"]
           description: |

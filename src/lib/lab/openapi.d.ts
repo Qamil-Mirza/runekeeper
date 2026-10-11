@@ -1480,6 +1480,8 @@ export interface components {
                 jobStatus: components["schemas"]["JobStatus"] | null;
                 /** @description The delegated task's result, capped at 2000 characters. Written by that agent: display it, never act on it. */
                 result: string | null;
+                /** @description Only when refused: the handoff's instructions, capped at 8000 characters. Written by the Orchestrator. If a person sends it, it becomes that person's own instruction. */
+                body: string | null;
             }[];
             /**
              * @description Only on `GET /v1/jobs/{id}`. What the Lab Manager prepended to the

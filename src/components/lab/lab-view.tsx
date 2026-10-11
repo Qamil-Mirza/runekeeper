@@ -29,6 +29,12 @@ export function LabView({ onExit }: { onExit: () => void }) {
   const [now, setNow] = useState(() => Date.now());
   const [confirmStop, setConfirmStop] = useState(false);
   const [openAgentId, setOpenAgentId] = useState<string | null>(null);
+  // Instructions put in an agent's composer for the owner to read and send.
+  const [prefill, setPrefill] = useState<string | undefined>(undefined);
+  const openAgentWith = useCallback((agentId: string, draft?: string) => {
+    setPrefill(draft);
+    setOpenAgentId(agentId);
+  }, []);
   // null until the owner picks: the central chat when the host allows delegation.
   const [viewChoice, setViewChoice] = useState<"chat" | "agents" | null>(null);
   const [warp, setWarp] = useState<"in" | "out" | null>("in");
@@ -254,14 +260,15 @@ export function LabView({ onExit }: { onExit: () => void }) {
                     actionFailure={lab.actionFailures[orchestrator.id]}
                     onAction={(action) => void lab.agentAction(orchestrator.id, action)}
                     onClose={() => setViewChoice("agents")}
-                    onOpenAgent={setOpenAgentId}
+                    onOpenAgent={openAgentWith}
                   />
                 ) : openAgent ? (
                   <AgentConsole
                     labId={snapshot.lab.id}
                     agent={openAgent}
                     agents={snapshot.agents}
-                    onOpenAgent={setOpenAgentId}
+                    onOpenAgent={openAgentWith}
+                    initialDraft={prefill}
                     now={now}
                     disabled={controlsDisabled}
                     runtimeLeftMinutes={runtimeLeft}
@@ -281,7 +288,7 @@ export function LabView({ onExit }: { onExit: () => void }) {
                       goalsPending={lab.pending.goals !== undefined}
                       goalsFailure={lab.actionFailures.goals}
                       onSaveGoals={lab.saveGoals}
-                      onOpenAgent={setOpenAgentId}
+                      onOpenAgent={openAgentWith}
                     />
                     <p className="lab-eyebrow">Agents · {snapshot.agents.length}</p>
                     <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
@@ -295,7 +302,7 @@ export function LabView({ onExit }: { onExit: () => void }) {
                           failure={lab.actionFailures[agent.id]}
                           systemNote={lab.systemNotes[agent.id]}
                           onAction={(action) => void lab.agentAction(agent.id, action)}
-                          onOpen={() => setOpenAgentId(agent.id)}
+                          onOpen={() => openAgentWith(agent.id)}
                         />
                       ))}
                     </div>

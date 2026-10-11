@@ -81,7 +81,16 @@ const REFUSAL_REASONS: Record<string, string> = {
 type Delegation = NonNullable<LabJob["delegations"]>[number];
 
 /** What became of one piece of work the Orchestrator handed on. */
-function DelegationCard({ delegation, onOpen }: { delegation: Delegation; onOpen?: () => void }) {
+function DelegationCard({
+  delegation,
+  onOpen,
+  onResend,
+}: {
+  delegation: Delegation;
+  onOpen?: () => void;
+  /** Opens the target agent with these instructions ready to read and send. */
+  onResend?: (body: string) => void;
+}) {
   const role = ROLE_LABELS[delegation.toRole];
   const status =
     delegation.status === "refused"
@@ -102,14 +111,27 @@ function DelegationCard({ delegation, onOpen }: { delegation: Delegation; onOpen
           to the {role} yourself.
         </p>
       )}
+      {delegation.status === "refused" && typeof delegation.body === "string" && (
+        <details>
+          <summary className="lab-eyebrow !text-[11px] cursor-pointer">What the Orchestrator wanted to ask</summary>
+          <AgentWritten label="Written by the Orchestrator" text={delegation.body} truncated={delegation.body.length >= 8000} />
+        </details>
+      )}
       {typeof delegation.result === "string" && delegation.result.length > 0 && (
         <AgentWritten label={`Result · written by the ${role}`} text={delegation.result} truncated={delegation.result.length >= 2000} />
       )}
-      {onOpen && (
-        <div>
-          <LabButton onClick={onOpen} className="!min-h-[28px] !px-2">
-            Open the {role}
-          </LabButton>
+      {(onOpen || onResend) && (
+        <div className="flex flex-wrap gap-2">
+          {onResend && delegation.status === "refused" && typeof delegation.body === "string" && (
+            <LabButton variant="primary" onClick={() => onResend(delegation.body!)} className="!min-h-[28px] !px-2">
+              Review and send to the {role}
+            </LabButton>
+          )}
+          {onOpen && (
+            <LabButton onClick={onOpen} className="!min-h-[28px] !px-2">
+              Open the {role}
+            </LabButton>
+          )}
         </div>
       )}
     </li>
@@ -325,12 +347,16 @@ export function AgentConsole({
   central = false,
   agents = [],
   onOpenAgent,
+  initialDraft,
 }: {
   /** The Orchestrator's conversation presented as the lab's one chat. */
   central?: boolean;
   /** The lab's agents, to link a delegation to the agent it went to. */
   agents?: LabAgent[];
-  onOpenAgent?: (agentId: string) => void;
+  /** `draft` puts text in that agent's composer for the owner to read and send. */
+  onOpenAgent?: (agentId: string, draft?: string) => void;
+  /** Text to start the composer with, shown for review and never sent by itself. */
+  initialDraft?: string;
   labId: string;
   agent: LabAgent;
   now: number;
@@ -353,9 +379,9 @@ export function AgentConsole({
 
   useEffect(() => setConfirming(null), [agent.state]);
   useEffect(() => {
-    setDraft("");
+    setDraft(initialDraft ?? "");
     setTab("conversation");
-  }, [agent.id]);
+  }, [agent.id, initialDraft]);
 
   // Follow new output only while the reader is already at the bottom.
   const scroller = useRef<HTMLDivElement>(null);
@@ -411,6 +437,24 @@ export function AgentConsole({
     }
   }
   const agentFor = (r: LabAgent["role"]) => agents.find((a) => a.role === r);
+  const delegatingJobs = new Set([...cardsAfter.values()].map((j) => j.id));
+  const cards = (job: LabJob) => (
+    <li>
+      <ul className="grid gap-2 sm:grid-cols-2" aria-label="Work handed to other agents">
+        {(job.delegations ?? []).map((d) => {
+          const target = agentFor(d.toRole);
+          return (
+            <DelegationCard
+              key={d.handoffId}
+              delegation={d}
+              onOpen={target && onOpenAgent ? () => onOpenAgent(target.id) : undefined}
+              onResend={target && onOpenAgent ? (body) => onOpenAgent(target.id, body) : undefined}
+            />
+          );
+        })}
+      </ul>
+    </li>
+  );
 
   const clickAction = (action: AgentAction) => {
     if (needsConfirm(action, agent.state) && confirming !== action) return setConfirming(action);
@@ -517,25 +561,19 @@ export function AgentConsole({
             <ol className="flex flex-col gap-3" aria-label="Conversation" aria-live="polite">
               {con.items.map((item) => {
                 const job = cardsAfter.get(item.id);
+                if (
+                  central &&
+                  item.kind === "systemNote" &&
+                  item.jobId &&
+                  delegatingJobs.has(item.jobId) &&
+                  /^(Recorded handoff|Delegated to|Not delegated to) /.test(item.text ?? "")
+                ) {
+                  return job ? <Fragment key={item.id}>{cards(job)}</Fragment> : null;
+                }
                 return (
                   <Fragment key={item.id}>
                     <TranscriptEntry item={item} role={role} now={now} />
-                    {job && (
-                      <li>
-                        <ul className="grid gap-2 sm:grid-cols-2" aria-label="Work handed to other agents">
-                          {(job.delegations ?? []).map((d) => {
-                            const target = agentFor(d.toRole);
-                            return (
-                              <DelegationCard
-                                key={d.handoffId}
-                                delegation={d}
-                                onOpen={target && onOpenAgent ? () => onOpenAgent(target.id) : undefined}
-                              />
-                            );
-                          })}
-                        </ul>
-                      </li>
-                    )}
+                    {job && cards(job)}
                   </Fragment>
                 );
               })}

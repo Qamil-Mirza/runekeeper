@@ -4,9 +4,9 @@ The files in this directory are unmodified copies from the Lab Manager repositor
 
 | | |
 |---|---|
-| Spec version | 1.0.0-draft.10 |
-| Source commit | `e53977e` (branch `feat/m2-service-foundation` in the-lab) |
-| SHA-256 of `openapi.yaml` | `37b69b3a60aac997f420bd242e6437dd652a27cf7a8293f021d8f507e69cd8ae` |
+| Spec version | 1.0.0-draft.11 |
+| Source commit | `5ddfdf3` (branch `feat/m2-service-foundation` in the-lab) |
+| SHA-256 of `openapi.yaml` | `4c45d7e5c52a4e6702d42f990cc0fb80b6c803e9ca22ced2f016819b512c76a9` |
 | SHA-256 of `binding-vectors.json` | `810a758e1c1d47be04f80d70d55dcda0137e1f74d0e186ec7bcde950bd0605e7` |
 | Pinned on | 2026-10-11 |
 | Status | Agreed by both sessions. Additive over draft.8 and draft.9. |
@@ -20,3 +20,5 @@ Do not edit these copies. Contract changes are made in the-lab first, reviewed b
 Draft.9 is additive: standing rules for manual mode that are set only in the Lab Manager's host configuration (`workspaceWrites`, `webSearch`, and refusing at once what no rule covers), reported in `Health.capabilities`, and a `standingRule` decision on a tool call may now be a refusal. Nothing signed changed; the test vectors are unchanged.
 
 Draft.10 is additive: delegation. When the host allows it (`Health.capabilities.delegation`), in manual mode, each handoff the Orchestrator records while answering the owner is started by the manager as a task for the role it names, one hop only, up to `Health.limits.delegationsPerMessage`. `Job.origin` gains `delegated`; `Job.delegation` and `Job.delegations` link the two sides; the target sees a `delegatedInstruction` transcript item, never a human message.
+
+Draft.11 is additive: a refused entry in `Job.delegations` carries `body`, the instructions the target would have been given, so the owner can read them and send them as their own instruction.
