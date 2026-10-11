@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Lab Manager API
-  version: 1.0.0-draft.13
+  version: 1.0.0-draft.14
   summary: Contract between Runekeeper (client) and the Lab Manager (server).
   description: |
     Status: DRAFT under joint review. Implemented by the Lab Manager, which
@@ -23,6 +23,16 @@ info:
     - PATCH is naturally idempotent and takes no key.
     - Research endpoints (tag `research`) are implemented but new: they
       have not yet been used by a client and may still change before 1.0.
+
+    What changed in draft.14 (additive)
+    - `Health.capabilities` gains `webFetch`, `skills` and `subagents`:
+      more of Claude Code's own tools, each switched on by the owner on the
+      host for manual mode. A web fetch allowed this way has `decidedBy`
+      `standingRule` with rule `webFetch`. Claude Code asks no permission
+      for using a skill or starting a subagent, so those tool calls (`Skill`,
+      `Agent`) show `builtin`; what a skill or subagent then does (a Write,
+      a fetch) is a tool call of its own in the same transcript and passes
+      through the same rules.
 
     What changed in draft.13 (additive)
     - `DELETE /v1/labs/{labId}`: deletes a lab for good. New error code
@@ -1678,6 +1688,15 @@ components:
                 decision. `deny`: the owner chose on the host not to be asked;
                 it is refused at once, the agent is told, and the task carries
                 on. `policy`: a host policy answers every request.
+            webFetch:
+              $ref: "#/components/schemas/Capability"
+              description: Manual mode, set on the host. Agents have the WebFetch tool and may open web pages without a per-request approval.
+            skills:
+              $ref: "#/components/schemas/Capability"
+              description: "Manual mode, set on the host. Agents have the Skill tool and load the skills the owner installed in a directory on the host that agents cannot write. Reason `skills_dir_missing` when the setting is on but no such directory is usable."
+            subagents:
+              $ref: "#/components/schemas/Capability"
+              description: Manual mode, set on the host. Agents may start subagents inside their own Claude Code process. A subagent has the same tools, files and rules as the agent that started it, and counts against the same task limits.
             delegation:
               $ref: "#/components/schemas/Capability"
               description: Manual mode, set on the host. When allowed, the Orchestrator's handoffs recorded in reply to the owner are started as tasks by the manager. Host-wide; there is no per-lab switch.

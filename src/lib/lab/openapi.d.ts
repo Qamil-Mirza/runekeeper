@@ -1121,6 +1121,12 @@ export interface components {
                  * @enum {string}
                  */
                 uncoveredRequests?: "ask" | "deny" | "policy";
+                /** @description Manual mode, set on the host. Agents have the WebFetch tool and may open web pages without a per-request approval. */
+                webFetch?: components["schemas"]["Capability"];
+                /** @description Manual mode, set on the host. Agents have the Skill tool and load the skills the owner installed in a directory on the host that agents cannot write. Reason `skills_dir_missing` when the setting is on but no such directory is usable. */
+                skills?: components["schemas"]["Capability"];
+                /** @description Manual mode, set on the host. Agents may start subagents inside their own Claude Code process. A subagent has the same tools, files and rules as the agent that started it, and counts against the same task limits. */
+                subagents?: components["schemas"]["Capability"];
                 /** @description Manual mode, set on the host. When allowed, the Orchestrator's handoffs recorded in reply to the owner are started as tasks by the manager. Host-wide; there is no per-lab switch. */
                 delegation?: components["schemas"]["Capability"];
                 /** @description Deprecated; same as shell.executor. */

@@ -46,6 +46,7 @@ const STANDING_RULES: Record<string, string> = {
   recordWrites: "record files",
   workspaceWrites: "files in its own workspace",
   webSearch: "web search",
+  webFetch: "fetching web pages",
 };
 
 type DecidedBy = NonNullable<NonNullable<LabTranscriptItem["tool"]>["decidedBy"]>;
