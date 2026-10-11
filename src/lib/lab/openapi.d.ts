@@ -227,6 +227,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/labs/{labId}/compute/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The lab's requests for rented compute, newest first, with its compute budget. */
+        get: operations["listComputeRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/compute/runs/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One compute run. */
+        get: operations["getComputeRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/compute/runs/{runId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop a run and remove what it rented. Unsigned. What it cost until then stays charged.
+         * @description Answers at once; the run is `removing` until the broker confirms
+         *     nothing paid is left, then `cancelled`. 409 `conflict` if the run
+         *     has already ended.
+         */
+        post: operations["cancelComputeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/network/hosts": {
         parameters: {
             query?: never;
@@ -1086,10 +1142,17 @@ export interface components {
             };
             spend: {
                 /**
-                 * @description `none`: no paid mechanism exists whose limits the Lab Manager can enforce, so no spending can be authorized and no charge can be verified.
+                 * @description `active`: the compute broker answers and the account's balance is known, so compute runs can start within each lab's limit. `none`: no run is started.
                  * @enum {string}
                  */
                 metering: "none" | "active";
+                /** @description Why metering is `none`: `no_broker_configured`, `broker_unavailable` or `balance_unknown`. */
+                reason: string | null;
+                provider: string | null;
+                /** @description Prepaid credit on the provider's account, as the provider reports it. The true ceiling on spending. Not measured by the Lab Manager. */
+                balanceUsd: number | null;
+                /** Format: date-time */
+                balanceAt: string | null;
             };
             /** @description Whether model work is suspended because the Claude subscription's usage limit appears to be reached. */
             subscription: {
@@ -1422,6 +1485,90 @@ export interface components {
         LabStatus: "stopped" | "starting" | "running" | "paused" | "degraded";
         /** @enum {string} */
         CycleStage: "idle" | "question" | "hypothesis" | "design" | "protocolRegistered" | "awaitingApproval" | "execution" | "review" | "findings" | "stateUpdate" | "decision" | "escalated";
+        /**
+         * @description Rented compute for one lab. Every figure except `providerBilledUsd`
+         *     is the Lab Manager's own count: hourly price times time by its own
+         *     clock, from the moment a run is asked for until its removal is
+         *     confirmed. The limit is set by the owner in a file on the host.
+         */
+        ComputeBudget: {
+            /** @description Null: the owner set no limit for this lab, so nothing can start. */
+            limitUsd: number | null;
+            /** Format: date-time */
+            validUntil: string | null;
+            expired: boolean;
+            /** @description The most that work now running could still cost. Held against the limit until each run's removal is confirmed. */
+            reservedUsd: number;
+            /** @description What work now running has cost so far. Part of what is reserved, not on top of it. */
+            accruingUsd: number;
+            /** @description What ended work cost. */
+            chargedUsd: number;
+            /** @description limitUsd minus chargedUsd minus reservedUsd; 0 without a valid limit. */
+            remainingUsd: number;
+            /** @description What the provider reported as billed for this lab's runs, where it has. For comparison only; never used to allow anything. */
+            providerBilledUsd: number | null;
+            /** @constant */
+            source: "managerMeasured";
+        };
+        ComputeRun: {
+            id: string;
+            labId: string;
+            agentId: string;
+            /** @description The task in which the agent filed the request. */
+            jobId: string | null;
+            /** @description Agent-written. */
+            title: string;
+            /**
+             * @description `starting`: rented and being charged, its container not up yet. `running`: up. `removing`: the outcome is decided and the broker has not yet confirmed that nothing paid is left; still held against the limit. `finished`: the turn it was rented for ended and it was removed.
+             * @enum {string}
+             */
+            status: "requested" | "refused" | "starting" | "running" | "removing" | "finished" | "failed" | "timedOut" | "cancelled";
+            /** @description Why it was refused or failed. Begins with one of: `no_limit_set`, `limit_expired`, `over_limit`, `over_balance`, `gpu_unavailable`, `compute_unavailable`, `lab_archived`, `manager_restarted`, `start`, `price_changed`; otherwise free text. */
+            reason: string | null;
+            /** @description What the agent asked for. Agent-written. */
+            request: {
+                image: string;
+                /** @description The container's start command, one argument each. Empty: the image's own. */
+                args: string[];
+                /** @description The HTTP port the container serves on. */
+                port: number;
+                gpuType: string;
+                gpuCount: number;
+                /** @enum {string} */
+                cloud: "secure" | "community";
+                diskGb: number;
+                maxMinutes: number;
+            };
+            /** @description The provider's price for everything the run rents, read when it was requested. */
+            usdPerHour: number | null;
+            reservedUsd: number;
+            /** @description By the Lab Manager's clock: so far while it runs, final once it ended. Not the provider's bill. */
+            costUsd: number;
+            providerBilledUsd: number | null;
+            /** @description Where the machine's port is reached from the internet while it is up. Null before it is up and after it is removed. Open to anyone who has it; the password that protects the server behind it is given only to the agent. */
+            url: string | null;
+            /** @description The turn the agent was given to use the machine. It is removed when that turn ends. */
+            usedByJobId: string | null;
+            /** Format: date-time */
+            requestedAt: string;
+            /**
+             * Format: date-time
+             * @description When it was rented. It is charged from here.
+             */
+            startedAt: string | null;
+            /**
+             * Format: date-time
+             * @description When its container was first seen up.
+             */
+            upAt: string | null;
+            /**
+             * Format: date-time
+             * @description When what was rented is removed whatever state it is in.
+             */
+            deadline: string | null;
+            /** Format: date-time */
+            endedAt: string | null;
+        };
         NetworkHost: {
             host: string;
             /** @enum {string} */
@@ -1514,6 +1661,7 @@ export interface components {
                 /** @constant */
                 source: "managerVerified";
             };
+            compute: components["schemas"]["ComputeBudget"];
             /**
              * @description Reported by Claude Code on the agent side. Never a charge and
              *     never verified. `notionalModelCostUsd` is what the same usage
@@ -2081,7 +2229,7 @@ export interface components {
             truncated: false;
         };
         /** @enum {string} */
-        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.deleted" | "network.hostTrusted" | "network.hostBlocked" | "lab.statusChanged" | "agent.stateChanged" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged";
+        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.deleted" | "network.hostTrusted" | "network.hostBlocked" | "compute.run" | "compute.cancelRequested" | "lab.statusChanged" | "agent.stateChanged" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged";
         ManagerStartedData: {
             serviceVersion: string;
             interruptedJobs: {
@@ -2512,6 +2660,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Lab"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listComputeRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                labId: components["parameters"]["LabId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description At most 200 runs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ComputeRun"][];
+                        budget: components["schemas"]["ComputeBudget"];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getComputeRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComputeRun"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    cancelComputeRun: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComputeRun"];
                 };
             };
             default: components["responses"]["Error"];

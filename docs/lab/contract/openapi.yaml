@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Lab Manager API
-  version: 1.0.0-draft.16
+  version: 1.0.0-draft.18
   summary: Contract between Runekeeper (client) and the Lab Manager (server).
   description: |
     Status: DRAFT under joint review. Implemented by the Lab Manager, which
@@ -23,6 +23,40 @@ info:
     - PATCH is naturally idempotent and takes no key.
     - Research endpoints (tag `research`) are implemented but new: they
       have not yet been used by a client and may still change before 1.0.
+
+    What changed in draft.18 (BREAKING for `ComputeRun`, which no client has shipped against)
+    - A compute run is now one rented machine serving on one HTTP port
+      (for instance a model server), not a batch job. Nothing is copied to
+      it or back. When it is up, the agent that asked is given one turn of
+      its own with the address and a password the Lab Manager made; the
+      machine is removed when that turn ends, and at its deadline at the
+      latest.
+    - `ComputeRun.request`: `directory` and `command` are gone; `args`
+      (list of strings) and `port` are new.
+    - `ComputeRun`: `exitCode` and `resultsDirectory` are gone; `url`,
+      `usedByJobId` and `upAt` are new. The password is never in the API.
+    - `ComputeRun.status`: `collecting` and `succeeded` are gone;
+      `finished` is new (the turn it was rented for ended). `starting` now
+      lasts until the container is up; `running` means it is up.
+
+    What changed in draft.17 (additive)
+    - Rented compute through a broker. An agent files a request (a record
+      of type `compute.request`); the Lab Manager starts it only if the most
+      it could cost fits the limit the owner set for the lab in a file on
+      the host, and removes what was rented when the command ends, at its
+      deadline, on cancel, and when the lab is stopped. Agents never hold
+      the provider's key. `GET /v1/labs/{labId}/compute/runs`,
+      `GET /v1/compute/runs/{runId}`, `POST /v1/compute/runs/{runId}/cancel`.
+      Events `compute.run` (a run changed) and `compute.cancelRequested`.
+    - `Health.spend` gains `reason`, `provider`, `balanceUsd`, `balanceAt`.
+      `metering` is `active` only while the broker answers and the
+      account's balance is known. The balance is the provider's figure.
+    - `Budget.compute`: the lab's limit and the Lab Manager's own count of
+      what is held for running work and what ended work cost. The signed
+      `Budget.spend` block is unchanged and still refuses any amount.
+    - `Job.stateNote` may also carry the Lab Manager's note to an agent
+      about its compute runs that ended since its last turn.
+    - Not proven against a real provider yet: only a pretend one.
 
     What changed in draft.16 (additive)
     - `Health.shellVerification`: whether the sandboxed shell's confinement
@@ -537,6 +571,51 @@ paths:
       summary: Cancel running jobs and stop all agents.
       parameters: *labActionParams
       responses: *labActionResponses
+
+  /v1/labs/{labId}/compute/runs:
+    get:
+      tags: [labs]
+      operationId: listComputeRuns
+      summary: The lab's requests for rented compute, newest first, with its compute budget.
+      parameters:
+        - $ref: "#/components/parameters/LabId"
+      responses:
+        "200":
+          description: At most 200 runs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, budget]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/ComputeRun" } }
+                  budget: { $ref: "#/components/schemas/ComputeBudget" }
+        default: { $ref: "#/components/responses/Error" }
+  /v1/compute/runs/{runId}:
+    get:
+      tags: [labs]
+      operationId: getComputeRun
+      summary: One compute run.
+      parameters:
+        - { name: runId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: The run., content: { application/json: { schema: { $ref: "#/components/schemas/ComputeRun" } } } }
+        default: { $ref: "#/components/responses/Error" }
+  /v1/compute/runs/{runId}/cancel:
+    post:
+      tags: [labs]
+      operationId: cancelComputeRun
+      summary: Stop a run and remove what it rented. Unsigned. What it cost until then stays charged.
+      description: |
+        Answers at once; the run is `removing` until the broker confirms
+        nothing paid is left, then `cancelled`. 409 `conflict` if the run
+        has already ended.
+      parameters:
+        - { name: runId, in: path, required: true, schema: { type: string } }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "202": { description: The run., content: { application/json: { schema: { $ref: "#/components/schemas/ComputeRun" } } } }
+        default: { $ref: "#/components/responses/Error" }
 
   /v1/network/hosts:
     get:
@@ -1655,12 +1734,16 @@ components:
             checkpointEvery: { type: [integer, "null"] }
         spend:
           type: object
-          required: [metering]
+          required: [metering, reason, provider, balanceUsd, balanceAt]
           properties:
             metering:
               type: string
               enum: [none, active]
-              description: "`none`: no paid mechanism exists whose limits the Lab Manager can enforce, so no spending can be authorized and no charge can be verified."
+              description: "`active`: the compute broker answers and the account's balance is known, so compute runs can start within each lab's limit. `none`: no run is started."
+            reason: { type: [string, "null"], description: "Why metering is `none`: `no_broker_configured`, `broker_unavailable` or `balance_unknown`." }
+            provider: { type: [string, "null"] }
+            balanceUsd: { type: [number, "null"], description: "Prepaid credit on the provider's account, as the provider reports it. The true ceiling on spending. Not measured by the Lab Manager." }
+            balanceAt: { type: [string, "null"], format: date-time }
         subscription:
           type: object
           description: Whether model work is suspended because the Claude subscription's usage limit appears to be reached.
@@ -2013,6 +2096,64 @@ components:
     CycleStage:
       type: string
       enum: [idle, question, hypothesis, design, protocolRegistered, awaitingApproval, execution, review, findings, stateUpdate, decision, escalated]
+    ComputeBudget:
+      type: object
+      description: |
+        Rented compute for one lab. Every figure except `providerBilledUsd`
+        is the Lab Manager's own count: hourly price times time by its own
+        clock, from the moment a run is asked for until its removal is
+        confirmed. The limit is set by the owner in a file on the host.
+      required: [limitUsd, validUntil, expired, reservedUsd, accruingUsd, chargedUsd, remainingUsd, providerBilledUsd, source]
+      properties:
+        limitUsd: { type: [number, "null"], description: "Null: the owner set no limit for this lab, so nothing can start." }
+        validUntil: { type: [string, "null"], format: date-time }
+        expired: { type: boolean }
+        reservedUsd: { type: number, description: "The most that work now running could still cost. Held against the limit until each run's removal is confirmed." }
+        accruingUsd: { type: number, description: "What work now running has cost so far. Part of what is reserved, not on top of it." }
+        chargedUsd: { type: number, description: "What ended work cost." }
+        remainingUsd: { type: number, description: "limitUsd minus chargedUsd minus reservedUsd; 0 without a valid limit." }
+        providerBilledUsd: { type: [number, "null"], description: "What the provider reported as billed for this lab's runs, where it has. For comparison only; never used to allow anything." }
+        source: { type: string, const: managerMeasured }
+    ComputeRun:
+      type: object
+      required: [id, labId, agentId, jobId, title, status, reason, request, usdPerHour, reservedUsd, costUsd, providerBilledUsd, url, usedByJobId, requestedAt, startedAt, upAt, deadline, endedAt]
+      properties:
+        id: { type: string }
+        labId: { type: string }
+        agentId: { type: string }
+        jobId: { type: [string, "null"], description: "The task in which the agent filed the request." }
+        title: { type: string, description: "Agent-written." }
+        status:
+          type: string
+          enum: [requested, refused, starting, running, removing, finished, failed, timedOut, cancelled]
+          description: "`starting`: rented and being charged, its container not up yet. `running`: up. `removing`: the outcome is decided and the broker has not yet confirmed that nothing paid is left; still held against the limit. `finished`: the turn it was rented for ended and it was removed."
+        reason:
+          type: [string, "null"]
+          description: "Why it was refused or failed. Begins with one of: `no_limit_set`, `limit_expired`, `over_limit`, `over_balance`, `gpu_unavailable`, `compute_unavailable`, `lab_archived`, `manager_restarted`, `start`, `price_changed`; otherwise free text."
+        request:
+          type: object
+          description: What the agent asked for. Agent-written.
+          required: [image, args, port, gpuType, gpuCount, cloud, diskGb, maxMinutes]
+          properties:
+            image: { type: string }
+            args: { type: array, items: { type: string }, description: "The container's start command, one argument each. Empty: the image's own." }
+            port: { type: integer, description: "The HTTP port the container serves on." }
+            gpuType: { type: string }
+            gpuCount: { type: integer }
+            cloud: { type: string, enum: [secure, community] }
+            diskGb: { type: integer }
+            maxMinutes: { type: integer }
+        usdPerHour: { type: [number, "null"], description: "The provider's price for everything the run rents, read when it was requested." }
+        reservedUsd: { type: number }
+        costUsd: { type: number, description: "By the Lab Manager's clock: so far while it runs, final once it ended. Not the provider's bill." }
+        providerBilledUsd: { type: [number, "null"] }
+        url: { type: [string, "null"], description: "Where the machine's port is reached from the internet while it is up. Null before it is up and after it is removed. Open to anyone who has it; the password that protects the server behind it is given only to the agent." }
+        usedByJobId: { type: [string, "null"], description: "The turn the agent was given to use the machine. It is removed when that turn ends." }
+        requestedAt: { type: string, format: date-time }
+        startedAt: { type: [string, "null"], format: date-time, description: "When it was rented. It is charged from here." }
+        upAt: { type: [string, "null"], format: date-time, description: "When its container was first seen up." }
+        deadline: { type: [string, "null"], format: date-time, description: "When what was rented is removed whatever state it is in." }
+        endedAt: { type: [string, "null"], format: date-time }
     NetworkHost:
       type: object
       required: [host, status, firstSeenAt, firstUse, uses, lastUsedAt, decidedBy, decidedAt]
@@ -2095,7 +2236,7 @@ components:
       description: |
         Three kinds of number that must never be mixed or summed. Each block
         says where its numbers come from in `source`.
-      required: [runtime, spend, estimates, limits, consumed]
+      required: [runtime, spend, compute, estimates, limits, consumed]
       properties:
         runtime:
           type: object
@@ -2117,6 +2258,7 @@ components:
             remainingUsd: { type: [number, "null"] }
             metering: { type: string, enum: [none, active] }
             source: { type: string, const: managerVerified }
+        compute: { $ref: "#/components/schemas/ComputeBudget" }
         estimates:
           type: object
           description: |
@@ -2763,6 +2905,8 @@ components:
         - lab.deleted
         - network.hostTrusted
         - network.hostBlocked
+        - compute.run
+        - compute.cancelRequested
         - lab.statusChanged
         - agent.stateChanged
         - transcript.itemAdded

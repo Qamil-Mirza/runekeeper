@@ -4,6 +4,15 @@ import type { components } from "./openapi";
 // (docs/lab/contract/openapi.yaml). Regenerate with `npm run lab:types`.
 type Schemas = components["schemas"];
 
+/** One rented-compute run an agent asked for. Its title and request are agent-written. */
+export type LabComputeRun = Schemas["ComputeRun"];
+/** A lab's rented-compute budget, counted by the Lab Manager's own clock. */
+export type LabComputeBudget = Schemas["ComputeBudget"];
+export interface LabComputeRuns {
+  items: LabComputeRun[];
+  budget: LabComputeBudget;
+}
+
 /** An internet host a sandboxed shell command has reached, or that the owner blocked. */
 export type LabNetworkHost = Schemas["NetworkHost"];
 export interface LabNetworkHosts {

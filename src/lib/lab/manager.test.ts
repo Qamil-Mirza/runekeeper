@@ -16,7 +16,9 @@ import {
   listJobs,
   sendAgentMessage,
   setRuntimeLimit,
+  cancelComputeRun,
   deleteLab,
+  listComputeRuns,
   listNetworkHosts,
   setNetworkHost,
   updateLab,
@@ -234,6 +236,19 @@ describe("over a unix socket", () => {
     assert.deepEqual(
       seen.map((s) => `${s.method} ${s.url}`),
       ["GET /v1/network/hosts", "POST /v1/network/hosts/pypi.org/block", "POST /v1/network/hosts/files.pythonhosted.org/trust"]
+    );
+    assert.equal(seen[1].headers["idempotency-key"], KEY);
+  });
+
+  it("lists a lab's compute runs and cancels one", async () => {
+    const { config, seen } = await onUnixSocket((_s, res) => json(res, 200, { items: [] }));
+    await listComputeRuns(config, ACTOR, "lab_1");
+    await cancelComputeRun(config, ACTOR, KEY, "run_1");
+    await assert.rejects(cancelComputeRun(config, ACTOR, KEY, "run_1/../x"), { code: "validation_failed" });
+
+    assert.deepEqual(
+      seen.map((s) => `${s.method} ${s.url}`),
+      ["GET /v1/labs/lab_1/compute/runs", "POST /v1/compute/runs/run_1/cancel"]
     );
     assert.equal(seen[1].headers["idempotency-key"], KEY);
   });
