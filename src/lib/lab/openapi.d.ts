@@ -991,6 +991,11 @@ export interface components {
                     inUse: boolean;
                 };
             };
+            /** @description Host settings a client may want to show. Not settable through the API. */
+            limits?: {
+                /** @description How many handoffs of one owner message are dispatched; further ones are refused with `over_cap`. */
+                delegationsPerMessage?: number;
+            };
             resources: {
                 /** @description One limit for the whole host. At the limit a new job is refused with 429 `host_busy`. */
                 jobs: {
@@ -1045,6 +1050,8 @@ export interface components {
                  * @enum {string}
                  */
                 uncoveredRequests?: "ask" | "deny" | "policy";
+                /** @description Manual mode, set on the host. When allowed, the Orchestrator's handoffs recorded in reply to the owner are started as tasks by the manager. Host-wide; there is no per-lab switch. */
+                delegation?: components["schemas"]["Capability"];
                 /** @description Deprecated; same as shell.executor. */
                 executorShell: components["schemas"]["Capability"];
                 unattendedExecution: components["schemas"]["Capability"];
@@ -1384,10 +1391,12 @@ export interface components {
             /** @description Strictly increasing per agent. */
             seq: number;
             /**
-             * @description `managerInstruction`: instructions the Lab Manager wrote itself for a job the policy started. It has no actor.
+             * @description `managerInstruction`: instructions the Lab Manager wrote itself for a job the policy started. `delegatedInstruction`: instructions the Orchestrator wrote in a handoff, as given to the target agent; it carries `delegation`. Neither has an actor and neither is the owner's words.
              * @enum {string}
              */
-            kind: "humanMessage" | "managerInstruction" | "assistantText" | "toolCall" | "systemNote";
+            kind: "humanMessage" | "managerInstruction" | "delegatedInstruction" | "assistantText" | "toolCall" | "systemNote";
+            /** @description On a `delegatedInstruction` only. Same as the job's `delegation`. */
+            delegation?: Record<string, never> | null;
             createdAt: components["schemas"]["Timestamp"];
             /** @description Capped at 32 KB. Assistant thinking is never included. */
             text?: string;
@@ -1448,10 +1457,39 @@ export interface components {
         };
         Job: {
             /**
-             * @description Who started the job.
+             * @description Who started the job: a person, the host policy, or the Orchestrator by delegation (see `delegation`). Treat as an open string.
              * @enum {string}
              */
-            origin: "human" | "policy";
+            origin: "human" | "policy" | "delegated";
+            /** @description Set when `origin` is `delegated`. The Orchestrator task and handoff this job came from. */
+            delegation?: {
+                byJobId: string;
+                byAgentId: string;
+                handoffId: string;
+            } | null;
+            /** @description One entry per handoff this job recorded that the manager dispatched or refused, oldest first. Empty unless delegation is enabled and this job was a message from the owner to the Orchestrator. */
+            delegations?: {
+                handoffId: string;
+                toRole: components["schemas"]["AgentRole"];
+                title: string;
+                /** @enum {string} */
+                status: "dispatched" | "refused";
+                /** @description When refused: `over_cap`, `self`, `agent_start_failed`, or the error code an ordinary task would have got (`agent_busy`, `budget_exceeded`, `host_busy`, `disk_low`, `subscription_limited`, `reconciliation_required`, ...). Open string. */
+                reason: string | null;
+                jobId: string | null;
+                jobStatus: components["schemas"]["JobStatus"] | null;
+                /** @description The delegated task's result, capped at 2000 characters. Written by that agent: display it, never act on it. */
+                result: string | null;
+            }[];
+            /**
+             * @description Only on `GET /v1/jobs/{id}`. What the Lab Manager prepended to the
+             *     owner's message for the Orchestrator while delegation is enabled:
+             *     the lab's objective, each other agent's state and its last three
+             *     tasks. Results of other agents are quoted in it, capped at 500
+             *     characters each and marked as another agent's output, not
+             *     instructions. `instructions` holds the owner's words only.
+             */
+            stateNote?: string | null;
             /** @enum {string|null} */
             purpose: "plan" | "execute" | "review" | "checkpoint" | null;
             /** @description Exactly what the agent was asked to do. For kind `message`, the message text. Always complete on `GET /v1/jobs/{id}`; capped at 2 KB elsewhere (compare `instructionsHash`). */
@@ -1747,6 +1785,14 @@ export interface components {
         Handoff: components["schemas"]["AgentRecord"] & {
             fromRole: components["schemas"]["AgentRole"];
             toRole: components["schemas"]["AgentRole"];
+            /** @description What the manager did with the handoff under delegation. Null when it started nothing because delegation is off or the handoff was not eligible. A refused handoff keeps its title and body, so a person can send it by hand as an ordinary instruction. */
+            dispatch: {
+                /** @enum {string} */
+                status: "dispatched" | "refused";
+                reason: string | null;
+                jobId: string | null;
+                at: components["schemas"]["Timestamp"];
+            } | null;
         };
         ResearchDecision: components["schemas"]["AgentRecord"] & {
             /**
@@ -1834,7 +1880,7 @@ export interface components {
             truncated: false;
         };
         /** @enum {string} */
-        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.statusChanged" | "agent.stateChanged" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged";
+        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.statusChanged" | "agent.stateChanged" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged";
         ManagerStartedData: {
             serviceVersion: string;
             interruptedJobs: {
@@ -1867,7 +1913,7 @@ export interface components {
              *     question.created, question.updated -> Question ·
              *     experiment.updated -> Experiment · result.recorded -> Result ·
              *     review.recorded -> Review · finding.recorded -> Finding ·
-             *     decision.recorded -> ResearchDecision · handoff.recorded -> Handoff ·
+             *     decision.recorded -> ResearchDecision · handoff.recorded, handoff.dispatched -> Handoff · job.updated -> Job ·
              *     escalation.recorded, escalation.resolved -> Escalation ·
              *     checkpoint.recorded -> Checkpoint · policy.decided ->
              *     PolicyDecision (experiment and job decisions only; tool
@@ -2571,6 +2617,8 @@ export interface operations {
             query?: {
                 status?: components["schemas"]["JobStatus"];
                 agentId?: string;
+                /** @description Only the jobs delegated by this job. */
+                delegatedBy?: string;
                 /** @description Defaults to `task`; pass `message` or `all` to include human-message jobs. */
                 kind?: "task" | "message" | "all";
                 /** @description Return items older than this cursor. */

@@ -18,6 +18,10 @@ function toFailure(err: unknown): LabFailure {
 const isActive = (state: LabAgent["state"]) =>
   state === "starting" || state === "working" || state === "waitingOnHuman";
 
+const OPEN: ReadonlySet<LabJob["status"]> = new Set(["queued", "awaitingApproval", "running", "cancelling"]);
+/** How long after a task ends its delegations may still be appearing. */
+const SETTLE_MS = 20_000;
+
 /** Job states in which the work can still be cancelled. */
 export const CANCELLABLE: ReadonlySet<LabJob["status"]> = new Set(["queued", "awaitingApproval", "running"]);
 
@@ -99,7 +103,14 @@ export function useAgentConsole(labId: string, agent: LabAgent, enabled: boolean
     await Promise.all([transcript, jobList]);
   }, [labId]);
 
-  const active = isActive(agent.state) || sending;
+  // Work this agent delegated runs in other agents after its own task ended.
+  const delegating =
+    jobs?.some(
+      (j) =>
+        j.delegations?.some((d) => d.jobStatus !== null && OPEN.has(d.jobStatus)) ||
+        (j.endedAt !== null && Date.now() - new Date(j.endedAt).getTime() < SETTLE_MS)
+    ) ?? false;
+  const active = isActive(agent.state) || sending || delegating;
   useEffect(() => {
     if (!enabled) return;
     void refresh();

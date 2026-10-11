@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   MAX_INSTRUCTION_LENGTH,
@@ -67,6 +67,55 @@ function decidedByLabel(decidedBy: DecidedBy | undefined): string {
   }
 }
 
+const REFUSAL_REASONS: Record<string, string> = {
+  over_cap: "more handoffs than one message may start",
+  self: "an agent cannot delegate to itself",
+  agent_busy: "that agent was busy",
+  agent_start_failed: "that agent could not be started",
+  budget_exceeded: "the lab has no runtime left",
+  host_busy: "the host was running as many tasks as it allows",
+  disk_low: "the host is low on disk space",
+  reconciliation_required: "that agent has an interrupted task to settle",
+};
+
+type Delegation = NonNullable<LabJob["delegations"]>[number];
+
+/** What became of one piece of work the Orchestrator handed on. */
+function DelegationCard({ delegation, onOpen }: { delegation: Delegation; onOpen?: () => void }) {
+  const role = ROLE_LABELS[delegation.toRole];
+  const status =
+    delegation.status === "refused"
+      ? { label: "Not started", tone: "warn" as LabTone }
+      : delegation.jobStatus
+        ? JOB_STATUS[delegation.jobStatus]
+        : { label: "Starting", tone: "accent" as LabTone };
+  return (
+    <li className={cn("lab-card p-3 flex flex-col gap-2 min-w-0", toneClass(status.tone))}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="lab-eyebrow !text-[11px]">Handed to the {role}</span>
+        <Chip tone={status.tone}>{status.label}</Chip>
+      </div>
+      <p className="break-words text-[13.5px] font-medium">{delegation.title}</p>
+      {delegation.status === "refused" && (
+        <p className="text-[13px] text-[var(--lab-warn)]">
+          Not started: {REFUSAL_REASONS[delegation.reason ?? ""] ?? delegation.reason ?? "refused"}. You can give it
+          to the {role} yourself.
+        </p>
+      )}
+      {typeof delegation.result === "string" && delegation.result.length > 0 && (
+        <AgentWritten label={`Result · written by the ${role}`} text={delegation.result} truncated={delegation.result.length >= 2000} />
+      )}
+      {onOpen && (
+        <div>
+          <LabButton onClick={onOpen} className="!min-h-[28px] !px-2">
+            Open the {role}
+          </LabButton>
+        </div>
+      )}
+    </li>
+  );
+}
+
 function formatDuration(seconds: number): string {
   if (seconds < 60) return `${Math.round(seconds)}s`;
   const minutes = Math.floor(seconds / 60);
@@ -111,6 +160,18 @@ function TranscriptEntry({ item, role, now }: { item: LabTranscriptItem; role: s
             <p className="mt-2 text-[12.5px] text-[var(--lab-faint)]">No input or output was recorded for this call.</p>
           )}
         </details>
+      </li>
+    );
+  }
+
+  if (item.kind === "delegatedInstruction") {
+    return (
+      <li className="lab-entry lab-entry-delegated">
+        <p className="flex items-baseline justify-between gap-3">
+          <span className="lab-eyebrow !text-[11px]">Delegated by the Orchestrator · not written by you</span>
+          {when}
+        </p>
+        <p className="mt-1 whitespace-pre-wrap break-words">{item.text}</p>
       </li>
     );
   }
@@ -175,6 +236,8 @@ function TaskRow({
         {formatAgo(job.createdAt, now)}
         {job.usage.wallClockSeconds > 0 && ` · ${formatDuration(job.usage.wallClockSeconds)}`}
         {job.usage.turns > 0 && ` · ${job.usage.turns} turn${job.usage.turns === 1 ? "" : "s"}`}
+        {job.origin === "delegated" && " · delegated by the Orchestrator"}
+        {job.origin === "policy" && " · started by host policy"}
       </p>
       {job.error && (
         <p className="lab-strip lab-tone-bad text-[13px]">
@@ -230,9 +293,6 @@ function composerBlock(agent: LabAgent, disabled: boolean, runtimeLeft: number |
   if (disabled) return "The Lab Manager is not answering.";
   if (agent.mode === "tmux") return "This agent is being driven at a terminal on the host.";
   switch (agent.state) {
-    case "notProvisioned":
-    case "stopped":
-      return "Start the agent to give it an instruction.";
     case "crashed":
       return "The agent's session ended unexpectedly. Resume it to continue.";
     case "starting":
@@ -262,7 +322,15 @@ export function AgentConsole({
   actionFailure,
   onAction,
   onClose,
+  central = false,
+  agents = [],
+  onOpenAgent,
 }: {
+  /** The Orchestrator's conversation presented as the lab's one chat. */
+  central?: boolean;
+  /** The lab's agents, to link a delegation to the agent it went to. */
+  agents?: LabAgent[];
+  onOpenAgent?: (agentId: string) => void;
   labId: string;
   agent: LabAgent;
   now: number;
@@ -293,18 +361,56 @@ export function AgentConsole({
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const lastSeq = con.items.at(-1)?.seq;
+  // Delegation cards arrive and fill in after the last message.
+  const cardsKey = con.jobs
+    ?.flatMap((j) => j.delegations ?? [])
+    .map((d) => `${d.handoffId}:${d.jobStatus ?? d.status}:${d.result?.length ?? 0}`)
+    .join("|");
   useLayoutEffect(() => {
     const el = scroller.current;
     if (el && pinned.current) el.scrollTop = el.scrollHeight;
-  }, [lastSeq, con.loaded, tab]);
+  }, [lastSeq, con.loaded, tab, cardsKey]);
 
   const text = draft.trim();
   const tooLong = draft.length > MAX_INSTRUCTION_LENGTH;
+  const asleep = agent.state === "notProvisioned" || agent.state === "stopped";
+  // An instruction for a stopped agent starts it first, then goes out once it is ready.
+  const [queued, setQueued] = useState<string | null>(null);
+  const { send } = con;
+  useEffect(() => {
+    if (queued === null) return;
+    if (agent.state === "idle") {
+      setQueued(null);
+      void send(queued).then((sent) => sent && setDraft(""));
+    } else if (agent.state === "crashed" || (asleep && pendingAction === undefined && actionFailure)) {
+      setQueued(null);
+    }
+  }, [queued, agent.state, asleep, pendingAction, actionFailure, send]);
+  useEffect(() => setQueued(null), [agent.id]);
+
   const submit = async () => {
-    if (!text || tooLong || blocked || con.sending) return;
+    if (!text || tooLong || blocked || con.sending || queued !== null) return;
     pinned.current = true;
+    if (asleep) {
+      setQueued(draft);
+      onAction("start");
+      return;
+    }
     if (await con.send(draft)) setDraft("");
   };
+  const busy = con.sending || queued !== null;
+
+  // Delegation cards go after the last entry of the task that recorded them.
+  const cardsAfter = new Map<string, LabJob>();
+  if (con.jobs) {
+    const lastOfJob = new Map<string, string>();
+    for (const item of con.items) if (item.jobId) lastOfJob.set(item.jobId, item.id);
+    for (const job of con.jobs) {
+      const last = lastOfJob.get(job.id);
+      if (last && job.delegations?.length) cardsAfter.set(last, job);
+    }
+  }
+  const agentFor = (r: LabAgent["role"]) => agents.find((a) => a.role === r);
 
   const clickAction = (action: AgentAction) => {
     if (needsConfirm(action, agent.state) && confirming !== action) return setConfirming(action);
@@ -321,7 +427,8 @@ export function AgentConsole({
           <span aria-hidden="true">←</span>
           <span className="hidden sm:inline">Agents</span>
         </LabButton>
-        <h4 className="text-[18px] font-semibold tracking-tight">{role}</h4>
+        <h4 className="text-[18px] font-semibold tracking-tight">{central ? "Central chat" : role}</h4>
+        {central && <span className="lab-eyebrow !text-[11px] hidden md:inline">the Orchestrator hands work to the right agent</span>}
         <span className="flex items-center gap-2 lab-tone-text text-[13.5px] font-medium" role="status">
           <StatusLight tone={presentation.tone} pulse={presentation.pulse} />
           {presentation.label}
@@ -402,13 +509,36 @@ export function AgentConsole({
               </Strip>
             )}
             {con.loaded && con.items.length === 0 && (
-              <p className="lab-eyebrow py-10 text-center">Nothing yet. Start the agent and give it an instruction.</p>
+              <p className="lab-eyebrow py-10 text-center">
+                {central ? "Nothing yet. Say what you want done." : "Nothing yet. Give it an instruction."}
+              </p>
             )}
             {!con.loaded && !con.transcriptFailure && <p className="lab-eyebrow py-10 text-center">Loading conversation…</p>}
             <ol className="flex flex-col gap-3" aria-label="Conversation" aria-live="polite">
-              {con.items.map((item) => (
-                <TranscriptEntry key={item.id} item={item} role={role} now={now} />
-              ))}
+              {con.items.map((item) => {
+                const job = cardsAfter.get(item.id);
+                return (
+                  <Fragment key={item.id}>
+                    <TranscriptEntry item={item} role={role} now={now} />
+                    {job && (
+                      <li>
+                        <ul className="grid gap-2 sm:grid-cols-2" aria-label="Work handed to other agents">
+                          {(job.delegations ?? []).map((d) => {
+                            const target = agentFor(d.toRole);
+                            return (
+                              <DelegationCard
+                                key={d.handoffId}
+                                delegation={d}
+                                onOpen={target && onOpenAgent ? () => onOpenAgent(target.id) : undefined}
+                              />
+                            );
+                          })}
+                        </ul>
+                      </li>
+                    )}
+                  </Fragment>
+                );
+              })}
             </ol>
             {agent.state === "working" && (
               <p className="lab-eyebrow mt-3 flex items-center gap-2 lab-tone-accent">
@@ -438,9 +568,11 @@ export function AgentConsole({
               id="lab-instruction"
               className="lab-input lab-textarea"
               rows={3}
-              placeholder={blocked ?? `Tell the ${role} what to do`}
+              placeholder={
+                blocked ?? (central ? "Say what you want done. The Orchestrator hands it to the right agent." : `Tell the ${role} what to do`)
+              }
               value={draft}
-              disabled={blocked !== null || con.sending}
+              disabled={blocked !== null || busy}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -453,10 +585,15 @@ export function AgentConsole({
               <p className={cn("text-[12.5px]", tooLong ? "text-[var(--lab-bad)]" : "text-[var(--lab-dim)]")}>
                 {tooLong
                   ? `Too long by ${draft.length - MAX_INSTRUCTION_LENGTH} characters.`
-                  : (blocked ?? "One instruction at a time · up to 30 minutes and 60 turns each.")}
+                  : (blocked ??
+                    (queued !== null
+                      ? `Starting the ${role}; your instruction goes out as soon as it is ready.`
+                      : asleep
+                        ? `The ${role} is stopped. Sending starts it.`
+                        : "One instruction at a time · up to 30 minutes and 60 turns each."))}
               </p>
-              <LabButton type="submit" variant="primary" disabled={!text || tooLong || blocked !== null || con.sending}>
-                {con.sending ? "Sending…" : "Send"}
+              <LabButton type="submit" variant="primary" disabled={!text || tooLong || blocked !== null || busy}>
+                {queued !== null ? "Starting…" : con.sending ? "Sending…" : "Send"}
               </LabButton>
             </div>
             {con.sendFailure && (

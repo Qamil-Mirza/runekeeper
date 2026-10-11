@@ -29,6 +29,8 @@ export function LabView({ onExit }: { onExit: () => void }) {
   const [now, setNow] = useState(() => Date.now());
   const [confirmStop, setConfirmStop] = useState(false);
   const [openAgentId, setOpenAgentId] = useState<string | null>(null);
+  // null until the owner picks: the central chat when the host allows delegation.
+  const [viewChoice, setViewChoice] = useState<"chat" | "agents" | null>(null);
   const [warp, setWarp] = useState<"in" | "out" | null>("in");
   const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -72,12 +74,18 @@ export function LabView({ onExit }: { onExit: () => void }) {
   const labStatus = snapshot?.lab.status;
 
   useEffect(() => setConfirmStop(false), [labStatus, lab.selectedLabId]);
-  useEffect(() => setOpenAgentId(null), [lab.selectedLabId]);
+  useEffect(() => {
+    setOpenAgentId(null);
+    setViewChoice(null);
+  }, [lab.selectedLabId]);
 
   // The runtime limit is shown only when Runekeeper is set to leave it to the owner.
   const runtime = status?.features?.runtimeLimit ? snapshot?.budget.runtime : undefined;
   const runtimeLeft = runtime ? runtime.limitWallClockMinutes - runtime.usedWallClockMinutes : null;
   const openAgent = snapshot?.agents.find((a) => a.id === openAgentId) ?? null;
+  const orchestrator = snapshot?.agents.find((a) => a.role === "orchestrator") ?? null;
+  const centralChat = status?.health?.capabilities.delegation?.allowed === true && orchestrator !== null;
+  const view = centralChat ? (viewChoice ?? "chat") : "agents";
 
   return (
     <div
@@ -128,7 +136,7 @@ export function LabView({ onExit }: { onExit: () => void }) {
 
             {snapshot && (
               <section
-                className={cn("flex flex-col gap-4 w-full max-w-[1400px]", openAgent && "flex-1 min-h-[34rem]")}
+                className={cn("flex flex-col gap-4 w-full max-w-[1400px]", (openAgent || view === "chat") && "flex-1 min-h-[34rem]")}
                 aria-label={`Lab ${snapshot.lab.name}`}
               >
                 <header className="lab-panel p-4 flex flex-col gap-4">
@@ -217,10 +225,43 @@ export function LabView({ onExit }: { onExit: () => void }) {
                   </Strip>
                 )}
 
-                {openAgent ? (
+                {centralChat && !openAgent && (
+                  <div className="flex border-b border-[var(--lab-line)]" role="tablist" aria-label="Lab views">
+                    {(["chat", "agents"] as const).map((name) => (
+                      <button
+                        key={name}
+                        role="tab"
+                        aria-selected={view === name}
+                        onClick={() => setViewChoice(name)}
+                        className="lab-tab"
+                      >
+                        {name === "chat" ? "Central chat" : "Agents and overview"}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {!openAgent && view === "chat" && orchestrator ? (
+                  <AgentConsole
+                    central
+                    labId={snapshot.lab.id}
+                    agent={orchestrator}
+                    agents={snapshot.agents}
+                    now={now}
+                    disabled={controlsDisabled}
+                    runtimeLeftMinutes={runtimeLeft}
+                    pendingAction={lab.pending[orchestrator.id]}
+                    actionFailure={lab.actionFailures[orchestrator.id]}
+                    onAction={(action) => void lab.agentAction(orchestrator.id, action)}
+                    onClose={() => setViewChoice("agents")}
+                    onOpenAgent={setOpenAgentId}
+                  />
+                ) : openAgent ? (
                   <AgentConsole
                     labId={snapshot.lab.id}
                     agent={openAgent}
+                    agents={snapshot.agents}
+                    onOpenAgent={setOpenAgentId}
                     now={now}
                     disabled={controlsDisabled}
                     runtimeLeftMinutes={runtimeLeft}
