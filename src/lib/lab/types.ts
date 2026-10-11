@@ -14,6 +14,14 @@ export interface LabMessageReceipt {
   /** Absent from a Lab Manager older than draft.19, which only ever starts a task. */
   delivery?: MessageDelivery;
 }
+export type LabGitOp = Schemas["GitOp"];
+export interface LabGitOps {
+  repo: string | null;
+  defaultBranch: string | null;
+  items: LabGitOp[];
+}
+/** "owner/name" or the repository's https://github.com address. */
+export const REPO_PATTERN = /^(https:\/\/github\.com\/)?[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(\.git)?\/?$/;
 export type LabComputeRun = Schemas["ComputeRun"];
 /** A lab's rented-compute budget, counted by the Lab Manager's own clock. */
 export type LabComputeBudget = Schemas["ComputeBudget"];

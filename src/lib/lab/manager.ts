@@ -17,6 +17,7 @@ import {
   type NetworkHostAction,
   type LabHealth,
   type LabJob,
+  type LabGitOps,
   type LabJobPage,
   type LabMessageReceipt,
   type LabSnapshot,
@@ -275,7 +276,7 @@ export function createLab(
   config: LabConfig,
   actor: LabActor,
   idempotencyKey: string,
-  input: { name: string; objective?: string; brief?: string }
+  input: { name: string; objective?: string; brief?: string; repo?: string }
 ): Promise<LabSnapshot> {
   return call<LabSnapshot>(config, {
     method: "POST",
@@ -353,6 +354,11 @@ export async function deleteLab(
 /** A lab's rented-compute runs, newest first, with its compute budget. */
 export async function listComputeRuns(config: LabConfig, actor: LabActor, labId: string): Promise<LabComputeRuns> {
   return call<LabComputeRuns>(config, { method: "GET", path: `/v1/labs/${assertId(labId)}/compute/runs`, actor });
+}
+
+/** What the lab's agents pushed and the pull requests they opened or edited. */
+export async function listGitOps(config: LabConfig, actor: LabActor, labId: string): Promise<LabGitOps> {
+  return call<LabGitOps>(config, { method: "GET", path: `/v1/labs/${assertId(labId)}/git/ops`, actor });
 }
 
 /** Asks the Lab Manager to stop a run and remove what it rented. */

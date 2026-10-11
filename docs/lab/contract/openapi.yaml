@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Lab Manager API
-  version: 1.0.0-draft.20
+  version: 1.0.0-draft.21
   summary: Contract between Runekeeper (client) and the Lab Manager (server).
   description: |
     Status: DRAFT under joint review. Implemented by the Lab Manager, which
@@ -24,6 +24,24 @@ info:
     - Research endpoints (tag `research`) are implemented but new: they
       have not yet been used by a client and may still change before 1.0.
 
+    What changed in draft.21 (additive)
+    - A lab can be started from a repository on GitHub: `POST /v1/labs`
+      accepts `repo` (`owner/name` or the repository's address), refused
+      unless the owner allowed it on the host and the broker holds a
+      credential. `Lab.repo`. Each agent gets its own clone, in a
+      directory named after the repository, when it is started.
+    - Agents hold no credential. To publish they file records
+      (`git.push` with a bundle of a branch; `git.pr` to open a pull
+      request or edit the title and text of the one open for the branch)
+      and the broker carries them out with the owner's credential. The
+      default branch is never pushed and nothing merges: only the owner
+      merges, on GitHub.
+      `GET /v1/labs/{labId}/git/ops` lists them; event `git.op`.
+    - `Health.codeHost`: whether that is available on this host, and
+      whether the owner set the identity agents' commits carry.
+    - `Job.stateNote` may also carry what became of an agent's requests
+      to the code host.
+
     What changed in draft.20 (additive)
     - `Lab.brief`: the owner's own description of the lab (what to
       investigate, methods, links as plain text; up to 16000 characters),
@@ -44,6 +62,12 @@ info:
     - `Approval.requestedBy` gains `labName`, `sessionId`, `jobTitle`, for
       a page that lists what waits across labs
       (`GET /v1/approvals?status=pending` already lists across labs).
+
+    Behaviour change after draft.20, no change of shape: the password of a
+    rented machine is no longer in any text the API returns. The agent
+    gets it in the environment of its commands for the turn it is given
+    the machine, and the Lab Manager removes it from transcript items,
+    tool details, task results and logs before storing them.
 
     What changed in draft.19 (messages to a busy agent)
     - `POST /v1/agents/{agentId}/messages` no longer answers 409
@@ -385,6 +409,7 @@ paths:
               properties:
                 name: { type: string, minLength: 1, maxLength: 120 }
                 brief: { type: string, maxLength: 16000, description: "The owner's description of the lab: what to investigate, methods, links." }
+                repo: { type: string, maxLength: 200, description: "Start the lab from this GitHub repository: owner/name or its address. 400 when the owner has not allowed it on the host or the code host is not set up (see Health.codeHost)." }
                 objective: { type: string, maxLength: 4000 }
       responses:
         "201":
@@ -609,6 +634,26 @@ paths:
       parameters: *labActionParams
       responses: *labActionResponses
 
+  /v1/labs/{labId}/git/ops:
+    get:
+      tags: [labs]
+      operationId: listGitOps
+      summary: What the lab's agents asked the code host to do, newest first, with the lab's repository.
+      parameters:
+        - $ref: "#/components/parameters/LabId"
+      responses:
+        "200":
+          description: The requests.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [repo, defaultBranch, items]
+                properties:
+                  repo: { type: [string, "null"], description: "owner/name, or null when the lab was not started from a repository." }
+                  defaultBranch: { type: [string, "null"], description: "Known once an agent's clone was made. Never pushed to." }
+                  items: { type: array, items: { $ref: "#/components/schemas/GitOp" } }
+        default: { $ref: "#/components/responses/Error" }
   /v1/labs/{labId}/compute/runs:
     get:
       tags: [labs]
@@ -1764,7 +1809,7 @@ components:
 
     Health:
       type: object
-      required: [status, apiVersion, serviceVersion, degraded, reasons, policy, spend, subscription, resources, reviewIndependence, capabilities]
+      required: [status, apiVersion, serviceVersion, degraded, reasons, policy, spend, codeHost, subscription, resources, reviewIndependence, capabilities]
       properties:
         policy:
           type: object
@@ -1777,6 +1822,14 @@ components:
             hash: { type: [string, "null"], description: "sha256 of the canonical JSON of the policy file. Part of every PolicyDecision and of every binding." }
             runtimeCapMinutes: { type: number, description: "The most a lab's runtime limit may be set to." }
             checkpointEvery: { type: [integer, "null"] }
+        codeHost:
+          type: object
+          description: "The code host (GitHub), reached through the broker with the owner's credential. Agents never hold it."
+          required: [available, reason, identitySet]
+          properties:
+            available: { type: boolean, description: "Labs can be started from a repository and agents' branches published." }
+            reason: { type: [string, "null"], description: "`no_broker_configured`, `broker_unavailable` or `no_code_host_credential`." }
+            identitySet: { type: boolean, description: "The owner set the name and address agents' commits carry." }
         spend:
           type: object
           required: [metering, reason, provider, balanceUsd, balanceAt]
@@ -2141,6 +2194,27 @@ components:
     CycleStage:
       type: string
       enum: [idle, question, hypothesis, design, protocolRegistered, awaitingApproval, execution, review, findings, stateUpdate, decision, escalated]
+    GitOp:
+      type: object
+      description: One request an agent made to the code host, carried out by the broker with the owner's credential. Titles and branch names are agent-written.
+      required: [id, labId, agentId, jobId, kind, repo, branch, status, title, error, commit, url, number, created, requestedAt, endedAt]
+      properties:
+        id: { type: string }
+        labId: { type: string }
+        agentId: { type: string }
+        jobId: { type: [string, "null"] }
+        kind: { type: string, enum: [push, pullRequest] }
+        repo: { type: string }
+        branch: { type: string }
+        status: { type: string, enum: [requested, done, failed] }
+        title: { type: [string, "null"], description: "The pull request's title, for `pullRequest`." }
+        error: { type: [string, "null"] }
+        commit: { type: [string, "null"], description: "What the branch pointed at when it was pushed." }
+        url: { type: [string, "null"], description: "The pull request's page." }
+        number: { type: [integer, "null"] }
+        created: { type: [boolean, "null"], description: "True when the pull request was opened by this request, false when an open one was edited." }
+        requestedAt: { type: string, format: date-time }
+        endedAt: { type: [string, "null"], format: date-time }
     ComputeBudget:
       type: object
       description: |
@@ -2257,10 +2331,11 @@ components:
       allOf:
         - $ref: "#/components/schemas/LabSummary"
         - type: object
-          required: [brief, objective, objectiveSetBy, objectiveSetAt, priorities, approvalPolicy, createdAt]
+          required: [brief, repo, objective, objectiveSetBy, objectiveSetAt, priorities, approvalPolicy, createdAt]
           properties:
             approvalPolicy: { $ref: "#/components/schemas/ApprovalPolicy" }
             brief: { type: [string, "null"], description: "The owner's own description of the lab. Given to every agent of the lab as the owner's words." }
+            repo: { type: [string, "null"], description: "The GitHub repository the lab was started from (owner/name), cloned for each agent. Set at creation only." }
             objective: { type: [string, "null"], description: "Decided by the Orchestrator from the brief; the owner may override it." }
             objectiveSetBy: { type: [string, "null"], enum: [owner, orchestrator, null] }
             objectiveSetAt: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
@@ -2969,6 +3044,7 @@ components:
         - network.hostTrusted
         - network.hostBlocked
         - compute.run
+        - git.op
         - compute.cancelRequested
         - lab.statusChanged
         - agent.stateChanged
