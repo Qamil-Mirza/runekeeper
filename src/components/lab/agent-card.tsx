@@ -8,6 +8,7 @@ import type {
   LabAgentState,
   LabTranscriptItem,
 } from "@/lib/lab/types";
+import { LabButton, StatusLight, toneClass, type LabTone } from "./lab-ui";
 import type { LabFailure } from "./use-lab";
 
 const ROLE_LABELS: Record<LabAgent["role"], string> = {
@@ -17,17 +18,14 @@ const ROLE_LABELS: Record<LabAgent["role"], string> = {
   orchestrator: "Orchestrator",
 };
 
-const STATE_PRESENTATION: Record<
-  LabAgentState,
-  { label: string; dot: string; text: string; pulse?: boolean }
-> = {
-  notProvisioned: { label: "Not provisioned", dot: "bg-outline", text: "text-on-surface-variant" },
-  starting: { label: "Starting", dot: "bg-tertiary", text: "text-tertiary", pulse: true },
-  idle: { label: "Idle", dot: "bg-[#6bcb6b]", text: "text-[#6bcb6b]" },
-  working: { label: "Working", dot: "bg-primary", text: "text-primary", pulse: true },
-  waitingOnHuman: { label: "Needs you", dot: "bg-[#ea4335]", text: "text-[#ea4335]", pulse: true },
-  stopped: { label: "Stopped", dot: "bg-outline", text: "text-on-surface-variant" },
-  crashed: { label: "Crashed", dot: "bg-[#ea4335]", text: "text-[#ea4335]" },
+const STATE_PRESENTATION: Record<LabAgentState, { label: string; tone: LabTone; pulse?: boolean }> = {
+  notProvisioned: { label: "Not provisioned", tone: "off" },
+  starting: { label: "Starting", tone: "warn", pulse: true },
+  idle: { label: "Idle", tone: "ok" },
+  working: { label: "Working", tone: "accent", pulse: true },
+  waitingOnHuman: { label: "Needs you", tone: "bad", pulse: true },
+  stopped: { label: "Stopped", tone: "off" },
+  crashed: { label: "Crashed", tone: "bad" },
 };
 
 // Which controls make sense in each state. The Lab Manager is the authority
@@ -113,112 +111,90 @@ export function AgentCard({
 
   return (
     <article
-      className="bg-surface-dim/70 ghost-border p-4 flex flex-col gap-3"
+      className={cn("lab-card p-4 flex flex-col gap-3 min-w-0", toneClass(presentation.tone))}
       aria-label={`${ROLE_LABELS[agent.role]} agent`}
     >
-      <header className="flex items-start justify-between gap-3">
-        <div>
-          <h4 className="font-display text-headline-md text-on-surface leading-tight">
-            {ROLE_LABELS[agent.role]}
-          </h4>
-          <p className="font-label text-label-sm uppercase tracking-wide text-on-surface-variant mt-0.5">
-            {agent.mode === "tmux" ? "tmux (driven at a terminal)" : "Managed"}
+      <header className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h4 className="lab-eyebrow !text-[var(--lab-text)]">{ROLE_LABELS[agent.role]}</h4>
+          <p className="lab-eyebrow mt-1 !text-[11px] !text-[var(--lab-faint)]">
+            {agent.mode === "tmux" ? "tmux · driven at a terminal" : "managed"}
           </p>
         </div>
-        <div
-          className={cn("flex items-center gap-2 font-label text-label-md", presentation.text)}
-          role="status"
-        >
-          <span
-            className={cn(
-              "w-2 h-2 rounded-full shrink-0",
-              presentation.dot,
-              presentation.pulse && "animate-pulse"
-            )}
-            aria-hidden="true"
-          />
+        <div className="flex items-center gap-2 lab-tone-text text-[13.5px] font-medium" role="status">
+          <StatusLight tone={presentation.tone} pulse={presentation.pulse} />
           {presentation.label}
         </div>
       </header>
 
-      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 font-label text-label-md">
-        <dt className="text-on-surface-variant">Session</dt>
-        <dd className="text-on-surface font-mono text-[11px] truncate" title={agent.sessionId ?? undefined}>
-          {agent.sessionId ?? "none yet"}
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[13.5px] border-t border-[var(--lab-line)] pt-3">
+        <dt className="text-[var(--lab-dim)]">Session</dt>
+        <dd className="lab-mono text-[12.5px] truncate" title={agent.sessionId ?? undefined}>
+          {agent.sessionId ?? "—"}
         </dd>
-        <dt className="text-on-surface-variant">Current job</dt>
-        <dd className="text-on-surface truncate">{agent.currentJob?.title ?? "none"}</dd>
-        <dt className="text-on-surface-variant">Last activity</dt>
-        <dd className="text-on-surface">{formatAgo(agent.lastActivityAt, now)}</dd>
+        <dt className="text-[var(--lab-dim)]">Job</dt>
+        <dd className="truncate">{agent.currentJob?.title ?? "—"}</dd>
+        <dt className="text-[var(--lab-dim)]">Activity</dt>
+        <dd className="lab-mono text-[12.5px]">{formatAgo(agent.lastActivityAt, now)}</dd>
         {agent.pendingApprovalCount > 0 && (
           <>
-            <dt className="text-on-surface-variant">Approvals</dt>
-            <dd className="text-[#ea4335]">{agent.pendingApprovalCount} waiting</dd>
+            <dt className="text-[var(--lab-dim)]">Approvals</dt>
+            <dd className="text-[var(--lab-bad)]">{agent.pendingApprovalCount} waiting</dd>
           </>
         )}
         {agent.mode === "tmux" && agent.tmuxAttachHint && (
           <>
-            <dt className="text-on-surface-variant">Attach</dt>
-            <dd className="text-on-surface font-mono text-[11px] break-all">
-              {agent.tmuxAttachHint}
-            </dd>
+            <dt className="text-[var(--lab-dim)]">Attach</dt>
+            <dd className="lab-mono text-[12.5px] break-all">{agent.tmuxAttachHint}</dd>
           </>
         )}
       </dl>
 
       {systemNote?.text && (
-        <p className="font-label text-label-md text-on-surface-variant break-words">
-          <span className="uppercase tracking-wide text-label-sm">
-            Manager note, {formatAgo(systemNote.createdAt, now)}:
-          </span>{" "}
-          <span className="text-on-surface">{systemNote.text}</span>
+        <p className="text-[13.5px] break-words text-[var(--lab-dim)]">
+          <span className="lab-eyebrow !text-[11px]">
+            Manager · {formatAgo(systemNote.createdAt, now)}
+          </span>
+          <span className="block mt-0.5 text-[var(--lab-text)]">{systemNote.text}</span>
         </p>
       )}
 
       {agent.blockedBy && (
-        <p className="font-label text-label-md text-tertiary">
+        <p className="lab-strip lab-tone-warn text-[13.5px]">
           {BLOCKED_REASONS[agent.blockedBy.reason] ?? "Held"}
         </p>
       )}
 
       {agent.lastError && (
-        <p className="px-2 py-1.5 bg-[rgba(234,67,53,0.1)] border border-[rgba(234,67,53,0.2)] font-label text-label-md text-[#ea4335] break-words">
+        <p className="lab-strip lab-tone-bad text-[13.5px]">
           Last error ({formatAgo(agent.lastError.at, now)}): {agent.lastError.message}
         </p>
       )}
 
       <div className="flex flex-wrap gap-2 mt-auto pt-1">
         {ALLOWED[agent.state].map((action) => (
-          <button
+          <LabButton
             key={action}
             onClick={() => handleClick(action)}
             disabled={disabled || busy}
-            className={cn(
-              "py-1.5 px-3 font-label text-label-md transition-colors disabled:opacity-40 disabled:pointer-events-none",
-              confirming === action
-                ? "bg-[rgba(234,67,53,0.2)] text-[#ea4335]"
-                : "bg-[rgba(212,168,96,0.15)] text-[#d4a860] hover:bg-[rgba(212,168,96,0.25)]"
-            )}
+            variant={confirming === action ? "danger" : action === "start" || action === "resume" ? "primary" : "default"}
           >
             {pendingAction === action
               ? `${ACTION_LABELS[action]}…`
               : confirming === action
                 ? `Confirm ${ACTION_LABELS[action].toLowerCase()}`
                 : ACTION_LABELS[action]}
-          </button>
+          </LabButton>
         ))}
         {confirming && (
-          <button
-            onClick={() => setConfirming(null)}
-            className="py-1.5 px-3 font-label text-label-md text-on-surface-variant hover:text-on-surface transition-colors"
-          >
+          <LabButton variant="quiet" onClick={() => setConfirming(null)}>
             Cancel
-          </button>
+          </LabButton>
         )}
       </div>
 
       {failure && (
-        <p className="font-label text-label-md text-[#ea4335] break-words" role="alert">
+        <p className="lab-strip lab-tone-bad text-[13.5px]" role="alert">
           {failure.message}
         </p>
       )}

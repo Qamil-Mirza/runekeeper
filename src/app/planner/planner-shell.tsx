@@ -114,8 +114,14 @@ function PlannerShell() {
     setSidebarOpen(false);
   };
 
+  // The Lab is its own full-window world; the Runekeeper shell stays mounted
+  // underneath but is taken out of focus and the accessibility tree.
+  const inLab = currentView === "lab" && labEnabled;
+
   return (
-    <div className="flex h-dvh overflow-hidden">
+    <>
+    {inLab && <LabView onExit={() => setCurrentView("home")} />}
+    <div className="flex h-dvh overflow-hidden" inert={inLab} aria-hidden={inLab || undefined}>
       {/* Sidebar — desktop (hidden during voice mode) */}
       <div className={`hidden lg:flex ${isVoiceMode ? "!hidden" : ""}`}>
         <Sidebar
@@ -187,7 +193,6 @@ function PlannerShell() {
               {currentView === "quest-log" && <InventoryPanel />}
               {currentView === "calendar" && <CalendarView />}
               {currentView === "integrations" && <IntegrationsGraph />}
-              {currentView === "lab" && labEnabled && <LabView />}
               {currentView === "profile" && <ProfileView />}
             </motion.div>
           </AnimatePresence>
@@ -223,6 +228,7 @@ function PlannerShell() {
       {/* New-deployment notice */}
       <UpdateBanner />
     </div>
+    </>
   );
 }
 

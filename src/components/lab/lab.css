@@ -1,0 +1,342 @@
+/*
+ * The Lab's own look ("mission control"). Everything is scoped under
+ * .lab-root so the rest of Runekeeper keeps its Hearthside theme.
+ */
+.lab-root {
+  --lab-bg: #07090c;
+  --lab-panel: #0c1116;
+  --lab-raised: #121a22;
+  --lab-line: #1d2732;
+  --lab-line-strong: #2b3947;
+  --lab-text: #e6edf3;
+  --lab-dim: #7f8d9b;
+  --lab-faint: #4d5a67;
+  --lab-accent: #38d6ff;
+  --lab-ok: #3ddc97;
+  --lab-warn: #ffb454;
+  --lab-bad: #ff5c6c;
+
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  color: var(--lab-text);
+  background:
+    linear-gradient(var(--lab-bg), var(--lab-bg)) padding-box,
+    var(--lab-bg);
+  background-image:
+    radial-gradient(1200px 500px at 50% -10%, rgba(56, 214, 255, 0.07), transparent 70%),
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: auto, 32px 32px, 32px 32px;
+  background-color: var(--lab-bg);
+  font-family: var(--font-lab-sans), system-ui, sans-serif;
+  font-size: 14.5px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+.lab-root ::selection {
+  background: rgba(56, 214, 255, 0.3);
+}
+
+.lab-mono {
+  font-family: var(--font-lab-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.lab-eyebrow {
+  font-family: var(--font-lab-mono), ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--lab-dim);
+}
+
+.lab-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--lab-line-strong) transparent;
+}
+
+/* Tones: one class sets the colour used by text, lights and strips. */
+.lab-tone-ok { --tone: var(--lab-ok); }
+.lab-tone-accent { --tone: var(--lab-accent); }
+.lab-tone-warn { --tone: var(--lab-warn); }
+.lab-tone-bad { --tone: var(--lab-bad); }
+.lab-tone-off { --tone: #6f7d8b; }
+.lab-tone-text { color: var(--tone); }
+
+.lab-light {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--tone);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 18%, transparent);
+}
+.lab-tone-off .lab-light,
+.lab-light.lab-tone-off {
+  box-shadow: none;
+}
+.lab-light-pulse {
+  animation: lab-pulse 1.6s ease-in-out infinite;
+}
+
+.lab-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, var(--tone) 45%, transparent);
+  background: color-mix(in srgb, var(--tone) 10%, transparent);
+  color: var(--tone);
+  font-family: var(--font-lab-mono), ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.lab-strip {
+  padding: 8px 12px;
+  border-left: 2px solid var(--tone);
+  background: color-mix(in srgb, var(--tone) 8%, transparent);
+  color: color-mix(in srgb, var(--tone) 70%, var(--lab-text));
+  overflow-wrap: anywhere;
+}
+
+.lab-panel {
+  background: color-mix(in srgb, var(--lab-panel) 92%, transparent);
+  border: 1px solid var(--lab-line);
+}
+
+.lab-card {
+  position: relative;
+  background: color-mix(in srgb, var(--lab-panel) 92%, transparent);
+  border: 1px solid var(--lab-line);
+  transition: border-color 160ms ease;
+}
+.lab-card::before {
+  content: "";
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  top: -1px;
+  height: 2px;
+  background: var(--tone);
+  opacity: 0.85;
+}
+.lab-card:hover {
+  border-color: var(--lab-line-strong);
+}
+
+.lab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--lab-line-strong);
+  background: var(--lab-raised);
+  color: var(--lab-text);
+  font-family: var(--font-lab-mono), ui-monospace, monospace;
+  font-size: 12.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+}
+.lab-btn:hover:not(:disabled) {
+  border-color: var(--lab-accent);
+  color: var(--lab-accent);
+}
+.lab-btn:focus-visible,
+.lab-rail-item:focus-visible,
+.lab-input:focus-visible {
+  outline: 2px solid var(--lab-accent);
+  outline-offset: 2px;
+}
+.lab-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.lab-btn-primary {
+  border-color: var(--lab-accent);
+  background: color-mix(in srgb, var(--lab-accent) 14%, transparent);
+  color: var(--lab-accent);
+}
+.lab-btn-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--lab-accent) 24%, transparent);
+}
+.lab-btn-danger {
+  border-color: var(--lab-bad);
+  background: color-mix(in srgb, var(--lab-bad) 14%, transparent);
+  color: var(--lab-bad);
+}
+.lab-btn-danger:hover:not(:disabled) {
+  border-color: var(--lab-bad);
+  color: var(--lab-bad);
+  background: color-mix(in srgb, var(--lab-bad) 24%, transparent);
+}
+.lab-btn-quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--lab-dim);
+}
+
+.lab-input {
+  min-height: 34px;
+  width: 100%;
+  padding: 0 10px;
+  border: 1px solid var(--lab-line-strong);
+  background: var(--lab-bg);
+  color: var(--lab-text);
+  font-family: inherit;
+  font-size: 14.5px;
+}
+.lab-input::placeholder {
+  color: var(--lab-faint);
+}
+
+.lab-rail-item {
+  display: block;
+  width: 100%;
+  padding: 9px 12px;
+  border-left: 2px solid transparent;
+  text-align: left;
+  color: var(--lab-dim);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+.lab-rail-item:hover {
+  background: var(--lab-raised);
+  color: var(--lab-text);
+}
+.lab-rail-item[aria-selected="true"] {
+  border-left-color: var(--lab-accent);
+  background: color-mix(in srgb, var(--lab-accent) 8%, transparent);
+  color: var(--lab-text);
+}
+
+.lab-meter {
+  height: 3px;
+  background: var(--lab-line);
+  overflow: hidden;
+}
+.lab-meter > span {
+  display: block;
+  height: 100%;
+  background: var(--tone, var(--lab-accent));
+  transition: width 400ms ease;
+}
+
+@keyframes lab-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* --- Warp: stepping between Runekeeper and The Lab ---------------------- */
+
+.lab-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  animation: lab-arrive 620ms cubic-bezier(0.2, 0.8, 0.2, 1) 180ms both;
+}
+.lab-root[data-leaving="true"] .lab-stage {
+  animation: lab-depart 380ms cubic-bezier(0.6, 0, 0.8, 0.2) both;
+}
+
+.lab-warp {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  pointer-events: none;
+  overflow: hidden;
+  /* Starts as Runekeeper's timber and falls away. */
+  background: #2c1810;
+  animation: lab-warp-veil 760ms ease-out both;
+}
+.lab-warp::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 220vmax;
+  height: 220vmax;
+  margin: -110vmax;
+  background: repeating-conic-gradient(
+    from 0deg,
+    transparent 0deg 1.1deg,
+    rgba(56, 214, 255, 0.7) 1.1deg 1.22deg,
+    transparent 1.22deg 2.9deg,
+    rgba(255, 255, 255, 0.55) 2.9deg 2.97deg,
+    transparent 2.97deg 4.6deg,
+    rgba(120, 150, 255, 0.5) 4.6deg 4.7deg,
+    transparent 4.7deg 7deg
+  );
+  -webkit-mask-image: radial-gradient(circle, transparent 0 3%, #000 16%, transparent 58%);
+  mask-image: radial-gradient(circle, transparent 0 3%, #000 16%, transparent 58%);
+  animation: lab-warp-streaks 760ms cubic-bezier(0.5, 0, 0.2, 1) both;
+}
+.lab-warp::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(200, 245, 255, 0.9), rgba(56, 214, 255, 0.25) 22%, transparent 55%);
+  animation: lab-warp-flash 760ms ease-out both;
+}
+.lab-warp[data-direction="out"] {
+  animation: lab-warp-veil-out 400ms ease-in both;
+}
+.lab-warp[data-direction="out"]::before {
+  animation: lab-warp-streaks-out 400ms cubic-bezier(0.6, 0, 0.9, 0.4) both;
+}
+.lab-warp[data-direction="out"]::after {
+  animation: none;
+  opacity: 0;
+}
+
+@keyframes lab-warp-veil {
+  0% { background-color: rgba(44, 24, 16, 1); }
+  45% { background-color: rgba(7, 9, 12, 0.85); }
+  100% { background-color: rgba(7, 9, 12, 0); }
+}
+@keyframes lab-warp-veil-out {
+  0% { background-color: rgba(7, 9, 12, 0); }
+  100% { background-color: rgba(44, 24, 16, 1); }
+}
+@keyframes lab-warp-streaks {
+  0% { transform: scale(0.12) rotate(-6deg); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: scale(2.6) rotate(10deg); opacity: 0; }
+}
+@keyframes lab-warp-streaks-out {
+  0% { transform: scale(2.2) rotate(8deg); opacity: 0; }
+  40% { opacity: 1; }
+  100% { transform: scale(0.1) rotate(-4deg); opacity: 0; }
+}
+@keyframes lab-warp-flash {
+  0% { opacity: 0; transform: scale(0.2); }
+  30% { opacity: 0.9; }
+  100% { opacity: 0; transform: scale(1.8); }
+}
+@keyframes lab-arrive {
+  0% { opacity: 0; transform: scale(1.06); filter: blur(10px); }
+  100% { opacity: 1; transform: none; filter: none; }
+}
+@keyframes lab-depart {
+  0% { opacity: 1; transform: none; filter: none; }
+  100% { opacity: 0; transform: scale(0.94); filter: blur(8px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lab-warp { display: none; }
+  .lab-stage,
+  .lab-root[data-leaving="true"] .lab-stage { animation: none; }
+  .lab-light-pulse { animation: none; }
+}
