@@ -5,6 +5,15 @@ import type { components } from "./openapi";
 type Schemas = components["schemas"];
 
 /** One rented-compute run an agent asked for. Its title and request are agent-written. */
+/** What became of a message: a new task, sent into the running task, or kept for later. */
+export type MessageDelivery = "started" | "duringTask" | "queued";
+export interface LabMessageReceipt {
+  /** Null when the message is kept for later. */
+  job: LabJob | null;
+  transcriptItem: LabTranscriptItem;
+  /** Absent from a Lab Manager older than draft.19, which only ever starts a task. */
+  delivery?: MessageDelivery;
+}
 export type LabComputeRun = Schemas["ComputeRun"];
 /** A lab's rented-compute budget, counted by the Lab Manager's own clock. */
 export type LabComputeBudget = Schemas["ComputeBudget"];
@@ -54,6 +63,8 @@ export interface LabJobPage {
 
 /** Longest instruction the Lab Manager accepts. */
 export const MAX_INSTRUCTION_LENGTH = 20_000;
+/** The owner's description of a lab, given to every agent of it. */
+export const MAX_BRIEF_LENGTH = 16_000;
 
 export const LAB_ACTIONS = ["start", "stop"] as const;
 export type LabAction = (typeof LAB_ACTIONS)[number];

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { LabStatus, LabSummary } from "@/lib/lab/types";
+import { cn } from "@/lib/utils";
+import { MAX_BRIEF_LENGTH, type LabStatus, type LabSummary } from "@/lib/lab/types";
 import { LabButton, StatusLight, Strip, type LabTone } from "./lab-ui";
 import type { LabFailure } from "./use-lab";
 
@@ -22,59 +23,97 @@ function CreateLab({
   disabled: boolean;
   pending: boolean;
   failure?: LabFailure;
-  onCreate: (name: string) => Promise<void>;
+  onCreate: (name: string, brief?: string) => Promise<boolean>;
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [brief, setBrief] = useState("");
   const trimmed = name.trim();
+  const tooLong = brief.length > MAX_BRIEF_LENGTH;
 
-  if (!open) {
-    return (
+  return (
+    <>
       <LabButton onClick={() => setOpen(true)} disabled={disabled} className="w-full">
         + New lab
       </LabButton>
-    );
-  }
 
-  return (
-    <form
-      className="flex flex-col gap-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!trimmed) return;
-        void onCreate(trimmed).then(() => {
-          setName("");
-          setOpen(false);
-        });
-      }}
-    >
-      <label htmlFor="lab-name" className="lab-eyebrow">
-        New lab
-      </label>
-      <input
-        id="lab-name"
-        className="lab-input"
-        placeholder="Name of the research project"
-        maxLength={120}
-        autoFocus
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        disabled={disabled || pending}
-      />
-      <div className="flex gap-2">
-        <LabButton type="submit" variant="primary" disabled={disabled || pending || !trimmed} className="flex-1">
-          {pending ? "Creating…" : "Create"}
-        </LabButton>
-        <LabButton variant="quiet" onClick={() => setOpen(false)}>
-          Cancel
-        </LabButton>
-      </div>
-      {failure && (
-        <Strip tone="bad" role="alert">
-          {failure.message}
-        </Strip>
+      {open && (
+        <div
+          className="lab-modal-backdrop"
+          onClick={(e) => e.target === e.currentTarget && !pending && setOpen(false)}
+          onKeyDown={(e) => {
+            if (e.key !== "Escape") return;
+            // Close only this dialog, not the Lab behind it.
+            e.preventDefault();
+            if (!pending) setOpen(false);
+          }}
+        >
+          <form
+            className="lab-modal lab-modal-plain lab-panel p-5 flex flex-col gap-3"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="lab-create-title"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!trimmed || tooLong || pending) return;
+              void onCreate(trimmed, brief.trim() || undefined).then((created) => {
+                if (!created) return;
+                setName("");
+                setBrief("");
+                setOpen(false);
+              });
+            }}
+          >
+            <h4 id="lab-create-title" className="text-[19px] font-semibold leading-tight">
+              New lab
+            </h4>
+            <label htmlFor="lab-name" className="lab-eyebrow">
+              Title
+            </label>
+            <input
+              id="lab-name"
+              className="lab-input"
+              placeholder="Name of the research project"
+              maxLength={120}
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={disabled || pending}
+            />
+            <label htmlFor="lab-brief" className="lab-eyebrow">
+              Description for the agents
+            </label>
+            <textarea
+              id="lab-brief"
+              className="lab-input lab-textarea"
+              rows={9}
+              placeholder={"What you want investigated.\nMethods you want used.\nLinks to papers and other sources, one per line."}
+              value={brief}
+              onChange={(e) => setBrief(e.target.value)}
+              disabled={disabled || pending}
+            />
+            <p className={cn("text-[12.5px]", tooLong ? "text-[var(--lab-bad)]" : "text-[var(--lab-dim)]")}>
+              {tooLong
+                ? `Too long by ${brief.length - MAX_BRIEF_LENGTH} characters.`
+                : "Every agent in the lab is given this as your words. The Orchestrator decides the lab's objective and goals from it. You can change it later."}
+            </p>
+            {failure && (
+              <Strip tone="bad" role="alert">
+                {failure.message}
+              </Strip>
+            )}
+            <div className="flex flex-wrap justify-end gap-2 pt-1">
+              <LabButton onClick={() => setOpen(false)} disabled={pending}>
+                Cancel
+              </LabButton>
+              <LabButton type="submit" variant="primary" disabled={disabled || pending || !trimmed || tooLong}>
+                {pending ? "Creating…" : "Create lab"}
+              </LabButton>
+            </div>
+          </form>
+        </div>
       )}
-    </form>
+    </>
   );
 }
 
@@ -87,7 +126,17 @@ export function LabRail({
   createFailure,
   onSelect,
   onCreate,
+  page,
+  onPage,
+  needsYou,
+  showSites,
 }: {
+  /** Which host-wide page is open instead of a lab, if any. */
+  page: "lab" | "needsYou" | "sites";
+  onPage: (page: "needsYou" | "sites") => void;
+  /** How many things, in every lab, wait for the owner. */
+  needsYou: number;
+  showSites: boolean;
   labs: LabSummary[] | null;
   selectedLabId: string | null;
   connected: boolean;
@@ -95,13 +144,37 @@ export function LabRail({
   createPending: boolean;
   createFailure?: LabFailure;
   onSelect: (labId: string) => void;
-  onCreate: (name: string) => Promise<void>;
+  onCreate: (name: string, brief?: string) => Promise<boolean>;
 }) {
   return (
     <aside
       className="shrink-0 lg:w-64 border-b lg:border-b-0 lg:border-r border-[var(--lab-line)] flex flex-col min-h-0"
       aria-label="Labs"
     >
+      <div className="flex lg:flex-col border-b border-[var(--lab-line)]" role="tablist" aria-label="Across all labs">
+        <button
+          role="tab"
+          aria-selected={page === "needsYou"}
+          onClick={() => onPage("needsYou")}
+          className="lab-rail-item flex-1 lg:flex-none"
+        >
+          <span className="flex items-center justify-between gap-2">
+            <span className="text-[14.5px] font-medium">Needs you</span>
+            {needsYou > 0 && <span className="lab-count">{needsYou}</span>}
+          </span>
+        </button>
+        {showSites && (
+          <button
+            role="tab"
+            aria-selected={page === "sites"}
+            onClick={() => onPage("sites")}
+            className="lab-rail-item flex-1 lg:flex-none"
+          >
+            <span className="text-[14.5px] font-medium">Sites reached</span>
+          </button>
+        )}
+      </div>
+
       <p className="lab-eyebrow px-3 sm:px-5 lg:px-4 pt-3 pb-2">
         Labs{labs ? ` · ${labs.length}` : ""}
       </p>
@@ -125,7 +198,7 @@ export function LabRail({
             <button
               key={item.id}
               role="tab"
-              aria-selected={item.id === selectedLabId}
+              aria-selected={page === "lab" && item.id === selectedLabId}
               onClick={() => onSelect(item.id)}
               className="lab-rail-item shrink-0 max-w-[14rem] lg:max-w-none"
             >

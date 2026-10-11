@@ -92,6 +92,8 @@ export function useLab() {
   // (e.g. the provisioning preflight), shown as evidence instead of inferred.
   const [systemNotes, setSystemNotes] = useState<Record<string, LabTranscriptItem>>({});
   const noteKeys = useRef<Record<string, string>>({});
+  // Latest thing each agent did (a tool call or a reply), for its card.
+  const [activity, setActivity] = useState<Record<string, LabTranscriptItem>>({});
 
   const selectedRef = useRef(selectedLabId);
   selectedRef.current = selectedLabId;
@@ -173,6 +175,8 @@ export function useLab() {
         .then(({ items }) => {
           const note = [...items].reverse().find((i) => i.kind === "systemNote");
           if (note) setSystemNotes((n) => ({ ...n, [agent.id]: note }));
+          const did = [...items].reverse().find((i) => i.kind === "toolCall" || i.kind === "assistantText");
+          if (did) setActivity((a) => ({ ...a, [agent.id]: did }));
         })
         .catch(() => {
           // Best effort; let the next change retry.
@@ -218,13 +222,17 @@ export function useLab() {
   );
 
   const createLab = useCallback(
-    (name: string) =>
-      runAction("create", "Creating", async () => {
-        const created = await labApi.createLab({ name });
+    async (name: string, brief?: string) => {
+      let done = false;
+      await runAction("create", "Creating", async () => {
+        const created = await labApi.createLab({ name, ...(brief ? { brief } : {}) });
         setSelectedLabId(created.lab.id);
         setSnapshot(created);
         setSnapshotAt(Date.now());
-      }),
+        done = true;
+      });
+      return done;
+    },
     [runAction]
   );
 
@@ -297,7 +305,24 @@ export function useLab() {
     [runAction]
   );
 
+  /** Resolves true when the brief was saved. */
+  const saveBrief = useCallback(
+    async (brief: string) => {
+      const labId = selectedRef.current;
+      if (!labId) return false;
+      let saved = false;
+      await runAction("goals", "Saving", async () => {
+        const lab = await labApi.updateLabBrief(labId, brief);
+        setSnapshot((s) => (s && s.lab.id === labId ? { ...s, lab: { ...s.lab, ...lab } } : s));
+        saved = true;
+      });
+      return saved;
+    },
+    [runAction]
+  );
+
   return {
+    saveBrief,
     status,
     statusFailure,
     connected,
@@ -311,6 +336,7 @@ export function useLab() {
     pending,
     actionFailures,
     systemNotes,
+    activity,
     createLab,
     deleteLab,
     labAction,

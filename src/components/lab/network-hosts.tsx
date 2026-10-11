@@ -25,6 +25,8 @@ export function NetworkHosts({ now, disabled }: { now: number; disabled: boolean
   const [failure, setFailure] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [confirmTrust, setConfirmTrust] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [only, setOnly] = useState<"all" | "blocked">("all");
 
   const refresh = useCallback(async () => {
     try {
@@ -66,7 +68,12 @@ export function NetworkHosts({ now, disabled }: { now: number; disabled: boolean
   }
 
   const recorded = new Set(data.items.map((i) => i.host));
-  const listedOnly = data.listed.filter((h) => !recorded.has(h));
+  const total = data.items.length + data.listed.filter((h) => !recorded.has(h)).length;
+  const blockedCount = data.items.filter((i) => i.status === "blocked").length;
+  const q = query.trim().toLowerCase();
+  const all = data;
+  const items = all.items.filter((i) => i.host.includes(q) && (only === "all" || i.status === "blocked"));
+  const listedOnly = only === "all" ? all.listed.filter((h) => !recorded.has(h) && h.includes(q)) : [];
 
   return (
     <>
@@ -77,13 +84,36 @@ export function NetworkHosts({ now, disabled }: { now: number; disabled: boolean
         This covers commands only, not an agent's web search or web fetch, and applies to every lab.
       </p>
 
-      {data.items.length === 0 && listedOnly.length === 0 && (
-        <p className="text-[13.5px]">No command has reached the internet yet.</p>
+      {total === 0 && <p className="text-[13.5px]">No command has reached the internet yet.</p>}
+
+      {total > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="lab-site-search" className="sr-only">
+            Find a site
+          </label>
+          <input
+            id="lab-site-search"
+            className="lab-input flex-1 min-w-[12rem]"
+            placeholder={`Find among ${total} site${total === 1 ? "" : "s"}`}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <LabButton
+            variant={only === "blocked" ? "primary" : "default"}
+            aria-pressed={only === "blocked"}
+            onClick={() => setOnly(only === "blocked" ? "all" : "blocked")}
+          >
+            Blocked · {blockedCount}
+          </LabButton>
+        </div>
+      )}
+      {total > 0 && items.length === 0 && listedOnly.length === 0 && (
+        <p className="text-[13.5px] text-[var(--lab-dim)]">No site matches.</p>
       )}
 
-      {(data.items.length > 0 || listedOnly.length > 0) && (
+      {(items.length > 0 || listedOnly.length > 0) && (
         <ul className="flex flex-col divide-y divide-[var(--lab-line)]">
-          {data.items.map((item) => {
+          {items.map((item) => {
             const blocked = item.status === "blocked";
             const confirming = confirmTrust === item.host;
             return (

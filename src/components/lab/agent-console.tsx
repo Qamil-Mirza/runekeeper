@@ -9,6 +9,7 @@ import {
   type LabJob,
   type LabJobStatus,
   type LabTranscriptItem,
+  type MessageDelivery,
 } from "@/lib/lab/types";
 import {
   ACTION_LABELS,
@@ -221,7 +222,10 @@ function TranscriptEntry({ item, role, now }: { item: LabTranscriptItem; role: s
   return (
     <li className={cn("lab-entry", mine ? "lab-entry-human" : "lab-entry-agent")}>
       <p className="flex items-baseline justify-between gap-3">
-        <span className="lab-eyebrow !text-[11px]">{mine ? "You" : role}</span>
+        <span className="lab-eyebrow !text-[11px]">
+          {mine ? "You" : role}
+          {mine && item.queued && <span className="text-[var(--lab-warn)]"> · waiting for the {role} to be free</span>}
+        </span>
         {when}
       </p>
       <p className="mt-1 whitespace-pre-wrap break-words">{item.text}</p>
@@ -324,10 +328,6 @@ function composerBlock(agent: LabAgent, disabled: boolean, runtimeLeft: number |
       return "The agent's session ended unexpectedly. Resume it to continue.";
     case "starting":
       return "The agent is starting.";
-    case "working":
-      return "The agent is working. It takes one instruction at a time.";
-    case "waitingOnHuman":
-      return "The agent is waiting for your decision on a tool request.";
   }
   if (agent.blockedBy?.reason === "reconciliation") {
     return "A task was interrupted by a restart. Choose Run again or Dismiss under Tasks first.";
@@ -382,8 +382,12 @@ export function AgentConsole({
   const role = ROLE_LABELS[agent.role];
   const blocked = composerBlock(agent, disabled, runtimeLeftMinutes);
 
+  // What became of the last message sent, said once under the composer.
+  const [delivered, setDelivered] = useState<MessageDelivery | null>(null);
+
   useEffect(() => setConfirming(null), [agent.state]);
   useEffect(() => {
+    setDelivered(null);
     setDraft(initialDraft ?? "");
     setTab("conversation");
   }, [agent.id, initialDraft]);
@@ -427,7 +431,9 @@ export function AgentConsole({
       onAction("start");
       return;
     }
-    if (await con.send(draft)) setDraft("");
+    const delivery = await con.send(draft);
+    if (delivery) setDraft("");
+    setDelivered(delivery);
   };
   const busy = con.sending || queued !== null;
 
@@ -636,7 +642,15 @@ export function AgentConsole({
                       ? `Starting the ${role}; your instruction goes out as soon as it is ready.`
                       : asleep
                         ? `The ${role} is stopped. Sending starts it.`
-                        : "Enter to send · Shift+Enter for a new line · one instruction at a time."))}
+                        : delivered === "duringTask"
+                          ? `Sent. The ${role} will see it at its next step, which can take a few minutes.`
+                          : delivered === "queued"
+                            ? `Sent. It waits until the ${role} is free.`
+                            : agent.state === "waitingOnHuman"
+                              ? `You can write to the ${role}, but a message does not answer its tool request.`
+                              : agent.state === "working"
+                                ? `The ${role} is working; it reads a message at its next step.`
+                                : "Enter to send · Shift+Enter for a new line."))}
               </p>
               <LabButton type="submit" variant="primary" disabled={!text || tooLong || blocked !== null || busy}>
                 {queued !== null ? "Starting…" : con.sending ? "Sending…" : "Send"}

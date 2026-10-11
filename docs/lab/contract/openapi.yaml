@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Lab Manager API
-  version: 1.0.0-draft.18
+  version: 1.0.0-draft.20
   summary: Contract between Runekeeper (client) and the Lab Manager (server).
   description: |
     Status: DRAFT under joint review. Implemented by the Lab Manager, which
@@ -23,6 +23,41 @@ info:
     - PATCH is naturally idempotent and takes no key.
     - Research endpoints (tag `research`) are implemented but new: they
       have not yet been used by a client and may still change before 1.0.
+
+    What changed in draft.20 (additive)
+    - `Lab.brief`: the owner's own description of the lab (what to
+      investigate, methods, links as plain text; up to 16000 characters),
+      accepted by create and by PATCH. Every agent of the lab is given it
+      in its standing instructions, marked as the owner's words. Whether
+      an agent can open a link in it is the existing `webFetch` rule.
+    - The Orchestrator decides the lab's objective and priorities: a
+      record of type `lab.objective`. `Lab.objectiveSetBy`
+      (`owner` | `orchestrator` | null) and `Lab.objectiveSetAt` say who
+      last set them. PATCH with `objective` or `priorities` still works as
+      the owner's override. A new lab has no objective; the Orchestrator
+      is told to decide one first.
+    - `Agent.currentJob` gains `kind`, `origin`, `startedAt`.
+      `Agent.currentActivity` (`{ text, at }` or null): one line on what
+      the running job is doing now, derived by the Lab Manager from the
+      latest transcript item. Event `agent.activity`
+      (`{ agentId, labId, jobId, currentActivity }`) follows it.
+    - `Approval.requestedBy` gains `labName`, `sessionId`, `jobTitle`, for
+      a page that lists what waits across labs
+      (`GET /v1/approvals?status=pending` already lists across labs).
+
+    What changed in draft.19 (messages to a busy agent)
+    - `POST /v1/agents/{agentId}/messages` no longer answers 409
+      `agent_busy` while the agent works. The response gains `delivery`:
+      `started` (a new job began, as before), `duringTask` (the message
+      was sent into the task the agent is doing; `job` is that task; the
+      agent reads it at its next step and answers within the task), or
+      `queued` (kept; `job` is null; it becomes the agent's next turn).
+      BREAKING for a client that requires `job` to be an object.
+    - `Agent.queuedMessages`: how many messages wait for the agent.
+    - A `humanMessage` transcript item carries `queued`. Its `jobId` is
+      null while queued and set when delivered.
+    - A message sent into a task that the agent had not read when the task
+      ended is queued, not lost.
 
     What changed in draft.18 (BREAKING for `ComputeRun`, which no client has shipped against)
     - A compute run is now one rented machine serving on one HTTP port
@@ -349,6 +384,7 @@ paths:
               required: [name]
               properties:
                 name: { type: string, minLength: 1, maxLength: 120 }
+                brief: { type: string, maxLength: 16000, description: "The owner's description of the lab: what to investigate, methods, links." }
                 objective: { type: string, maxLength: 4000 }
       responses:
         "201":
@@ -385,6 +421,7 @@ paths:
               minProperties: 1
               properties:
                 name: { type: string, minLength: 1, maxLength: 120 }
+                brief: { type: string, maxLength: 16000, description: "The owner's description of the lab: what to investigate, methods, links." }
                 objective: { type: string, maxLength: 4000 }
                 priorities:
                   type: array
@@ -807,12 +844,17 @@ paths:
     post:
       tags: [agents]
       operationId: sendAgentMessage
-      summary: Send a human message to an agent. Creates a job of kind `message`.
+      summary: Send a human message to an agent, whether or not it is working.
       description: |
-        Accepted only when the agent is `idle`. In `starting`, `working` or
-        `waitingOnHuman` the call is 409 `agent_busy` (a session blocked on a
-        prompt cannot take input); in tmux mode it is 409 `tmux_mode_active`.
-        There is no message queue in v1.
+        Idle agent: creates a job of kind `message` (`delivery: started`).
+        Working agent: the message is sent into the running task and
+        answered within it at the agent's next step, which can be minutes
+        away while a long command runs (`delivery: duringTask`). It changes
+        nothing about what the task is permitted to do. Otherwise busy
+        (starting, or a task that is ending): kept and delivered as the
+        agent's next turn, several kept messages together
+        (`delivery: queued`). A stopped agent still answers 409
+        `agent_not_running`; tmux mode 409 `tmux_mode_active`.
       parameters: *agentActionParams
       requestBody:
         required: true
@@ -830,10 +872,13 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [job, transcriptItem]
+                required: [job, transcriptItem, delivery]
                 properties:
-                  job: { $ref: "#/components/schemas/Job" }
+                  job:
+                    oneOf: [{ $ref: "#/components/schemas/Job" }, { type: "null" }]
+                    description: "The job that carries the message. Null while it is queued."
                   transcriptItem: { $ref: "#/components/schemas/TranscriptItem" }
+                  delivery: { type: string, enum: [started, duringTask, queued] }
         default: { $ref: "#/components/responses/Error" }
 
   /v1/agents/{agentId}/transcript:
@@ -2212,10 +2257,13 @@ components:
       allOf:
         - $ref: "#/components/schemas/LabSummary"
         - type: object
-          required: [objective, priorities, approvalPolicy, createdAt]
+          required: [brief, objective, objectiveSetBy, objectiveSetAt, priorities, approvalPolicy, createdAt]
           properties:
             approvalPolicy: { $ref: "#/components/schemas/ApprovalPolicy" }
-            objective: { type: [string, "null"] }
+            brief: { type: [string, "null"], description: "The owner's own description of the lab. Given to every agent of the lab as the owner's words." }
+            objective: { type: [string, "null"], description: "Decided by the Orchestrator from the brief; the owner may override it." }
+            objectiveSetBy: { type: [string, "null"], enum: [owner, orchestrator, null] }
+            objectiveSetAt: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
             priorities: { type: array, items: { type: string } }
             createdAt: { $ref: "#/components/schemas/Timestamp" }
     BudgetLimits:
@@ -2302,7 +2350,7 @@ components:
     AgentMode: { type: string, enum: [managed, tmux] }
     Agent:
       type: object
-      required: [id, labId, role, state, mode, sessionId, hasTmux, tmuxAttachHint, currentJob, blockedBy, pendingApprovalCount, lastActivityAt, lastError]
+      required: [id, labId, role, state, mode, sessionId, hasTmux, tmuxAttachHint, currentJob, currentActivity, blockedBy, pendingApprovalCount, queuedMessages, lastActivityAt, lastError]
       properties:
         blockedBy:
           type: [object, "null"]
@@ -2321,11 +2369,22 @@ components:
         tmuxAttachHint: { type: [string, "null"], description: "Display-only text. There is no terminal access over the API." }
         currentJob:
           type: [object, "null"]
-          required: [id, title]
+          required: [id, title, kind, origin, startedAt]
           properties:
             id: { type: string }
-            title: { type: string }
+            title: { type: string, description: "The task's title, or the start of the message." }
+            kind: { type: string, enum: [task, message] }
+            origin: { type: string, enum: [human, policy, delegated] }
+            startedAt: { $ref: "#/components/schemas/Timestamp" }
+        currentActivity:
+          type: [object, "null"]
+          description: "What the running job is doing now, in one line the Lab Manager derives from its latest transcript item: a tool call and its summary, writing, or reading its instructions. Null when nothing runs. The summary of a command is the agent's own text."
+          required: [text, at]
+          properties:
+            text: { type: string }
+            at: { $ref: "#/components/schemas/Timestamp" }
         pendingApprovalCount: { type: integer }
+        queuedMessages: { type: integer, description: "Messages a person sent that wait for the agent to be free." }
         lastActivityAt: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
         lastError:
           type: [object, "null"]
@@ -2355,6 +2414,7 @@ components:
         text: { type: string, description: "Capped at 32 KB. Assistant thinking is never included." }
         truncated: { type: boolean, default: false }
         actor: { $ref: "#/components/schemas/Actor" }
+        queued: { type: boolean, description: "On a `humanMessage`: true while it waits for the agent to be free." }
         tool:
           type: object
           required: [name, summary, status]
@@ -2530,11 +2590,14 @@ components:
         status: { $ref: "#/components/schemas/ApprovalStatus" }
         requestedBy:
           type: object
-          required: [agentId, role, jobId]
+          required: [agentId, role, jobId, labName, sessionId, jobTitle]
           properties:
             agentId: { type: string }
             role: { $ref: "#/components/schemas/AgentRole" }
             jobId: { type: [string, "null"] }
+            labName: { type: [string, "null"] }
+            sessionId: { type: [string, "null"] }
+            jobTitle: { type: [string, "null"] }
         title: { type: string }
         request:
           description: Exactly what is being approved, by kind.
@@ -2934,6 +2997,7 @@ components:
         - budget.thresholdCrossed
         - manager.healthChanged
         - agent.modeChanged
+        - agent.activity
     ManagerStartedData:
       type: object
       required: [serviceVersion, interruptedJobs]

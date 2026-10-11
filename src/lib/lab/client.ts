@@ -8,6 +8,7 @@ import type {
   LabErrorBody,
   LabJob,
   LabJobPage,
+  LabMessageReceipt,
   LabSnapshot,
   LabComputeRun,
   LabComputeRuns,
@@ -85,7 +86,7 @@ export async function fetchLabs(): Promise<LabSummary[]> {
   return (await labFetch<{ items: LabSummary[] }>("/api/lab/labs")).items;
 }
 
-export function createLab(input: { name: string; objective?: string }) {
+export function createLab(input: { name: string; brief?: string }) {
   return mutate<LabSnapshot>("/api/lab/labs", input);
 }
 
@@ -138,7 +139,7 @@ export function fetchAgentTranscript(
 }
 
 export function sendAgentMessage(agentId: string, text: string) {
-  return mutate<{ job: LabJob; transcriptItem: LabTranscriptItem }>(
+  return mutate<LabMessageReceipt>(
     `/api/lab/agents/${encodeURIComponent(agentId)}/messages`,
     { text }
   );
@@ -162,6 +163,10 @@ export function setRuntimeLimit(labId: string, wallClockMinutes: number) {
 
 export function updateLabGoals(labId: string, goals: { objective: string; priorities: string[] }) {
   return mutate<Lab>(`/api/lab/labs/${encodeURIComponent(labId)}`, goals, "PATCH");
+}
+
+export function updateLabBrief(labId: string, brief: string) {
+  return mutate<Lab>(`/api/lab/labs/${encodeURIComponent(labId)}`, { brief }, "PATCH");
 }
 
 /** The lab's newest tasks across all agents, newest first. */

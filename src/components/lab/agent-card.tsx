@@ -6,8 +6,10 @@ import type {
   AgentAction,
   LabAgent,
   LabAgentState,
+  LabJob,
   LabTranscriptItem,
 } from "@/lib/lab/types";
+import { AgentAvatar } from "./agent-avatar";
 import { LabButton, StatusLight, toneClass, type LabTone } from "./lab-ui";
 import type { LabFailure } from "./use-lab";
 
@@ -73,7 +75,37 @@ export function formatAgo(iso: string | null | undefined, now: number): string {
   return `${Math.round(hours / 24)}d ago`;
 }
 
+const RESTING: Partial<Record<LabAgentState, string>> = {
+  notProvisioned: "Does not exist yet. Start it to create it.",
+  starting: "Starting up",
+  idle: "Nothing; waiting for work",
+  waitingOnHuman: "Waiting for your decision on a tool request",
+  stopped: "Stopped",
+  crashed: "Its session ended unexpectedly",
+};
+
+function firstLine(text: string, max = 140): string {
+  const line = text.trim().split("\n")[0] ?? "";
+  return line.length > max ? `${line.slice(0, max)}…` : line;
+}
+
+/** One line for what a working agent last did, from its transcript. */
+function doingNow(agent: LabAgent, last: LabTranscriptItem | undefined): string {
+  // A Lab Manager from draft.20 on says it itself; older ones leave it to the transcript.
+  if (agent.currentActivity?.text) return firstLine(agent.currentActivity.text);
+  if (agent.state !== "working") return RESTING[agent.state] ?? "—";
+  if (last?.kind === "toolCall" && last.tool) {
+    return firstLine(`${last.tool.name}${last.tool.summary ? `: ${last.tool.summary}` : ""}`);
+  }
+  if (last?.kind === "assistantText" && last.text) return `Writing: ${firstLine(last.text, 110)}`;
+  return "Working";
+}
+
 interface AgentCardProps {
+  /** The task this agent is on, from the lab's task list. */
+  job?: LabJob;
+  /** The latest thing it did, from its transcript. */
+  lastItem?: LabTranscriptItem;
   agent: LabAgent;
   now: number;
   disabled: boolean;
@@ -87,6 +119,8 @@ interface AgentCardProps {
 }
 
 export function AgentCard({
+  job,
+  lastItem,
   agent,
   now,
   disabled,
@@ -117,8 +151,9 @@ export function AgentCard({
       className={cn("lab-card p-4 flex flex-col gap-3 min-w-0", toneClass(presentation.tone))}
       aria-label={`${ROLE_LABELS[agent.role]} agent`}
     >
-      <header className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
+      <header className="flex items-center gap-3">
+        <AgentAvatar role={agent.role} state={agent.state} size={56} />
+        <div className="min-w-0 mr-auto">
           <h4 className="lab-eyebrow !text-[var(--lab-text)]">{ROLE_LABELS[agent.role]}</h4>
           <p className="lab-eyebrow mt-1 !text-[11px] !text-[var(--lab-faint)]">
             {agent.mode === "tmux" ? "tmux · driven at a terminal" : "managed"}
@@ -131,12 +166,12 @@ export function AgentCard({
       </header>
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[13.5px] border-t border-[var(--lab-line)] pt-3">
-        <dt className="text-[var(--lab-dim)]">Session</dt>
-        <dd className="lab-mono text-[12.5px] truncate" title={agent.sessionId ?? undefined}>
-          {agent.sessionId ?? "—"}
+        <dt className="text-[var(--lab-dim)]">Goal</dt>
+        <dd className="line-clamp-2 break-words">
+          {job ? firstLine(job.kind === "task" ? job.title : job.instructions) : (agent.currentJob?.title ?? "—")}
         </dd>
-        <dt className="text-[var(--lab-dim)]">Job</dt>
-        <dd className="truncate">{agent.currentJob?.title ?? "—"}</dd>
+        <dt className="text-[var(--lab-dim)]">Doing</dt>
+        <dd className="line-clamp-2 break-words">{doingNow(agent, lastItem)}</dd>
         <dt className="text-[var(--lab-dim)]">Activity</dt>
         <dd className="lab-mono text-[12.5px]">{formatAgo(agent.lastActivityAt, now)}</dd>
         {agent.pendingApprovalCount > 0 && (

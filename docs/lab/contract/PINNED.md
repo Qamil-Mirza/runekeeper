@@ -4,14 +4,14 @@ The files in this directory are unmodified copies from the Lab Manager repositor
 
 | | |
 |---|---|
-| Spec version | 1.0.0-draft.18 |
-| Source commit | `d31b733` (branch `feat/m2-service-foundation` in the-lab) |
-| SHA-256 of `openapi.yaml` | `deb71fa809b52430667d48d8b67f00f007186eb6a11130977d0ebd546ce23321` |
+| Spec version | 1.0.0-draft.20 |
+| Source commit | `8566245` (branch `feat/m2-service-foundation` in the-lab) |
+| SHA-256 of `openapi.yaml` | `3965d06c150ee5bb6963b5c5afe0538a16dbd7bd4b9c517d985c6672917630af` |
 | SHA-256 of `binding-vectors.json` | `810a758e1c1d47be04f80d70d55dcda0137e1f74d0e186ec7bcde950bd0605e7` |
 | Pinned on | 2026-10-11 |
 | Status | Agreed by both sessions. Additive over draft.8 to draft.11. |
 
-Previous pins: draft.17 at `3022502`, draft.16 at `7ca0439`, draft.15 at `9fa649d`, draft.14 at `9fd203a`, draft.13 at `7918f04`, draft.11 at `5ddfdf3`, draft.9 at `657f691`, draft.8 at `5108015`, draft.6 at `8b4dd31`, draft.3 at `8e63b7a62b26b275e6d8f5eb8a031e507a30cdc7`, draft.4 at `9b7d41f`, draft.5 at `a1b8f3b`. Draft.4 replaced the signed-authorization scheme (`lab-authz-v2`: bindings, expiry, nonce) and added `binding` and `bindingHash` to approvals and jobs. Draft.5 is non-breaking: it defines `keyId`, documents the reasons for a rejected signature, and states that both sides read the service token from a file. Draft.6 is non-breaking: an approval binding's `experimentId` is exactly the job's; experiment, budget and other approvals are never created by a draft manager and a client offers only `denied` for them; approving a budget request never changes a limit by itself. The test vectors are unchanged.
+Previous pins: draft.18 at `d31b733`, draft.17 at `3022502`, draft.16 at `7ca0439`, draft.15 at `9fa649d`, draft.14 at `9fd203a`, draft.13 at `7918f04`, draft.11 at `5ddfdf3`, draft.9 at `657f691`, draft.8 at `5108015`, draft.6 at `8b4dd31`, draft.3 at `8e63b7a62b26b275e6d8f5eb8a031e507a30cdc7`, draft.4 at `9b7d41f`, draft.5 at `a1b8f3b`. Draft.4 replaced the signed-authorization scheme (`lab-authz-v2`: bindings, expiry, nonce) and added `binding` and `bindingHash` to approvals and jobs. Draft.5 is non-breaking: it defines `keyId`, documents the reasons for a rejected signature, and states that both sides read the service token from a file. Draft.6 is non-breaking: an approval binding's `experimentId` is exactly the job's; experiment, budget and other approvals are never created by a draft manager and a client offers only `denied` for them; approving a budget request never changes a limit by itself. The test vectors are unchanged.
 
 Draft.8 is breaking for signing: the signed text is `lab-authz-v3`, the only signed actions are `approval.decision` and `budget.set` (a lab's spending limit, with the host policy hash in the binding), and no binding carries a dollar figure except the spending limit. Job retry and experiment conclusions are no longer signed. It adds tool input and output in transcripts, read-only workspace files, a three-block budget (runtime, spend, estimates) and policy, subscription and resource status in health. `Budget.limits`, `Budget.consumed` and `Job.usage.costUsd` are kept, deprecated, for one release.
 
@@ -36,3 +36,7 @@ Draft.16 is additive: the network of sandboxed shell commands (`GET /v1/network/
 Draft.17 is additive: rented compute through a broker. `GET /v1/labs/{labId}/compute/runs`, `GET /v1/compute/runs/{runId}`, `POST /v1/compute/runs/{runId}/cancel`; `Budget.compute` (the lab's limit is set on the host and has no API); `Health.spend` gains the provider and its reported balance. Cost figures on a run and in the compute budget are the Lab Manager's own count; `providerBilledUsd` and the balance are the provider's.
 
 Draft.18 changes `ComputeRun`, which no deployed manager served yet: a rented machine is a server the agent calls over HTTPS for one turn, not a batch job. The request carries `args` and `port` instead of `directory` and `command`; `exitCode` and `resultsDirectory` are gone; `url`, `usedByJobId` and `upAt` are new; the states `collecting` and `succeeded` are replaced by `finished`. The server's password is never in the API.
+
+Draft.19 (`fd23efc`): a message can be sent to an agent while it works. The 202 answer carries `delivery` (`started`, `duringTask`, `queued`) and `job` is null when queued; `Agent.queuedMessages` and `TranscriptItem.queued` are new.
+
+Draft.20 is additive: `Lab.brief` (the owner's description, given to every agent; accepted on create and PATCH); the Orchestrator sets the lab's objective and goals, with `Lab.objectiveSetBy` and `objectiveSetAt` (PATCH stays as the owner's override); `Agent.currentActivity` and richer `currentJob`; `Approval.requestedBy` gains `labName`, `sessionId`, `jobTitle`.
