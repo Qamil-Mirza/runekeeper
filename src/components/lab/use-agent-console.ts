@@ -170,7 +170,25 @@ export function useAgentConsole(labId: string, agent: LabAgent, enabled: boolean
     [refresh]
   );
 
+  /** Settles a task interrupted by a restart: run it again, or just clear it. */
+  const reconcile = useCallback(
+    async (jobId: string, resolution: "acknowledge" | "retry") => {
+      setCancelling((c) => ({ ...c, [jobId]: true }));
+      setCancelFailures(({ [jobId]: _cleared, ...rest }) => rest);
+      try {
+        await labApi.reconcileJob(jobId, resolution);
+      } catch (err) {
+        setCancelFailures((f) => ({ ...f, [jobId]: toFailure(err) }));
+      } finally {
+        setCancelling(({ [jobId]: _done, ...rest }) => rest);
+        void refresh();
+      }
+    },
+    [refresh]
+  );
+
   return {
+    reconcile,
     items,
     loaded,
     hasEarlier: earlier !== null,

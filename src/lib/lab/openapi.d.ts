@@ -1024,6 +1024,27 @@ export interface components {
                  *     Always allowed under an autonomous policy.
                  */
                 recordWrites: components["schemas"]["Capability"];
+                /**
+                 * @description Manual mode: a standing rule the owner sets on the host. When
+                 *     allowed, an agent's Write, Edit or NotebookEdit of a file
+                 *     inside its own workspace is permitted without a per-request
+                 *     approval. Files that steer Claude Code itself (`CLAUDE.md`,
+                 *     `.mcp.json`, anything under `.claude`) are not covered.
+                 *     Reason `superseded_by_policy` under an autonomous policy,
+                 *     where the policy answers instead.
+                 */
+                workspaceWrites?: components["schemas"]["Capability"];
+                /** @description Manual mode, set the same way. When allowed, WebSearch is permitted without a per-request approval. */
+                webSearch?: components["schemas"]["Capability"];
+                /**
+                 * @description What happens to a tool request no standing rule covers. `ask`:
+                 *     it becomes an approval and the task waits for a signed
+                 *     decision. `deny`: the owner chose on the host not to be asked;
+                 *     it is refused at once, the agent is told, and the task carries
+                 *     on. `policy`: a host policy answers every request.
+                 * @enum {string}
+                 */
+                uncoveredRequests?: "ask" | "deny" | "policy";
                 /** @description Deprecated; same as shell.executor. */
                 executorShell: components["schemas"]["Capability"];
                 unattendedExecution: components["schemas"]["Capability"];
@@ -1413,7 +1434,7 @@ export interface components {
                     type: "standingRule";
                     rule: string;
                     /** @enum {string} */
-                    outcome: "allow";
+                    outcome: "allow" | "deny";
                 };
             };
         };
