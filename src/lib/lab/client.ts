@@ -10,6 +10,9 @@ import type {
   LabJobPage,
   LabSnapshot,
   LabDeletionReceipt,
+  LabNetworkHost,
+  LabNetworkHosts,
+  NetworkHostAction,
   LabSummary,
   LabTranscriptItem,
   LabTranscriptPage,
@@ -86,6 +89,14 @@ export function createLab(input: { name: string; objective?: string }) {
 
 export function fetchLabSnapshot(labId: string) {
   return labFetch<LabSnapshot>(`/api/lab/labs/${encodeURIComponent(labId)}`);
+}
+
+export function fetchNetworkHosts() {
+  return labFetch<LabNetworkHosts>("/api/lab/network/hosts");
+}
+
+export function setNetworkHost(host: string, action: NetworkHostAction) {
+  return mutate<LabNetworkHost>(`/api/lab/network/hosts/${encodeURIComponent(host)}/${action}`);
 }
 
 /** Permanently deletes a lab; `confirmName` must be the lab's exact name. */
