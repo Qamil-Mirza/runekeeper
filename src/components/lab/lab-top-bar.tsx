@@ -116,9 +116,11 @@ export function LabTopBar({
               ? DEGRADED_REASONS[capability.reason] ?? capability.reason.replace(/_/g, " ")
               : null;
             return (
-              <li key={key} title={reason ?? undefined}>
+              <li key={key} title={reason ?? undefined} className="max-w-full">
                 <Chip tone={capability.allowed ? "ok" : "off"}>
-                  {CAPABILITY_LABELS[key]} · {capability.allowed ? "on" : "off"}
+                  <span className="whitespace-nowrap">
+                    {CAPABILITY_LABELS[key]} · {capability.allowed ? "on" : "off"}
+                  </span>
                   {!capability.allowed && reason && (
                     <span className="normal-case tracking-normal">({reason})</span>
                   )}
