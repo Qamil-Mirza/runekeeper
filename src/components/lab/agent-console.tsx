@@ -46,6 +46,7 @@ const STANDING_RULES: Record<string, string> = {
   recordWrites: "record files",
   workspaceWrites: "files in its own workspace",
   webSearch: "web search",
+  webFetch: "fetching web pages",
 };
 
 type DecidedBy = NonNullable<NonNullable<LabTranscriptItem["tool"]>["decidedBy"]>;
@@ -613,10 +614,13 @@ export function AgentConsole({
               disabled={blocked !== null || busy}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                  e.preventDefault();
-                  void submit();
-                }
+                // Enter sends; Shift+Enter makes a new line. On a touch keyboard
+                // Enter stays a new line and the Send button sends.
+                if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+                const touch = window.matchMedia("(pointer: coarse)").matches;
+                if (touch && !(e.metaKey || e.ctrlKey)) return;
+                e.preventDefault();
+                void submit();
               }}
             />
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -628,7 +632,7 @@ export function AgentConsole({
                       ? `Starting the ${role}; your instruction goes out as soon as it is ready.`
                       : asleep
                         ? `The ${role} is stopped. Sending starts it.`
-                        : "One instruction at a time · up to 30 minutes and 60 turns each."))}
+                        : "Enter to send · Shift+Enter for a new line · one instruction at a time."))}
               </p>
               <LabButton type="submit" variant="primary" disabled={!text || tooLong || blocked !== null || busy}>
                 {queued !== null ? "Starting…" : con.sending ? "Sending…" : "Send"}

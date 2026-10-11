@@ -2,7 +2,7 @@
 
 import type { LabConnectionStatus } from "@/lib/lab/types";
 import { formatAgo } from "./agent-card";
-import { Chip, LabButton, StatusLight, Strip, toneClass, type LabTone } from "./lab-ui";
+import { LabButton, StatusLight, Strip, toneClass, type LabTone } from "./lab-ui";
 import type { LabFailure } from "./use-lab";
 import { cn } from "@/lib/utils";
 
@@ -13,35 +13,6 @@ const DEGRADED_REASONS: Record<string, string> = {
   agent_isolation_missing: "Agent isolation is not configured",
   storage_error: "The Lab Manager cannot write its storage",
 };
-
-type Capabilities = NonNullable<LabConnectionStatus["health"]>["capabilities"];
-
-/** How much the agents may do without asking, as set on the host. */
-function permissionChips(capabilities: Capabilities): { key: string; text: string; tone: LabTone; title?: string }[] {
-  const chips: { key: string; text: string; tone: LabTone; title?: string }[] = [];
-  const rule = (key: "workspaceWrites" | "webSearch", label: string) => {
-    const capability = capabilities[key];
-    // Absent on a Lab Manager older than these rules.
-    if (!capability) return;
-    chips.push({
-      key,
-      text: `${label} · ${capability.allowed ? "no approval needed" : "asks first"}`,
-      tone: capability.allowed ? "ok" : "off",
-      title: capability.reason ? DEGRADED_REASONS[capability.reason] ?? capability.reason.replace(/_/g, " ") : undefined,
-    });
-  };
-  rule("workspaceWrites", "File writes");
-  rule("webSearch", "Web search");
-  const uncovered = capabilities.uncoveredRequests;
-  if (uncovered) {
-    chips.push({
-      key: "uncovered",
-      text: `Anything else · ${uncovered === "deny" ? "refused" : uncovered === "ask" ? "asks first" : "host policy"}`,
-      tone: uncovered === "ask" ? "warn" : "off",
-    });
-  }
-  return chips;
-}
 
 function describe(status: LabConnectionStatus | null): {
   tone: LabTone;
@@ -88,7 +59,6 @@ export function LabTopBar({
 }) {
   const { tone, headline, detail } = describe(status);
   const health = status?.health;
-  const chips = health && status?.apiCompatible ? permissionChips(health.capabilities) : [];
 
   return (
     <header className="shrink-0 border-b border-[var(--lab-line)] bg-[color-mix(in_srgb,var(--lab-panel)_85%,transparent)]">
@@ -132,15 +102,6 @@ export function LabTopBar({
         </div>
       )}
 
-      {chips.length > 0 && (
-        <ul className="px-3 sm:px-5 pb-2.5 flex flex-wrap gap-2" aria-label="What agents may do without asking">
-          {chips.map((chip) => (
-            <li key={chip.key} title={chip.title} className="max-w-full">
-              <Chip tone={chip.tone}>{chip.text}</Chip>
-            </li>
-          ))}
-        </ul>
-      )}
     </header>
   );
 }

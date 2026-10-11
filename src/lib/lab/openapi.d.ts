@@ -57,7 +57,36 @@ export interface paths {
         get: operations["getLabSnapshot"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete a lab for good. Cannot be undone.
+         * @description Unsigned; takes an `Idempotency-Key` like a POST, and a repeat with
+         *     the same key returns the first receipt.
+         *
+         *     Refused with 409 `lab_not_stopped` while any agent is starting, idle,
+         *     working or waiting, or any task is running (`details.agents` lists the
+         *     roles, `details.jobs` the job ids). The delete stops nothing itself:
+         *     stop the lab first. Interrupted tasks awaiting reconciliation do not
+         *     block it. Refused with 503 `manager_degraded`, and nothing is deleted,
+         *     when the agent worker cannot be reached or the files cannot be removed.
+         *
+         *     **Removed:** the lab; its agents; jobs and their logs; transcripts;
+         *     approvals; questions, experiments and their protocol versions;
+         *     results, reviews, findings, handoffs, decisions, escalations and
+         *     checkpoints; delegations; policy decisions; stored snapshots; each
+         *     agent's workspace directory on disk; and the session files Claude
+         *     Code keeps for those agents, so their conversations cannot be resumed
+         *     or recovered. The lab's past events leave the event history.
+         *
+         *     **Kept:** a tombstone (lab id, name, who deleted it, when, and the
+         *     counts in the receipt), and every signed authorization recorded for
+         *     the lab, which remains verifiable by itself. Stored text that
+         *     another lab's record also uses is kept for that lab.
+         *
+         *     Afterwards the lab, its agents and its jobs are 404. Any lab may be
+         *     deleted, including the last one. Emits `lab.deleted` with the receipt,
+         *     on the stream without a lab filter.
+         */
+        delete: operations["deleteLab"];
         options?: never;
         head?: never;
         /** Update name, objective, priorities or approval policy. Budget limits have their own signed endpoint. */
@@ -192,6 +221,48 @@ export interface paths {
         put?: never;
         /** Cancel running jobs and stop all agents. */
         post: operations["stopLab"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/labs/{labId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Put a lab away. Deletes nothing.
+         * @description The lab disappears from `GET /v1/labs` and takes no work: starting an
+         *     agent, sending a message or starting a task is 409 `conflict` with
+         *     `details.archived`. Everything stays readable by id: transcript,
+         *     jobs, records and the agents' files. Refused with 409 `conflict`
+         *     unless every agent is stopped and no task is running; stop the lab
+         *     first. Archiving an archived lab changes nothing. Emits `lab.updated`.
+         */
+        post: operations["archiveLab"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/labs/{labId}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bring an archived lab back. */
+        post: operations["unarchiveLab"];
         delete?: never;
         options?: never;
         head?: never;
@@ -932,7 +1003,7 @@ export interface components {
         /** Format: date-time */
         Timestamp: string;
         /** @enum {string} */
-        ErrorCode: "validation_failed" | "unauthenticated" | "actor_not_allowed" | "not_found" | "conflict" | "agent_already_running" | "agent_not_running" | "agent_busy" | "tmux_mode_active" | "job_not_cancellable" | "job_not_interrupted" | "reconciliation_required" | "approval_already_decided" | "signature_invalid" | "idempotency_conflict" | "cursor_expired" | "approval_expired" | "approval_required" | "budget_exceeded" | "spend_metering_unavailable" | "subscription_limited" | "host_busy" | "disk_low" | "isolation_required" | "protocol_changed" | "claude_code_failed" | "manager_degraded" | "rate_limited" | "internal_error";
+        ErrorCode: "validation_failed" | "unauthenticated" | "actor_not_allowed" | "not_found" | "conflict" | "agent_already_running" | "agent_not_running" | "agent_busy" | "tmux_mode_active" | "job_not_cancellable" | "job_not_interrupted" | "reconciliation_required" | "approval_already_decided" | "signature_invalid" | "idempotency_conflict" | "cursor_expired" | "approval_expired" | "approval_required" | "budget_exceeded" | "spend_metering_unavailable" | "subscription_limited" | "host_busy" | "disk_low" | "isolation_required" | "protocol_changed" | "claude_code_failed" | "manager_degraded" | "lab_not_stopped" | "rate_limited" | "internal_error";
         ErrorResponse: {
             error: {
                 code: components["schemas"]["ErrorCode"];
@@ -1050,6 +1121,12 @@ export interface components {
                  * @enum {string}
                  */
                 uncoveredRequests?: "ask" | "deny" | "policy";
+                /** @description Manual mode, set on the host. Agents have the WebFetch tool and may open web pages without a per-request approval. */
+                webFetch?: components["schemas"]["Capability"];
+                /** @description Manual mode, set on the host. Agents have the Skill tool and load the skills the owner installed in a directory on the host that agents cannot write. Reason `skills_dir_missing` when the setting is on but no such directory is usable. */
+                skills?: components["schemas"]["Capability"];
+                /** @description Manual mode, set on the host. Agents may start subagents inside their own Claude Code process. A subagent has the same tools, files and rules as the agent that started it, and counts against the same task limits. */
+                subagents?: components["schemas"]["Capability"];
                 /** @description Manual mode, set on the host. When allowed, the Orchestrator's handoffs recorded in reply to the owner are started as tasks by the manager. Host-wide; there is no per-lab switch. */
                 delegation?: components["schemas"]["Capability"];
                 /** @description Deprecated; same as shell.executor. */
@@ -1262,6 +1339,24 @@ export interface components {
         LabStatus: "stopped" | "starting" | "running" | "paused" | "degraded";
         /** @enum {string} */
         CycleStage: "idle" | "question" | "hypothesis" | "design" | "protocolRegistered" | "awaitingApproval" | "execution" | "review" | "findings" | "stateUpdate" | "decision" | "escalated";
+        LabDeletionReceipt: {
+            labId: string;
+            name: string;
+            deletedAt: components["schemas"]["Timestamp"];
+            removed: {
+                agents: number;
+                jobs: number;
+                transcriptItems: number;
+                /** @description Questions, experiments and every kind of research record. */
+                records: number;
+                /** @description Workspace directories that existed and were removed. */
+                workspaces: number;
+            };
+            kept: {
+                tombstone: boolean;
+                signedAuthorizations: number;
+            };
+        };
         LabSummary: {
             id: string;
             name: string;
@@ -1272,6 +1367,8 @@ export interface components {
             /** @description True when the host policy lets this lab advance without a human approving each step. */
             autonomous: boolean;
             lastActivityAt: components["schemas"]["Timestamp"];
+            /** @description Set while the lab is archived. */
+            archivedAt?: components["schemas"]["Timestamp"] | null;
         };
         Lab: components["schemas"]["LabSummary"] & {
             approvalPolicy: components["schemas"]["ApprovalPolicy"];
@@ -1882,7 +1979,7 @@ export interface components {
             truncated: false;
         };
         /** @enum {string} */
-        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.statusChanged" | "agent.stateChanged" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged";
+        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.deleted" | "lab.statusChanged" | "agent.stateChanged" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged";
         ManagerStartedData: {
             serviceVersion: string;
             interruptedJobs: {
@@ -1989,14 +2086,17 @@ export interface operations {
     };
     listLabs: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `true`: only archived labs. Default: only labs that are not archived. */
+                archived?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description All labs. */
+            /** @description The labs. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2060,6 +2160,32 @@ export interface operations {
                     "application/json": components["schemas"]["LabSnapshot"];
                 };
             };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteLab: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                labId: components["parameters"]["LabId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The receipt. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LabDeletionReceipt"];
+                };
+            };
+            409: components["responses"]["Error"];
             default: components["responses"]["Error"];
         };
     };
@@ -2279,6 +2405,57 @@ export interface operations {
         responses: {
             /** @description Accepted; progress is reported on the event stream. */
             202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Lab"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    archiveLab: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                labId: components["parameters"]["LabId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The lab, with `archivedAt` set. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Lab"];
+                };
+            };
+            409: components["responses"]["Error"];
+            default: components["responses"]["Error"];
+        };
+    };
+    unarchiveLab: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                labId: components["parameters"]["LabId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The lab, with `archivedAt` null. It is stopped; start it as usual. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

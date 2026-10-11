@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { AgentCard, formatAgo } from "./agent-card";
 import { AgentConsole } from "./agent-console";
+import { DeleteLab } from "./delete-lab";
 import { labFontClasses } from "./fonts";
 import { LabOverview } from "./lab-overview";
 import { LAB_STATUS_TONE, LabRail } from "./lab-rail";
@@ -306,6 +307,15 @@ export function LabView({ onExit }: { onExit: () => void }) {
                         />
                       ))}
                     </div>
+                    <DeleteLab
+                      labId={snapshot.lab.id}
+                      name={snapshot.lab.name}
+                      stopped={snapshot.lab.status === "stopped"}
+                      disabled={controlsDisabled}
+                      pending={lab.pending.delete !== undefined}
+                      failure={lab.actionFailures.delete}
+                      onDelete={lab.deleteLab}
+                    />
                   </>
                 )}
               </section>

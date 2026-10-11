@@ -16,6 +16,7 @@ import {
   listJobs,
   sendAgentMessage,
   setRuntimeLimit,
+  deleteLab,
   updateLab,
   getConnectionStatus,
   getLabSnapshot,
@@ -208,6 +209,15 @@ describe("over a unix socket", () => {
     assert.equal(seen[0].headers["idempotency-key"], KEY);
     assert.deepEqual(JSON.parse(seen[6].body), { wallClockMinutes: 120 });
     assert.deepEqual(JSON.parse(seen[7].body), { objective: "Find it", priorities: ["a", "b"] });
+  });
+
+  it("deletes a lab with DELETE and the idempotency key", async () => {
+    const { config, seen } = await onUnixSocket((_s, res) => json(res, 200, { labId: "lab_1" }));
+    await deleteLab(config, ACTOR, KEY, "lab_1");
+    await assert.rejects(deleteLab(config, ACTOR, KEY, "../labs"), { code: "validation_failed" });
+
+    assert.deepEqual(seen.map((s) => `${s.method} ${s.url}`), ["DELETE /v1/labs/lab_1"]);
+    assert.equal(seen[0].headers["idempotency-key"], KEY);
   });
 
   it("refuses cursors that would change the request", async () => {
