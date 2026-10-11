@@ -15,6 +15,22 @@ export type LabAgentState = Schemas["AgentState"];
 export type LabAgentRole = Schemas["AgentRole"];
 export type LabTranscriptItem = Schemas["TranscriptItem"];
 export type LabErrorCode = Schemas["ErrorCode"];
+export type LabJob = Schemas["Job"];
+export type LabJobStatus = Schemas["JobStatus"];
+export type LabBudget = Schemas["Budget"];
+
+export interface LabTranscriptPage {
+  items: LabTranscriptItem[];
+  nextCursor: string | null;
+}
+
+export interface LabJobPage {
+  items: LabJob[];
+  nextCursor: string | null;
+}
+
+/** Longest instruction the Lab Manager accepts. */
+export const MAX_INSTRUCTION_LENGTH = 20_000;
 
 export const LAB_ACTIONS = ["start", "stop"] as const;
 export type LabAction = (typeof LAB_ACTIONS)[number];

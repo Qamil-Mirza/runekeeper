@@ -42,21 +42,20 @@ export type RefusalCode =
   | "request_incomplete"
   | "binding_mismatch"
   | "unsupported_kind"
-  | "not_reconcilable"
   | "invalid_limits"
+  | "metering_unavailable"
   | "no_change";
 
 export type Refusal = { ok: false; code: RefusalCode; message: string };
 const refuse = (code: RefusalCode, message: string): Refusal => ({ ok: false, code, message });
 
+/** The limits a binding covers. No dollar figure: only a spending limit is money. */
 export interface Limits {
-  costUsd?: number | null;
   wallClockMinutes?: number | null;
   maxTurns?: number | null;
 }
 
 export interface BindingLimits {
-  costUsd: string | null;
   wallClockMinutes: string | null;
   maxTurns?: number | null;
 }
@@ -84,13 +83,7 @@ export interface JobRecord {
   labId: string;
   agentId: string;
   kind: string;
-  title: string;
   experimentId?: string | null;
-  instructions: string;
-  instructionsHash: string;
-  binding: unknown;
-  bindingHash: string;
-  needsReconciliation: boolean;
   limits: Limits;
 }
 
@@ -114,7 +107,6 @@ const CONTRACT_VERSION = "1.0";
 function bindingLimits(l: Limits): BindingLimits {
   const d = (v: number | null | undefined) => (typeof v === "number" ? toBindingDecimal(v) : null);
   return {
-    costUsd: d(l.costUsd),
     wallClockMinutes: d(l.wallClockMinutes),
     ...(l.maxTurns !== undefined ? { maxTurns: l.maxTurns === null ? null : Math.trunc(l.maxTurns) } : {}),
   };
@@ -129,14 +121,27 @@ function sameBinding(ours: unknown, published: unknown, publishedHash: string): 
  * Verifies an approval fetched by id from the Lab Manager and rebuilds its
  * binding. `job` is the job the approval belongs to, fetched separately, so
  * the limits in the binding are checked against the job's own record.
+ * `policyHash` is `Health.policy.hash` as just fetched by the server (null in
+ * manual mode without a policy file).
  */
-export function reviewApproval(approval: ApprovalRecord, job: JobRecord | null, now: number): ReviewResult {
+export function reviewApproval(
+  approval: ApprovalRecord,
+  job: JobRecord | null,
+  policyHash: string | null,
+  now: number
+): ReviewResult {
   if (approval.status !== "pending" || approval.decision != null) {
     return refuse("not_pending", "This request has already been decided or withdrawn.");
   }
   const expiresAt = Date.parse(approval.expiresAt);
   if (!Number.isFinite(expiresAt) || expiresAt <= now) {
     return refuse("expired", "This request has expired.");
+  }
+  // Only a tool permission can be rebuilt from records this server reads. An
+  // experiment's binding also depends on its protocol and limits; deciding
+  // one waits for that work.
+  if (approval.kind !== "permission") {
+    return refuse("unsupported_kind", "This kind of request cannot be decided from Runekeeper yet.");
   }
   if (approval.requestTruncated !== false) {
     return refuse("request_incomplete", "The complete request is not available, so it cannot be decided.");
@@ -172,11 +177,9 @@ export function reviewApproval(approval: ApprovalRecord, job: JobRecord | null, 
       experimentId: job?.experimentId ?? null,
       requestHash,
       limits: bindingLimits(job?.limits ?? {}),
-      estimate: bindingLimits({
-        costUsd: approval.estimate?.costUsd ?? null,
-        wallClockMinutes: approval.estimate?.wallClockMinutes ?? null,
-      }),
+      estimate: bindingLimits({ wallClockMinutes: approval.estimate?.wallClockMinutes ?? null }),
       expiresAt: approval.expiresAt,
+      policyHash,
     };
   } catch {
     return refuse("binding_mismatch", "The request carries limits that cannot be represented.");
@@ -185,11 +188,6 @@ export function reviewApproval(approval: ApprovalRecord, job: JobRecord | null, 
     return refuse("binding_mismatch", "The request does not match what the Lab Manager recorded for it.");
   }
 
-  // Approving anything but a tool permission needs contract work first: an
-  // experiment must come with protocol text that hashes to its protocolHash,
-  // so a human never approves a bare hash. Denying is always possible.
-  const outcomes: AuthzOutcome[] = approval.kind === "permission" ? ["approved", "denied"] : ["denied"];
-
   return {
     ok: true,
     review: {
@@ -197,71 +195,43 @@ export function reviewApproval(approval: ApprovalRecord, job: JobRecord | null, 
       targetId: approval.id,
       binding,
       bindingHash: approval.bindingHash,
-      outcomes,
+      outcomes: ["approved", "denied"],
       notAfter: expiresAt,
     },
   };
 }
 
-/** Verifies an interrupted job fetched by id and rebuilds its retry binding. */
-export function reviewJobRetry(job: JobRecord): ReviewResult {
-  if (job.needsReconciliation !== true) {
-    return refuse("not_reconcilable", "This job is not waiting to be reconciled.");
-  }
-  if (sha256Hex(job.instructions) !== job.instructionsHash) {
-    return refuse("request_incomplete", "The job's complete instructions are not available.");
-  }
-  let binding: Record<string, unknown>;
-  try {
-    binding = {
-      contractVersion: CONTRACT_VERSION,
-      jobId: job.id,
-      labId: job.labId,
-      agentId: job.agentId,
-      kind: job.kind,
-      title: job.title,
-      experimentId: job.experimentId ?? null,
-      instructionsHash: job.instructionsHash,
-      limits: bindingLimits(job.limits),
-    };
-  } catch {
-    return refuse("binding_mismatch", "The job carries limits that cannot be represented.");
-  }
-  if (!sameBinding(binding, job.binding, job.bindingHash)) {
-    return refuse("binding_mismatch", "The job does not match what the Lab Manager recorded for it.");
-  }
-  return {
-    ok: true,
-    review: { action: "job.retry", targetId: job.id, binding, bindingHash: job.bindingHash, outcomes: ["retry"], notAfter: null },
-  };
-}
+const MAX_SPEND_LIMIT_USD = 1_000_000;
 
-const MAX_BUDGET_COST_USD = 1_000_000;
-const MAX_BUDGET_MINUTES = 60 * 24 * 365;
-
-function validBudget(l: unknown): l is { costUsd: number; wallClockMinutes: number } {
-  if (!l || typeof l !== "object") return false;
-  const { costUsd, wallClockMinutes } = l as Record<string, unknown>;
-  const ok = (v: unknown, max: number) => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= max;
-  return ok(costUsd, MAX_BUDGET_COST_USD) && ok(wallClockMinutes, MAX_BUDGET_MINUTES);
-}
+const validAmount = (v: unknown): v is number =>
+  typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= MAX_SPEND_LIMIT_USD;
 
 /**
- * Builds the binding for a budget change. `previous` is the lab's limits as
- * just fetched from the Lab Manager by the server; `requested` is what the
- * human typed. Only the two numbers are taken from the request.
+ * Builds the binding for a change to a lab's spending limit. `previous` is
+ * `Budget.spend.signedLimitUsd`, `metering` is `Health.spend.metering` and
+ * `policyHash` is `Health.policy.hash`, all as just fetched from the Lab
+ * Manager by the server. Only `requested` comes from the human.
  */
-export function reviewBudgetChange(labId: string, previous: unknown, requested: unknown): ReviewResult {
-  if (!validBudget(requested)) return refuse("invalid_limits", "Budget limits must be numbers of zero or more.");
-  if (!validBudget(previous)) return refuse("binding_mismatch", "The lab's current limits could not be read.");
-  if (previous.costUsd === requested.costUsd && previous.wallClockMinutes === requested.wallClockMinutes) {
-    return refuse("no_change", "These are already the lab's limits.");
+export function reviewSpendLimit(
+  labId: string,
+  previous: unknown,
+  requested: unknown,
+  metering: unknown,
+  policyHash: string | null
+): ReviewResult {
+  if (!validAmount(requested)) return refuse("invalid_limits", "A spending limit must be a number of zero or more.");
+  if (!validAmount(previous)) return refuse("binding_mismatch", "The lab's current spending limit could not be read.");
+  if (previous === requested) return refuse("no_change", "This is already the lab's spending limit.");
+  // Never sign for money nobody can meter, even though the manager would refuse it too.
+  if (requested > 0 && metering !== "active") {
+    return refuse("metering_unavailable", "No paid service is metered by the Lab Manager, so no spending can be authorized.");
   }
   const binding = {
     contractVersion: CONTRACT_VERSION,
     labId,
-    previousLimits: bindingLimits({ costUsd: previous.costUsd, wallClockMinutes: previous.wallClockMinutes }),
-    limits: bindingLimits({ costUsd: requested.costUsd, wallClockMinutes: requested.wallClockMinutes }),
+    previousSpendLimitUsd: toBindingDecimal(previous),
+    spendLimitUsd: toBindingDecimal(requested),
+    policyHash,
   };
   return {
     ok: true,
@@ -360,7 +330,7 @@ export function authorizeDecision(input: DecisionInput): DecisionResult {
   const { review, now } = input;
   const outcome = review.outcomes.find((o) => o === input.outcome);
   if (!outcome) {
-    return typeof input.outcome === "string" && ["approved", "denied", "retry", "set"].includes(input.outcome)
+    return typeof input.outcome === "string" && ["approved", "denied", "set"].includes(input.outcome)
       ? refuse("unsupported_kind", "This kind of request cannot be given that outcome yet.")
       : refuse("confirmation_required", "State the decision explicitly.");
   }

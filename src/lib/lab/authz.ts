@@ -9,14 +9,14 @@ import {
 import { readSecretFile, type SecretReader } from "./secrets";
 
 /**
- * Signed authorizations (`lab-authz-v2`): proof that an authenticated human
+ * Signed authorizations (`lab-authz-v3`): proof that an authenticated human
  * approved one specific action. Server-side only.
  *
  * The contract and its test vectors are pinned in docs/lab/contract/.
  */
 
-export type AuthzAction = "approval.decision" | "job.retry" | "budget.set";
-export type AuthzOutcome = "approved" | "denied" | "retry" | "set";
+export type AuthzAction = "approval.decision" | "budget.set";
+export type AuthzOutcome = "approved" | "denied" | "set";
 
 export interface SignedAuthorization {
   signedAt: string;
@@ -111,7 +111,7 @@ export function toBindingDecimal(n: number): string {
 /** The exact text the signature covers: ten lines, no trailing newline. */
 export function signedText(f: AuthzFields): string {
   return [
-    "lab-authz-v2",
+    "lab-authz-v3",
     f.action,
     f.targetId,
     f.bindingHash,

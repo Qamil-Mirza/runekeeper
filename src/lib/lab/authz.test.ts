@@ -59,7 +59,7 @@ function fieldsOf(v: Vector): AuthzFields {
   };
 }
 
-describe("lab-authz-v2 against the pinned vectors", () => {
+describe("lab-authz-v3 against the pinned vectors", () => {
   it("has vectors to check", () => {
     assert.ok(file.vectors.length >= 4);
     assert.equal(

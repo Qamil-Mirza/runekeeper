@@ -1,10 +1,11 @@
 openapi: 3.1.0
 info:
   title: Lab Manager API
-  version: 1.0.0-draft.6
+  version: 1.0.0-draft.8
   summary: Contract between Runekeeper (client) and the Lab Manager (server).
   description: |
-    Status: DRAFT under joint review. Nothing is implemented.
+    Status: DRAFT under joint review. Implemented by the Lab Manager, which
+    validates its own responses against this file in tests.
 
     This file is the source of truth for the contract. Both repositories
     generate TypeScript types from it, and the Lab Manager validates its
@@ -20,9 +21,122 @@ info:
       original response; same key with a different body is 409
       `idempotency_conflict`. Keys are kept for 24 hours.
     - PATCH is naturally idempotent and takes no key.
-    - Research endpoints (tag `research`) are provisional; their shapes are
-      deferred until the agent write path is designed. Milestone 1 needs none
-      of them.
+    - Research endpoints (tag `research`) are implemented but new: they
+      have not yet been used by a client and may still change before 1.0.
+
+    What changed in draft.8 (breaking; see "Upgrading from draft.6")
+    - The only signed actions are `budget.set` (the lab's SPENDING limit)
+      and `approval.decision`. `job.retry` and `experiment.conclude` are no
+      longer signed actions. An endpoint that is not signed REJECTS a
+      request that carries an `authorization` (400), it never ignores one.
+    - The signed text now starts with `lab-authz-v3`. A `lab-authz-v2`
+      signature never verifies.
+    - Budget is three blocks that are never mixed: `runtime` (measured by
+      the Lab Manager), `spend` (signed by a human, verified by the Lab
+      Manager) and `estimates` (reported by agents).
+    - A host policy may let a lab run without a human approving each step.
+      Decisions made by the policy are a different shape from decisions made
+      by a human and are never presented as signatures.
+
+    Autonomy and the host policy
+    - The policy is a file on the host. It is read once when the Lab Manager
+      starts. No endpoint creates, changes or reloads it. `Health.policy`
+      reports whether one is active, its id and hash, and the runtime cap.
+    - Without a policy the Lab Manager is in manual mode: every tool request
+      is an approval a human signs, experiments need a signed approval, and
+      no agent has a shell.
+    - With a policy in `autonomous` mode: tool requests are answered by the
+      policy and recorded as PolicyDecision; an experiment that declares no
+      paid resource or credential is admitted by the policy; the Lab Manager
+      starts planning, execution, review and checkpoint jobs itself
+      (`Job.origin = policy`); a review ends an experiment.
+    - A decision is exactly one of two shapes. Human: an actor and a
+      SignedAuthorization. Policy: no actor and no authorization; the policy
+      id and hash, the rule that matched and the facts it matched on. No
+      endpoint lets a client create a policy decision.
+    - Money. The default and, today, the only reachable spending limit is 0.
+      `Health.spend.metering` is `none`: no paid mechanism exists whose
+      limits the Lab Manager can enforce, so `POST .../budget` refuses any
+      amount above zero with 412 `spend_metering_unavailable`. An experiment
+      whose proposal declares a paid resource or a credential becomes
+      `blocked` and raises an escalation; no approval is raised, because
+      nothing could honour one. The declaration is agent-reported. The Lab
+      Manager cannot detect an undeclared cost; what prevents one is that
+      agents hold no payment method and no credential.
+    - Reserved, not implemented: approval kind `spend`. Its binding will
+      name the mechanism, the payee or resource, a cap and currency, an
+      expiry, the lab and experiment, and be single-use.
+    - The name `costUsd` now appears only in fields kept for a draft.6
+      client (`Budget.limits`, `Budget.consumed`, `Job.usage.costUsd`), all
+      deprecated. Everywhere else a dollar figure is either
+      `spendLimitUsd`/`signedLimitUsd`/`verifiedChargesUsd` (money) or
+      `notionalModelCostUsd` (an agent-side estimate, render it with the
+      estimates). No binding other than BudgetBinding contains a dollar
+      figure.
+    - The owner's stop conditions map as follows. Unauthorized charge ->
+      `unauthorized_charge`. Unenforceable boundary -> `security_boundary`.
+      Missing inputs -> `no_open_questions` when the lab has nothing to
+      work on; an agent that lacks an input it needs raises
+      `human_decision`. Subscription limit -> not an escalation: it is the
+      hold in `Health.subscription`, announced by `manager.healthChanged`,
+      and clears by itself. Repeated failure -> `repeated_failures`. Lack of
+      progress -> `no_progress`. A human decision that is needed ->
+      `human_decision`. Runtime used up -> `runtime_exhausted`.
+    - `ShellCapability.reason` and `PolicyDecision.rule` are open strings
+      with documented known values. A client prints an unknown value
+      verbatim. `Escalation.reason` is a closed enum.
+    - Stop conditions raise an Escalation (`escalation.recorded`). Resolving
+      an escalation is an acknowledgement only. It approves nothing and
+      resumes nothing: the Lab Manager re-checks each condition itself. A
+      lab paused after repeated failures or lack of progress continues only
+      through `POST /v1/labs/{labId}/resume`.
+    - A shell is granted only when `Health.capabilities.shell.<role>.allowed`
+      is true. If the policy grants a role a shell and the boundary cannot
+      be verified, that role's jobs are refused with 412
+      `isolation_required`. It is never run on a weaker boundary instead.
+
+    Upgrading from draft.6
+    - `Budget.limits` and `Budget.consumed` remain for one release, marked
+      deprecated, so a draft.6 client still loads. In them `costUsd` is
+      money only (the signed spending limit, and 0 consumed), never an
+      estimate. A client must stop reading them before the next draft.
+    - Deploy order: the client that reads the three blocks ships first, then
+      the Lab Manager is upgraded.
+
+    Research records
+    - Agents never call this API. An agent proposes a record by leaving a
+      JSON file in its workspace outbox; when its job ends the Lab Manager
+      reads the outbox, validates each file as untrusted input, enforces
+      which role may record what, and stores accepted content by SHA-256
+      computed from the bytes it received. Rejections appear as `systemNote`
+      items in that agent's transcript.
+    - Stored content is immutable and addressed by hash (`ArtifactRef`).
+      `GET /v1/labs/{labId}/artifacts/{hash}` always returns the whole
+      document, so a client can verify `sha256(utf8(content)) == hash`.
+    - A protocol version never changes. A revision is a new version with a
+      new hash, and it voids any approval given or pending for the old one.
+    - An approval of kind `experiment` authorizes ONE execution attempt of
+      exactly the protocol hash and version in its request, under exactly
+      the limits in its binding. Its binding has `jobId: null` and
+      `experimentId` equal to `request.experimentId`.
+    - An experiment's `limits` and `estimate` change only through a protocol
+      revision, which voids the approval. The job runs under the signed
+      limits or less (they are reduced to what remains of the lab budget),
+      never more.
+    - A given approval is usable until the `expiresAt` in its binding, which
+      the human signed. After that the experiment returns to
+      `protocolRegistered` and needs a new approval.
+    - Stored text is hashed over exactly the UTF-8 bytes the Lab Manager
+      stored and returns: no normalisation, and no newline added or removed.
+    - A review ends an experiment (`reviewed`). A person may add an
+      assessment afterwards. It is optional, unsigned, changes no status,
+      and no rule reads it as an input that widens anything. Agents see it
+      only as labelled owner feedback.
+    - After an execution the Lab Manager takes its own copy of the
+      experiment's working directory (`Experiment.snapshot`), hashes the
+      bytes it received, and stores it where no agent can write. The
+      Reviewer receives that copy and its verdict must cite the hash.
+      `snapshot.commit` is reported by the Executor's side.
 
     Authorization
     - The bearer token authenticates Runekeeper's server. Both sides read it
@@ -175,8 +289,13 @@ paths:
     post:
       tags: [labs]
       operationId: setLabBudget
-      summary: Set the lab's budget limits. Signed, because it authorizes spend.
-      description: The signature covers a BudgetBinding, which includes the limits in force before the change.
+      summary: Set the lab's spending limit. The only signed setting, because it is the only one that authorizes money.
+      description: |
+        The signature covers a BudgetBinding, which includes the limit in
+        force before the change and the hash of the host policy in force.
+        While `Health.spend.metering` is `none`, any amount above zero is
+        refused with 412 `spend_metering_unavailable` before the signature
+        is looked at, and nothing is recorded.
       parameters:
         - $ref: "#/components/parameters/LabId"
         - $ref: "#/components/parameters/IdempotencyKey"
@@ -186,17 +305,78 @@ paths:
           application/json:
             schema:
               type: object
-              required: [limits, authorization]
+              required: [spendLimitUsd, authorization]
+              additionalProperties: false
               properties:
-                limits: { $ref: "#/components/schemas/BudgetLimits" }
+                spendLimitUsd: { type: number, minimum: 0 }
                 note: { type: string, maxLength: 2000 }
                 authorization: { $ref: "#/components/schemas/SignedAuthorization" }
       responses:
         "200":
-          description: Limits updated; `lab.updated` and `budget.updated` are emitted with the actor.
+          description: Limit updated; `budget.updated` is emitted with the actor.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Budget" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/labs/{labId}/runtime-limit:
+    post:
+      tags: [labs]
+      operationId: setLabRuntimeLimit
+      summary: Set how many minutes agents may run in this lab in total. Not money, so not signed.
+      description: |
+        Capped by `Health.policy.runtimeCapMinutes`, which is set on the
+        host only. Above the cap: 400 `validation_failed` with
+        `details.capMinutes`. A request carrying an `authorization` is
+        rejected. With shells and no spending, this is the limit that
+        binds, and it can be moved by any caller holding the service token:
+        the client should require explicit confirmation before raising it.
+      parameters:
+        - $ref: "#/components/parameters/LabId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [wallClockMinutes]
+              additionalProperties: false
+              properties:
+                wallClockMinutes: { type: number, minimum: 0 }
+      responses:
+        "200":
+          description: Limit updated; `budget.updated` is emitted with the actor.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Budget" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/labs/{labId}/policy-decisions:
+    get:
+      tags: [labs]
+      operationId: listPolicyDecisions
+      summary: Everything that ran in this lab on the policy's say-so instead of a human's, newest first.
+      parameters:
+        - $ref: "#/components/parameters/LabId"
+        - name: subject
+          in: query
+          schema: { type: string, enum: [experiment, tool, job] }
+        - name: before
+          in: query
+          schema: { type: string }
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: A page of policy decisions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, nextCursor]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/PolicyDecision" } }
+                  nextCursor: { $ref: "#/components/schemas/Cursor" }
         default: { $ref: "#/components/responses/Error" }
 
   /v1/labs/{labId}/start:
@@ -395,6 +575,75 @@ paths:
                   nextCursor: { $ref: "#/components/schemas/Cursor" }
         default: { $ref: "#/components/responses/Error" }
 
+  /v1/agents/{agentId}/files:
+    get:
+      tags: [agents]
+      operationId: listAgentFiles
+      summary: List one directory of the agent's workspace. Read-only.
+      description: |
+        For seeing what a task produced. `path` is relative to the
+        workspace; empty is the workspace itself. A path that leaves the
+        workspace, directly or through a symbolic link, is refused (400).
+        Works whether or not the agent is running. Names and contents come
+        from the agent side and are untrusted.
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - name: path
+          in: query
+          schema: { type: string, maxLength: 1024, default: "" }
+      responses:
+        "200":
+          description: Up to 500 entries, sorted by name.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agentId, path, entries, truncated]
+                properties:
+                  agentId: { type: string }
+                  path: { type: string }
+                  truncated: { type: boolean }
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      required: [name, type, size, modifiedAt]
+                      properties:
+                        name: { type: string }
+                        type: { type: string, enum: [file, directory, other], description: "`other` includes symbolic links; they are listed, never followed out of the workspace." }
+                        size: { type: integer }
+                        modifiedAt: { type: [string, "null"] }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/agents/{agentId}/files/content:
+    get:
+      tags: [agents]
+      operationId: readAgentFile
+      summary: Read the first 256 KB of one regular file in the agent's workspace.
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - name: path
+          in: query
+          required: true
+          schema: { type: string, maxLength: 1024 }
+      responses:
+        "200":
+          description: "The file's text, or binary true with null content."
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agentId, path, size, encoding, content, truncated, binary]
+                properties:
+                  agentId: { type: string }
+                  path: { type: string }
+                  size: { type: integer }
+                  encoding: { type: string, enum: [utf8] }
+                  content: { type: [string, "null"] }
+                  truncated: { type: boolean }
+                  binary: { type: boolean }
+        default: { $ref: "#/components/responses/Error" }
+
   /v1/labs/{labId}/jobs:
     get:
       tags: [jobs]
@@ -494,7 +743,11 @@ paths:
       operationId: reconcileJob
       summary: Resolve a job that was interrupted by a manager restart.
       description: |
-        Interrupted jobs are never re-executed automatically. A human either
+        Interrupted jobs are never re-executed automatically. Neither
+        resolution is signed, and a request carrying an `authorization` is
+        rejected. In an autonomous lab the policy acknowledges an
+        interrupted job itself (`reconciliation.actor` is null and
+        `reconciliation.policy` is set); it never retries one. A human either
         acknowledges the interruption or asks for a retry, which creates a NEW
         job (returned as `retryJob`) with the same instructions and
         `retryOfJobId` set. The new job inherits no approvals and must obtain
@@ -511,12 +764,10 @@ paths:
             schema:
               type: object
               required: [resolution]
+              additionalProperties: false
               properties:
                 resolution: { type: string, enum: [acknowledge, retry] }
                 note: { type: string, maxLength: 2000 }
-                authorization:
-                  $ref: "#/components/schemas/SignedAuthorization"
-                  description: Required when resolution is `retry`.
       responses:
         "200":
           description: Reconciled.
@@ -641,7 +892,7 @@ paths:
     get:
       tags: [research]
       operationId: listQuestions
-      summary: List research questions.
+      summary: List research questions, newest first.
       parameters:
         - $ref: "#/components/parameters/LabId"
       responses:
@@ -653,9 +904,7 @@ paths:
                 type: object
                 required: [items]
                 properties:
-                  items:
-                    type: array
-                    items: { $ref: "#/components/schemas/Question" }
+                  items: { type: array, items: { $ref: "#/components/schemas/Question" } }
         default: { $ref: "#/components/responses/Error" }
     post:
       tags: [research]
@@ -669,13 +918,40 @@ paths:
             schema:
               type: object
               required: [title]
+              additionalProperties: false
               properties:
                 title: { type: string, minLength: 1, maxLength: 300 }
                 body: { type: string, maxLength: 20000 }
                 priority: { type: string, enum: [low, medium, high], default: medium }
       responses:
         "201":
-          description: Created.
+          description: Created with status `open`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Question" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/questions/{questionId}/status:
+    post:
+      tags: [research]
+      operationId: setQuestionStatus
+      summary: Change a question's status. At most one question per lab is active; activating one returns the previous one to open.
+      parameters:
+        - { name: questionId, in: path, required: true, schema: { type: string } }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              additionalProperties: false
+              properties:
+                status: { $ref: "#/components/schemas/QuestionStatus" }
+      responses:
+        "200":
+          description: The question.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Question" }
@@ -685,7 +961,7 @@ paths:
     get:
       tags: [research]
       operationId: listExperiments
-      summary: List experiments.
+      summary: List experiments, newest first.
       parameters:
         - $ref: "#/components/parameters/LabId"
       responses:
@@ -697,34 +973,216 @@ paths:
                 type: object
                 required: [items]
                 properties:
-                  items:
-                    type: array
-                    items: { $ref: "#/components/schemas/Experiment" }
+                  items: { type: array, items: { $ref: "#/components/schemas/Experiment" } }
         default: { $ref: "#/components/responses/Error" }
 
   /v1/experiments/{experimentId}:
     get:
       tags: [research]
       operationId: getExperiment
-      summary: Get one experiment.
+      summary: One experiment with its protocol versions, jobs, approvals, results and review.
       parameters:
-        - name: experimentId
-          in: path
-          required: true
-          schema: { type: string }
+        - $ref: "#/components/parameters/ExperimentId"
       responses:
         "200":
-          description: Experiment with its jobs and approvals.
+          description: Experiment detail.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ExperimentDetail" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/experiments/{experimentId}/request-approval:
+    post:
+      tags: [research]
+      operationId: requestExperimentApproval
+      summary: Raise a new approval for the current protocol version.
+      description: |
+        Only from `protocolRegistered`, which an experiment returns to when
+        its approval is denied, expires, or was spent on an attempt that
+        recorded no result. 409 `conflict` otherwise.
+      parameters: &experimentActionParams
+        - $ref: "#/components/parameters/ExperimentId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: The experiment, now `awaitingApproval`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Experiment" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/experiments/{experimentId}/execute:
+    post:
+      tags: [research]
+      operationId: executeExperiment
+      summary: Start the one execution attempt an approval authorizes.
+      description: |
+        The Lab Manager builds the Executor's instructions itself from the
+        approved protocol text and starts a task job under the approved
+        limits. 412 `approval_required` unless the experiment is `approved`;
+        412 `protocol_changed` if the current protocol is not the approved
+        one or the approval has passed its `expiresAt`. The usual job
+        preconditions apply (agent idle, budget, no reconciliation
+        outstanding). In the response, `experiment.approvalId` and
+        `experiment.approvedProtocolHash` are the approval and protocol this
+        attempt consumed. If the attempt ends without a recorded
+        result, the experiment returns to `protocolRegistered` and needs a
+        new approval.
+      parameters: *experimentActionParams
+      responses: &experimentJobResponses
+        "202":
+          description: The experiment and the job that was started.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [experiment, job]
+                properties:
+                  experiment: { $ref: "#/components/schemas/Experiment" }
+                  job: { $ref: "#/components/schemas/Job" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/experiments/{experimentId}/review:
+    post:
+      tags: [research]
+      operationId: reviewExperiment
+      summary: Start an independent review of an executed experiment.
+      description: |
+        The Reviewer is given the approved protocol and the recorded results
+        by the Lab Manager, with their hashes, and must cite those hashes in
+        its verdict. 409 `conflict` unless the experiment is `executed` and
+        no other job is running in the lab; while the review runs, no other
+        agent in the lab can start work. If the review ends without a valid
+        verdict the experiment returns to `executed`.
+      parameters: *experimentActionParams
+      responses: *experimentJobResponses
+
+  /v1/experiments/{experimentId}/assessment:
+    post:
+      tags: [research]
+      operationId: assessExperiment
+      summary: Record a person's opinion of a reviewed experiment. Optional and unsigned.
+      description: |
+        Allowed only for a `reviewed` experiment (409 otherwise). It changes
+        no status and gates nothing. It is recorded on the experiment and in
+        the decision log with the actor and `authentication: unsigned`, and
+        it reaches agents only as labelled owner feedback. A request
+        carrying an `authorization` is rejected.
+      parameters: *experimentActionParams
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outcome]
+              additionalProperties: false
+              properties:
+                outcome: { type: string, enum: [agree, disagree] }
+                note: { type: string, maxLength: 2000 }
+      responses:
+        "200":
+          description: The experiment with the assessment recorded.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Experiment" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/experiments/{experimentId}/abandon:
+    post:
+      tags: [research]
+      operationId: abandonExperiment
+      summary: End an experiment that will not be taken further. Unsigned; it only prevents work.
+      description: Allowed from any state that is not final. Cancels a pending approval. Refused (409) while a job for the experiment is running.
+      parameters: *experimentActionParams
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                note: { type: string, maxLength: 2000 }
+      responses:
+        "200":
+          description: The abandoned experiment.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Experiment" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/labs/{labId}/escalations:
+    get:
+      tags: [research]
+      operationId: listEscalations
+      summary: Things a person should look at, newest first.
+      parameters:
+        - $ref: "#/components/parameters/LabId"
+      responses:
+        "200":
+          description: Escalations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Escalation" } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/escalations/{escalationId}/resolve:
+    post:
+      tags: [research]
+      operationId: resolveEscalation
+      summary: Acknowledge an escalation. It approves nothing and resumes nothing.
+      parameters:
+        - name: escalationId
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                note: { type: string, maxLength: 2000 }
+      responses:
+        "200":
+          description: The resolved escalation; `escalation.resolved` is emitted.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Escalation" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/labs/{labId}/checkpoints:
+    get:
+      tags: [research]
+      operationId: listCheckpoints
+      summary: Progress reports written after every `Health.policy.checkpointEvery` reviewed experiments, newest first.
+      parameters:
+        - $ref: "#/components/parameters/LabId"
+      responses:
+        "200":
+          description: Checkpoints.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Checkpoint" } }
         default: { $ref: "#/components/responses/Error" }
 
   /v1/labs/{labId}/findings:
     get:
       tags: [research]
       operationId: listFindings
-      summary: List findings.
+      summary: List findings, newest first.
       parameters:
         - $ref: "#/components/parameters/LabId"
       responses:
@@ -736,72 +1194,61 @@ paths:
                 type: object
                 required: [items]
                 properties:
-                  items:
-                    type: array
-                    items: { $ref: "#/components/schemas/Finding" }
+                  items: { type: array, items: { $ref: "#/components/schemas/Finding" } }
         default: { $ref: "#/components/responses/Error" }
 
   /v1/labs/{labId}/decisions:
     get:
       tags: [research]
       operationId: listResearchDecisions
-      summary: List the research decision log.
+      summary: List the research decision log, newest first (not approval decisions).
       parameters:
         - $ref: "#/components/parameters/LabId"
       responses:
         "200":
-          description: Research decision log (not approval decisions).
+          description: Decisions recorded by agents, and unsigned feedback and abandonments recorded by a person.
           content:
             application/json:
               schema:
                 type: object
                 required: [items]
                 properties:
-                  items:
-                    type: array
-                    items: { $ref: "#/components/schemas/ResearchRecord" }
+                  items: { type: array, items: { $ref: "#/components/schemas/ResearchDecision" } }
         default: { $ref: "#/components/responses/Error" }
 
   /v1/labs/{labId}/handoffs:
     get:
       tags: [research]
       operationId: listHandoffs
-      summary: List handoffs.
+      summary: List handoffs between roles, newest first.
       parameters:
         - $ref: "#/components/parameters/LabId"
       responses:
         "200":
-          description: Structured handoffs between agents.
+          description: Handoffs.
           content:
             application/json:
               schema:
                 type: object
                 required: [items]
                 properties:
-                  items:
-                    type: array
-                    items: { $ref: "#/components/schemas/Handoff" }
+                  items: { type: array, items: { $ref: "#/components/schemas/Handoff" } }
         default: { $ref: "#/components/responses/Error" }
 
-  /v1/labs/{labId}/artifacts:
+  /v1/labs/{labId}/artifacts/{hash}:
     get:
       tags: [research]
       operationId: getArtifact
-      summary: Read one file from the lab repository at a commit. Confined to the repository; size-capped.
+      summary: One stored document, whole, by content hash.
+      description: |
+        Only content that a record or protocol in this lab refers to. Never
+        truncated: protocols are at most 64 KiB and other bodies 128 KiB.
       parameters:
         - $ref: "#/components/parameters/LabId"
-        - name: path
-          in: query
-          required: true
-          description: Repository-relative path. Absolute paths and `..` segments are rejected.
-          schema: { type: string, maxLength: 1024 }
-        - name: ref
-          in: query
-          description: Commit sha. Defaults to the head of `main`.
-          schema: { type: string, pattern: "^[0-9a-f]{7,40}$" }
+        - { name: hash, in: path, required: true, schema: { type: string, pattern: "^[0-9a-f]{64}$" } }
       responses:
         "200":
-          description: File content.
+          description: The document.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Artifact" }
@@ -890,6 +1337,7 @@ components:
 
   parameters:
     LabId: { name: labId, in: path, required: true, schema: { type: string } }
+    ExperimentId: { name: experimentId, in: path, required: true, schema: { type: string } }
     AgentId: { name: agentId, in: path, required: true, schema: { type: string } }
     JobId: { name: jobId, in: path, required: true, schema: { type: string } }
     ApprovalId: { name: approvalId, in: path, required: true, schema: { type: string } }
@@ -955,6 +1403,10 @@ components:
         - approval_expired
         - approval_required
         - budget_exceeded
+        - spend_metering_unavailable
+        - subscription_limited
+        - host_busy
+        - disk_low
         - isolation_required
         - protocol_changed
         - claude_code_failed
@@ -976,16 +1428,105 @@ components:
 
     Health:
       type: object
-      required: [status, apiVersion, serviceVersion, degraded, reasons, capabilities]
+      required: [status, apiVersion, serviceVersion, degraded, reasons, policy, spend, subscription, resources, reviewIndependence, capabilities]
       properties:
+        policy:
+          type: object
+          description: Which rules are in force. Set on the host only; no endpoint changes it.
+          required: [active, mode, id, hash, runtimeCapMinutes, checkpointEvery]
+          properties:
+            active: { type: boolean }
+            mode: { type: string, enum: [manual, autonomous] }
+            id: { type: [string, "null"] }
+            hash: { type: [string, "null"], description: "sha256 of the canonical JSON of the policy file. Part of every PolicyDecision and of every binding." }
+            runtimeCapMinutes: { type: number, description: "The most a lab's runtime limit may be set to." }
+            checkpointEvery: { type: [integer, "null"] }
+        spend:
+          type: object
+          required: [metering]
+          properties:
+            metering:
+              type: string
+              enum: [none, active]
+              description: "`none`: no paid mechanism exists whose limits the Lab Manager can enforce, so no spending can be authorized and no charge can be verified."
+        subscription:
+          type: object
+          description: Whether model work is suspended because the Claude subscription's usage limit appears to be reached.
+          required: [state, until, basis, reportedAt, windows, overage]
+          properties:
+            state: { type: string, enum: [ok, limited] }
+            until: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
+            basis:
+              type: string
+              enum: [reported, inferred]
+              description: |
+                `reported`: from the rate-limit report Claude Code sends with
+                every model call. `inferred`: from the wording of a failed
+                job, or nothing has been reported yet. Neither is measured by
+                the Lab Manager; both arrive through the agent side.
+            reportedAt: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
+            windows:
+              type: object
+              description: Per allowance window as Claude Code names it (for example five_hour, seven_day).
+              additionalProperties:
+                type: object
+                required: [utilization, resetsAt]
+                properties:
+                  utilization: { type: number, description: "Fraction used, 0 to 1." }
+                  resetsAt: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
+            overage:
+              type: object
+              description: Paid usage beyond the subscription. If `inUse` is ever reported true the job is stopped, all model work is suspended and an `unauthorized_charge` escalation is raised.
+              required: [status, inUse]
+              properties:
+                status: { type: [string, "null"] }
+                inUse: { type: boolean }
+        resources:
+          type: object
+          required: [jobs, disk, identities]
+          properties:
+            jobs:
+              type: object
+              description: One limit for the whole host. At the limit a new job is refused with 429 `host_busy`.
+              required: [running, hostLimit]
+              properties: { running: { type: integer }, hostLimit: { type: integer } }
+            disk:
+              type: object
+              description: Below `minFreeBytes` no job starts (412 `disk_low`); below half of it running jobs are stopped.
+              required: [minFreeBytes, freeBytes]
+              properties:
+                minFreeBytes: { type: number }
+                freeBytes: { type: object, additionalProperties: { type: [number, "null"] }, description: "Per identity (agent, reviewer) and for the manager's own storage. Refreshed every 30 seconds." }
+            identities:
+              type: object
+              description: Memory, CPU time and process count per agent identity, read by its worker from its own control group. Null where the host does not expose it.
+              additionalProperties:
+                type: object
+                properties:
+                  memoryBytes: { type: [number, "null"] }
+                  cpuSeconds: { type: [number, "null"] }
+                  processes: { type: [number, "null"] }
+        reviewIndependence: { $ref: "#/components/schemas/ReviewIndependence" }
         capabilities:
           type: object
           description: What this deployment currently permits, so the UI can disable controls up front.
-          required: [executorShell, unattendedExecution, tmuxMode]
+          required: [executorShell, unattendedExecution, tmuxMode, recordWrites, shell]
           properties:
-            executorShell: { $ref: "#/components/schemas/Capability" }
+            recordWrites:
+              $ref: "#/components/schemas/Capability"
+              description: |
+                Manual mode: a standing rule the owner sets on the host. When
+                allowed, an agent's Write of one record file directly inside
+                its own outbox is permitted without a per-request approval.
+                Always allowed under an autonomous policy.
+            executorShell: { $ref: "#/components/schemas/Capability", description: "Deprecated; same as shell.executor." }
             unattendedExecution: { $ref: "#/components/schemas/Capability" }
             tmuxMode: { $ref: "#/components/schemas/Capability" }
+            shell:
+              type: object
+              description: Per role, whether a job started now would have a shell, and on which boundary.
+              required: [advisor, executor, reviewer, orchestrator]
+              additionalProperties: { $ref: "#/components/schemas/ShellCapability" }
         status: { type: string, enum: [ok, degraded] }
         apiVersion: { type: string, description: "major.minor; the major number changes on any breaking change." }
         serviceVersion: { type: string }
@@ -995,6 +1536,63 @@ components:
           items:
             type: string
             enum: [claude_code_unavailable, claude_code_logged_out, tmux_unavailable, agent_isolation_missing, storage_error]
+
+    ShellCapability:
+      type: object
+      required: [allowed, reason, boundary]
+      properties:
+        allowed: { type: boolean }
+        reason:
+          type: [string, "null"]
+          description: |
+            Why not. Known values: no_autonomy_policy, role_not_granted,
+            worker_unavailable, agent_isolation_missing, isolation_unverified,
+            isolation_check_failed, reviewer_identity_missing,
+            sandbox_unavailable.
+        boundary:
+          type: [string, "null"]
+          enum: [osIdentity, osIdentityAndCommandSandbox, null]
+          description: |
+            What confines the shell. `osIdentity`: a dedicated OS user with
+            no administrative rights inside a hardened service.
+            `osIdentityAndCommandSandbox`: that, and every command also runs
+            in Claude Code's sandbox and cannot opt out of it.
+    ReviewIndependence:
+      type: string
+      enum: [enforced, notEnforced]
+      description: |
+        `enforced` only when the Reviewer runs as a different OS user from
+        every other role AND the isolation checks of both identities pass,
+        which include that neither can read or write where the other keeps
+        its files. Otherwise `notEnforced`.
+    PolicyDecision:
+      type: object
+      description: |
+        A decision made by the host policy instead of a human. It has no
+        actor and no authorization, and must never be displayed as a
+        signature. Immutable.
+      required: [id, labId, jobId, agentId, subject, subjectId, rule, outcome, summary, facts, policy, at]
+      additionalProperties: false
+      properties:
+        id: { type: string }
+        labId: { type: string }
+        jobId: { type: [string, "null"] }
+        agentId: { type: [string, "null"] }
+        subject: { type: string, enum: [experiment, tool, job] }
+        subjectId: { type: [string, "null"], description: "Experiment id, tool use id or job id." }
+        rule:
+          type: string
+          description: "Known values: experiment.admit, shell.run, tool.use, sandbox.escape, request.tooLarge, interrupted.acknowledge."
+        outcome: { type: string, enum: [allow, deny] }
+        summary: { type: string }
+        facts: { type: object, additionalProperties: true, description: "What the rule matched on." }
+        policy:
+          type: object
+          required: [id, hash]
+          properties:
+            id: { type: string }
+            hash: { type: string }
+        at: { $ref: "#/components/schemas/Timestamp" }
 
     Capability:
       type: object
@@ -1011,11 +1609,11 @@ components:
         `signature` is base64 of the 64-byte Ed25519 signature over the UTF-8
         bytes of these ten lines joined by "\n" (no trailing newline):
 
-          lab-authz-v2
-          <action>        approval.decision | job.retry | budget.set
-          <targetId>      approvalId | jobId | labId
+          lab-authz-v3
+          <action>        approval.decision | budget.set
+          <targetId>      approvalId | labId
           <bindingHash>   sha256 hex of the RFC 8785 canonical JSON of the binding
-          <outcome>       approved | denied | retry | set
+          <outcome>       approved | denied | set
           <actorId>       must equal X-Lab-Actor-Id
           <signedAt>      exactly as sent
           <expiresAt>     exactly as sent
@@ -1024,8 +1622,8 @@ components:
                           string when there is no note)
 
         The binding is what is being authorized (see ApprovalBinding,
-        JobBinding, BudgetBinding). The Lab Manager publishes the binding and
-        its hash on Approval and Job; Runekeeper recomputes the hash from the
+        BudgetBinding). The Lab Manager publishes the binding and
+        its hash on Approval; Runekeeper recomputes the hash from the
         binding it shows the human and refuses to sign on a mismatch. For a
         budget change Runekeeper builds the binding itself.
 
@@ -1075,15 +1673,19 @@ components:
         strings with exactly six fractional digits (JavaScript:
         `n.toFixed(6)`), so the hash never depends on how a JSON library
         prints a floating-point number. Null means not set.
-      required: [costUsd, wallClockMinutes]
+
+        No dollar figure appears in a binding other than BudgetBinding. The
+        notional model cost is an agent-side estimate and gates nothing a
+        signature covers, so it is not signed.
+      required: [wallClockMinutes]
+      additionalProperties: false
       properties:
-        costUsd: { type: [string, "null"], pattern: "^[0-9]+\\.[0-9]{6}$" }
         wallClockMinutes: { type: [string, "null"], pattern: "^[0-9]+\\.[0-9]{6}$" }
         maxTurns: { type: [integer, "null"] }
     ApprovalBinding:
       type: object
       description: What a human authorizes by deciding an approval. Always complete, even where `request` is truncated.
-      required: [contractVersion, approvalId, kind, labId, agentId, role, jobId, experimentId, requestHash, limits, estimate, expiresAt]
+      required: [contractVersion, approvalId, kind, labId, agentId, role, jobId, experimentId, requestHash, limits, estimate, expiresAt, policyHash]
       properties:
         contractVersion: { type: string, const: "1.0" }
         approvalId: { type: string }
@@ -1095,40 +1697,38 @@ components:
         experimentId:
           type: [string, "null"]
           description: |
-            For an approval raised by a job, exactly that job's
-            `experimentId` (null when the job belongs to no experiment). A
-            client that rebuilds the binding takes it from the job record.
+            Kind `permission`: exactly the requesting job's `experimentId`
+            (null when the job belongs to no experiment); a client that
+            rebuilds the binding takes it from the job record. Kind
+            `experiment`: `request.experimentId`, and `jobId` is null.
         requestHash: { type: string }
         limits: { $ref: "#/components/schemas/BindingLimits", description: "The limits the approved work runs under." }
         estimate: { $ref: "#/components/schemas/BindingLimits" }
         expiresAt: { $ref: "#/components/schemas/Timestamp" }
-    JobBinding:
-      type: object
-      description: What a human authorizes by retrying an interrupted job.
-      required: [contractVersion, jobId, labId, agentId, kind, title, experimentId, instructionsHash, limits]
-      properties:
-        contractVersion: { type: string, const: "1.0" }
-        jobId: { type: string }
-        labId: { type: string }
-        agentId: { type: string }
-        kind: { type: string, enum: [message, task] }
-        title: { type: string }
-        experimentId: { type: [string, "null"] }
-        instructionsHash: { type: string }
-        limits: { $ref: "#/components/schemas/BindingLimits" }
+        policyHash:
+          type: [string, "null"]
+          description: |
+            `Health.policy.hash` when the approval was requested; null in
+            manual mode without a policy file. A decision is refused (409,
+            and the approval is cancelled) if the policy in force differs.
     BudgetBinding:
       type: object
       description: |
-        What a human authorizes by changing a lab's budget. Built by
-        Runekeeper. `previousLimits` must equal the limits in force when the
-        call arrives; an authorization made against a stale view does not
-        verify (403 `signature_invalid`). Refetch the snapshot and sign again.
-      required: [contractVersion, labId, previousLimits, limits]
+        What a human authorizes by setting a lab's spending limit. Built by
+        Runekeeper. `previousSpendLimitUsd` must equal the limit in force
+        when the call arrives, and `policyHash` must equal
+        `Health.policy.hash` (null without a policy): an authorization made
+        against a stale view, or under another policy, does not verify (403
+        `signature_invalid`). Amounts are decimal strings with exactly six
+        fractional digits.
+      required: [contractVersion, labId, previousSpendLimitUsd, spendLimitUsd, policyHash]
+      additionalProperties: false
       properties:
         contractVersion: { type: string, const: "1.0" }
         labId: { type: string }
-        previousLimits: { $ref: "#/components/schemas/BindingLimits" }
-        limits: { $ref: "#/components/schemas/BindingLimits" }
+        previousSpendLimitUsd: { type: string, pattern: "^[0-9]+\\.[0-9]{6}$" }
+        spendLimitUsd: { type: string, pattern: "^[0-9]+\\.[0-9]{6}$" }
+        policyHash: { type: [string, "null"] }
     Actor:
       type: object
       required: [id, email]
@@ -1142,13 +1742,15 @@ components:
       enum: [idle, question, hypothesis, design, protocolRegistered, awaitingApproval, execution, review, findings, stateUpdate, decision, escalated]
     LabSummary:
       type: object
-      required: [id, name, status, cycleStage, pendingApprovalCount, lastActivityAt]
+      required: [id, name, status, cycleStage, pendingApprovalCount, openEscalationCount, autonomous, lastActivityAt]
       properties:
         id: { type: string }
         name: { type: string }
         status: { $ref: "#/components/schemas/LabStatus" }
         cycleStage: { $ref: "#/components/schemas/CycleStage" }
         pendingApprovalCount: { type: integer }
+        openEscalationCount: { type: integer }
+        autonomous: { type: boolean, description: "True when the host policy lets this lab advance without a human approving each step." }
         lastActivityAt: { $ref: "#/components/schemas/Timestamp" }
     Lab:
       allOf:
@@ -1162,10 +1764,10 @@ components:
             createdAt: { $ref: "#/components/schemas/Timestamp" }
     BudgetLimits:
       type: object
-      description: Always explicit; there is no unlimited budget.
+      deprecated: true
       required: [costUsd, wallClockMinutes]
       properties:
-        costUsd: { type: number, minimum: 0 }
+        costUsd: { type: number, minimum: 0, description: "Money only: the signed spending limit." }
         wallClockMinutes: { type: number, minimum: 0 }
     ApprovalPolicy:
       type: object
@@ -1175,18 +1777,54 @@ components:
         experimentTtlMinutes: { type: integer, minimum: 1, default: 10080 }
     Budget:
       type: object
-      required: [limits, consumed]
+      description: |
+        Three kinds of number that must never be mixed or summed. Each block
+        says where its numbers come from in `source`.
+      required: [runtime, spend, estimates, limits, consumed]
       properties:
+        runtime:
+          type: object
+          description: Measured by the Lab Manager. Cannot be under-reported by an agent. This is the limit that binds.
+          required: [limitWallClockMinutes, usedWallClockMinutes, source]
+          properties:
+            limitWallClockMinutes: { type: number }
+            usedWallClockMinutes: { type: number }
+            source: { type: string, const: managerMeasured }
+        spend:
+          type: object
+          description: Money beyond what the owner already pays for.
+          required: [signedLimitUsd, verifiedChargesUsd, remainingUsd, metering, source]
+          properties:
+            signedLimitUsd: { type: number, description: "Set only by a signed `budget.set`. Default 0." }
+            verifiedChargesUsd:
+              type: [number, "null"]
+              description: "Charges the Lab Manager verified itself. Null, not 0, while metering is `none`: nothing can be verified."
+            remainingUsd: { type: [number, "null"] }
+            metering: { type: string, enum: [none, active] }
+            source: { type: string, const: managerVerified }
+        estimates:
+          type: object
+          description: |
+            Reported by Claude Code on the agent side. Never a charge and
+            never verified. `notionalModelCostUsd` is what the same usage
+            would cost at API prices; under a subscription nothing is owed
+            for it.
+          required: [notionalModelCostUsd, tokens, source]
+          properties:
+            notionalModelCostUsd: { type: number }
+            tokens: { type: integer }
+            source: { type: string, const: agentReported }
         limits: { $ref: "#/components/schemas/BudgetLimits" }
         consumed:
           type: object
+          deprecated: true
           required: [costUsd, wallClockMinutes]
           properties:
-            costUsd: { type: number, description: "Cost as reported by Claude Code. On a subscription login this is notional, not billed." }
+            costUsd: { type: number, description: "Always 0. Money only; never an estimate." }
             wallClockMinutes: { type: number }
     LabSnapshot:
       type: object
-      required: [lab, agents, activeQuestion, pendingApprovals, jobsNeedingReconciliation, budget, recentFindings, recentEvents, eventCursor]
+      required: [lab, agents, activeQuestion, pendingApprovals, jobsNeedingReconciliation, budget, openEscalations, recentFindings, recentEvents, eventCursor]
       properties:
         lab: { $ref: "#/components/schemas/Lab" }
         agents: { type: array, items: { $ref: "#/components/schemas/Agent" } }
@@ -1197,6 +1835,7 @@ components:
         pendingApprovals: { type: array, items: { $ref: "#/components/schemas/Approval" } }
         jobsNeedingReconciliation: { type: array, items: { $ref: "#/components/schemas/Job" } }
         budget: { $ref: "#/components/schemas/Budget" }
+        openEscalations: { type: array, items: { $ref: "#/components/schemas/Escalation" } }
         recentFindings: { type: array, maxItems: 5, items: { $ref: "#/components/schemas/Finding" } }
         recentEvents: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/Event" } }
         eventCursor: { type: string, description: "Subscribe with after=<eventCursor> for no gap and no duplicate." }
@@ -1248,7 +1887,10 @@ components:
         jobId: { type: [string, "null"] }
         sessionId: { type: [string, "null"] }
         seq: { type: integer, description: "Strictly increasing per agent." }
-        kind: { type: string, enum: [humanMessage, assistantText, toolCall, systemNote] }
+        kind:
+          type: string
+          enum: [humanMessage, managerInstruction, assistantText, toolCall, systemNote]
+          description: "`managerInstruction`: instructions the Lab Manager wrote itself for a job the policy started. It has no actor."
         createdAt: { $ref: "#/components/schemas/Timestamp" }
         text: { type: string, description: "Capped at 32 KB. Assistant thinking is never included." }
         truncated: { type: boolean, default: false }
@@ -1261,6 +1903,33 @@ components:
             summary: { type: string, description: "One line." }
             status: { type: string, enum: [running, succeeded, failed, denied] }
             approvalId: { type: [string, "null"] }
+            input: { type: string, description: "The tool call's input as canonical JSON, capped at 8 KB. Written by the agent: display it, never act on it." }
+            inputTruncated: { type: boolean }
+            result: { type: [string, "null"], description: "The text the tool returned to the agent, capped at 8 KB. Null while running. May contain anything the agent read. Non-text parts are named in brackets." }
+            resultTruncated: { type: boolean }
+            decidedBy:
+              description: |
+                Who let this tool call proceed or refused it. Always present
+                on items created from draft.8 on. `builtin`: Claude Code's
+                own rules allowed it and no permission request was raised
+                (for example reading a file inside the workspace).
+              oneOf:
+                - type: object
+                  required: [type]
+                  additionalProperties: false
+                  properties: { type: { const: builtin } }
+                - type: object
+                  required: [type, approvalId, outcome]
+                  additionalProperties: false
+                  properties: { type: { const: human }, approvalId: { type: string }, outcome: { type: string, enum: [allow, deny] } }
+                - type: object
+                  required: [type, policyHash, rule, outcome]
+                  additionalProperties: false
+                  properties: { type: { const: policy }, policyHash: { type: string }, rule: { type: string }, outcome: { type: string, enum: [allow, deny] } }
+                - type: object
+                  required: [type, rule, outcome]
+                  additionalProperties: false
+                  properties: { type: { const: standingRule }, rule: { type: string }, outcome: { type: string, enum: [allow] } }
 
     JobStatus:
       type: string
@@ -1268,21 +1937,24 @@ components:
     JobLimits:
       type: object
       properties:
-        costUsd: { type: number, minimum: 0 }
+        notionalModelCostUsd:
+          type: number
+          minimum: 0
+          description: A cap on Claude Code's own estimate of model cost, enforced on the agent side as a guard against a runaway job. Not money, not a charge, and not part of any signed binding.
         wallClockMinutes: { type: number, minimum: 1 }
         maxTurns: { type: integer, minimum: 1 }
     Job:
       type: object
-      required: [id, labId, agentId, kind, title, status, instructions, instructionsHash, binding, bindingHash, needsReconciliation, limits, usage, createdAt, startedAt, endedAt]
+      required: [id, labId, agentId, kind, title, status, instructions, instructionsHash, needsReconciliation, origin, purpose, limits, usage, createdAt, startedAt, endedAt]
       properties:
-        binding: { $ref: "#/components/schemas/JobBinding" }
-        bindingHash: { type: string, description: "sha256 hex of the RFC 8785 canonical JSON of `binding`. This is what a retry signature covers." }
+        origin: { type: string, enum: [human, policy], description: "Who started the job." }
+        purpose: { type: [string, "null"], enum: [plan, execute, review, checkpoint, null] }
         instructions:
           type: string
           description: Exactly what the agent was asked to do. For kind `message`, the message text. Always complete on `GET /v1/jobs/{id}`; capped at 2 KB elsewhere (compare `instructionsHash`).
         instructionsHash:
           type: string
-          description: sha256 hex of the UTF-8 bytes of the complete instructions. Part of the job's binding.
+          description: sha256 hex of the UTF-8 bytes of the complete instructions.
         id: { type: string }
         labId: { type: string }
         agentId: { type: string }
@@ -1295,8 +1967,12 @@ components:
           required: [resolution, actor, at]
           properties:
             resolution: { type: string, enum: [acknowledge, retry] }
-            actor: { $ref: "#/components/schemas/Actor" }
-            note: { type: string }
+            actor: { oneOf: [{ $ref: "#/components/schemas/Actor" }, { type: "null" }], description: "Null when the policy acknowledged it." }
+            policy:
+              type: object
+              required: [id, hash]
+              properties: { id: { type: string }, hash: { type: string } }
+            note: { type: [string, "null"] }
             at: { $ref: "#/components/schemas/Timestamp" }
             retryJobId: { type: [string, "null"] }
         retryOfJobId: { type: [string, "null"] }
@@ -1305,10 +1981,12 @@ components:
         limits: { $ref: "#/components/schemas/JobLimits" }
         usage:
           type: object
-          required: [costUsd, wallClockSeconds, turns]
+          required: [costUsd, notionalModelCostUsd, tokens, wallClockSeconds, turns]
           properties:
-            costUsd: { type: number }
-            wallClockSeconds: { type: number }
+            costUsd: { type: number, deprecated: true, description: "Same as notionalModelCostUsd. Not a charge. Kept for one release for a draft.6 client; removed in the next draft." }
+            notionalModelCostUsd: { type: number, description: "Agent-reported estimate at API prices. Not a charge." }
+            tokens: { type: integer, description: "Agent-reported." }
+            wallClockSeconds: { type: number, description: "Measured by the Lab Manager." }
             turns: { type: integer }
         createdAt: { $ref: "#/components/schemas/Timestamp" }
         startedAt: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
@@ -1371,22 +2049,20 @@ components:
                 input: { type: object, additionalProperties: true }
             - title: ExperimentRequest
               description: |
-                Provisional, and never created by a 1.0-draft manager. Before
-                experiment approvals are enabled, the approval detail must let
-                the client fetch the exact protocol text and verify that it
-                hashes to `protocolHash`, so a human never approves a bare
-                hash. Intended definition, to be fixed with the research
-                records: `protocolHash` is the SHA-256 of the exact bytes of
-                the protocol file as committed in the manager's canonical
-                repository; a protocol is immutable once hashed; a revision
-                is a new protocol version with a new hash and needs a new
-                approval; the request will carry that version. Until then a
-                client should offer only `denied` for this kind.
+                `requestHash` is the SHA-256 of the RFC 8785 form of this
+                object. `protocolHash` is the SHA-256 of the exact UTF-8
+                bytes of the protocol text, which the client fetches from
+                `/v1/labs/{labId}/artifacts/{protocolHash}` and should show
+                to the human, verifying the hash itself, before signing.
               type: object
-              required: [experimentId, protocolHash]
+              required: [experimentId, title, hypothesis, protocolVersion, protocolHash]
+              additionalProperties: false
               properties:
                 experimentId: { type: string }
-                protocolHash: { type: string, description: "The approval is bound to this content hash." }
+                title: { type: string }
+                hypothesis: { type: [string, "null"] }
+                protocolVersion: { type: integer, minimum: 1 }
+                protocolHash: { type: string, pattern: "^[0-9a-f]{64}$" }
             - title: BudgetRequest
               description: |
                 Never created by a 1.0-draft manager. Approving one changes
@@ -1408,7 +2084,7 @@ components:
         estimate:
           type: object
           properties:
-            costUsd: { type: [number, "null"] }
+            notionalModelCostUsd: { type: [number, "null"], description: "Agent-reported estimate. Not money." }
             wallClockMinutes: { type: [number, "null"] }
             notes: { type: [string, "null"] }
         createdAt: { $ref: "#/components/schemas/Timestamp" }
@@ -1425,10 +2101,11 @@ components:
 
     ArtifactRef:
       type: object
-      required: [path, commit]
+      description: Stored, immutable content addressed by the SHA-256 of its bytes.
+      required: [hash, size]
       properties:
-        path: { type: string }
-        commit: { type: string }
+        hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+        size: { type: integer, description: "Bytes." }
     ResearchRecord:
       type: object
       required: [id, labId, title, status, createdAt, updatedAt, artifact]
@@ -1439,75 +2116,278 @@ components:
         status: { type: string }
         createdAt: { $ref: "#/components/schemas/Timestamp" }
         updatedAt: { $ref: "#/components/schemas/Timestamp" }
-        artifact: { oneOf: [{ $ref: "#/components/schemas/ArtifactRef" }, { type: "null" }] }
+        artifact:
+          description: The record's body, when it has one.
+          oneOf: [{ $ref: "#/components/schemas/ArtifactRef" }, { type: "null" }]
+    AgentRecord:
+      description: Fields common to records submitted through an agent's outbox or written by a human action.
+      allOf:
+        - $ref: "#/components/schemas/ResearchRecord"
+        - type: object
+          required: [kind, experimentId, jobId, role]
+          properties:
+            kind: { type: string, enum: [result, review, finding, handoff, decision, escalation, checkpoint] }
+            experimentId: { type: [string, "null"] }
+            jobId: { type: [string, "null"], description: "The job whose outbox the record came from." }
+            role:
+              description: The submitting agent's role; null for a record written by a human action.
+              oneOf: [{ $ref: "#/components/schemas/AgentRole" }, { type: "null" }]
+            actor: { $ref: "#/components/schemas/Actor" }
+    QuestionStatus: { type: string, enum: [open, active, answered, dropped] }
     Question:
       allOf:
         - $ref: "#/components/schemas/ResearchRecord"
         - type: object
-          required: [priority]
+          required: [priority, body, createdBy]
           properties:
+            status: { $ref: "#/components/schemas/QuestionStatus" }
             priority: { type: string, enum: [low, medium, high] }
-            status: { type: string, enum: [open, active, answered, dropped] }
+            body: { type: [string, "null"] }
             createdBy: { $ref: "#/components/schemas/Actor" }
     ExperimentStatus:
       type: string
-      enum: [draft, protocolRegistered, awaitingApproval, approved, running, executed, underReview, accepted, rejected, abandoned]
+      description: |
+        protocolRegistered -> approved -> running -> executed -> underReview
+        -> reviewed. In manual mode `awaitingApproval` sits between the first
+        two. `blocked`: the proposal declares a paid resource or credential.
+        `abandoned` from any state that is not final. Denial, expiry or a
+        failed attempt return it to protocolRegistered; a revision registers
+        a new version and is admitted or sent for approval again. A review
+        without a valid verdict returns it to executed. `draft` is reserved.
+      enum: [draft, protocolRegistered, awaitingApproval, approved, running, executed, underReview, reviewed, blocked, abandoned]
+    ProtocolVersion:
+      type: object
+      required: [version, hash, registeredAt, artifact]
+      properties:
+        version: { type: integer, minimum: 1 }
+        hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+        registeredAt: { $ref: "#/components/schemas/Timestamp" }
+        artifact: { $ref: "#/components/schemas/ArtifactRef" }
     Experiment:
       allOf:
         - $ref: "#/components/schemas/ResearchRecord"
         - type: object
-          required: [hypothesis, protocol, reviewVerdict]
+          required: [questionId, hypothesis, protocol, approvedProtocolHash, approvalId, approvedUntil, limits, estimate, reviewVerdict, proposedBy, admission, attempts, needsDecision, requires, blockedReason, snapshot, reviewIndependence, assessment]
           properties:
             status: { $ref: "#/components/schemas/ExperimentStatus" }
             questionId: { type: [string, "null"] }
             hypothesis: { type: [string, "null"] }
             protocol:
-              type: [object, "null"]
-              required: [version, hash, registeredAt, artifact]
+              $ref: "#/components/schemas/ProtocolVersion"
+              description: The current version.
+            approvedProtocolHash:
+              type: [string, "null"]
+              description: Set while an approval for exactly this hash is in force or was used for the recorded execution.
+            approvalId: { type: [string, "null"], description: "The most recent approval raised for this experiment." }
+            approvedUntil:
+              description: While the status is `approved`, the moment the approval lapses; otherwise null.
+              oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }]
+            limits:
+              type: object
+              description: The limits an execution runs under. `wallClockMinutes` and `maxTurns` are bound into a human approval; the notional model cost is not.
+              required: [notionalModelCostUsd, wallClockMinutes, maxTurns]
               properties:
-                version: { type: integer }
-                hash: { type: string }
-                registeredAt: { $ref: "#/components/schemas/Timestamp" }
-                artifact: { $ref: "#/components/schemas/ArtifactRef" }
+                notionalModelCostUsd: { type: number, description: "Cap on the agent-side estimate. Not money." }
+                wallClockMinutes: { type: number }
+                maxTurns: { type: integer }
+            estimate:
+              type: object
+              description: The proposing agent's own estimate. Agent-reported.
+              required: [notionalModelCostUsd, wallClockMinutes, notes]
+              properties:
+                notionalModelCostUsd: { type: [number, "null"] }
+                wallClockMinutes: { type: [number, "null"] }
+                notes: { type: [string, "null"] }
             reviewVerdict: { type: [string, "null"], enum: [supported, notSupported, inconclusive, methodologyProblem, null] }
+            admission:
+              description: How the current protocol came to be allowed to run. Exactly one shape, or null while it is not.
+              oneOf:
+                - type: "null"
+                - type: object
+                  required: [type, approvalId]
+                  additionalProperties: false
+                  properties: { type: { const: human }, approvalId: { type: string } }
+                - type: object
+                  required: [type, decisionId, policyId, policyHash, rule, at]
+                  additionalProperties: false
+                  properties:
+                    type: { const: policy }
+                    decisionId: { type: string }
+                    policyId: { type: string }
+                    policyHash: { type: string }
+                    rule: { type: string }
+                    at: { $ref: "#/components/schemas/Timestamp" }
+            attempts: { type: integer, description: "Executions of the current protocol version that ended without a result." }
+            needsDecision: { type: boolean, description: "The policy will not run it again by itself: it was interrupted, or used up its attempts. The Advisor must revise or abandon it." }
+            requires:
+              type: object
+              description: What the proposing agent says the experiment needs beyond what the lab already has. Agent-reported.
+              required: [paidResources, credentials]
+              properties:
+                paidResources: { type: array, items: { type: string } }
+                credentials: { type: array, items: { type: string } }
+            blockedReason: { type: [string, "null"], enum: [paid_resources_unavailable, null] }
+            snapshot:
+              description: The Lab Manager's own copy of the experiment's working directory, taken when the execution ended. Null if the directory did not exist.
+              oneOf:
+                - type: "null"
+                - type: object
+                  required: [hash, size, commit, takenAt]
+                  properties:
+                    hash: { type: string, pattern: "^[0-9a-f]{64}$", description: "sha256 of the tar archive, computed by the Lab Manager from the bytes it received." }
+                    size: { type: integer }
+                    commit: { type: [string, "null"], description: "What git reported in the Executor's directory. Reported by the agent side; the repository is inside the snapshot." }
+                    takenAt: { $ref: "#/components/schemas/Timestamp" }
+            reviewIndependence:
+              description: As it was when the review verdict was recorded. Null before that.
+              oneOf: [{ $ref: "#/components/schemas/ReviewIndependence" }, { type: "null" }]
+            assessment:
+              description: A person's optional opinion. Unsigned; never display it as a signature.
+              oneOf:
+                - type: "null"
+                - type: object
+                  required: [outcome]
+                  properties:
+                    outcome: { type: string, enum: [agree, disagree] }
+                    note: { type: [string, "null"] }
+                    actor: { $ref: "#/components/schemas/Actor" }
+                    at: { $ref: "#/components/schemas/Timestamp" }
+                    authentication: { type: string, const: unsigned }
+            proposedBy:
+              type: object
+              required: [agentId, role]
+              properties:
+                agentId: { type: string }
+                role: { $ref: "#/components/schemas/AgentRole" }
     ExperimentDetail:
       allOf:
         - $ref: "#/components/schemas/Experiment"
         - type: object
-          required: [jobs, approvals, results, review]
+          required: [protocolVersions, jobs, approvals, results, review]
           properties:
+            protocolVersions: { type: array, items: { $ref: "#/components/schemas/ProtocolVersion" } }
             jobs: { type: array, items: { $ref: "#/components/schemas/Job" } }
             approvals: { type: array, items: { $ref: "#/components/schemas/Approval" } }
-            results: { type: array, items: { $ref: "#/components/schemas/ArtifactRef" } }
-            review: { oneOf: [{ $ref: "#/components/schemas/ArtifactRef" }, { type: "null" }] }
+            results: { type: array, items: { $ref: "#/components/schemas/Result" } }
+            review: { oneOf: [{ $ref: "#/components/schemas/Review" }, { type: "null" }] }
+    Result:
+      description: What the Executor recorded for one execution. The protocol hash is assigned by the Lab Manager, not claimed by the agent.
+      allOf:
+        - $ref: "#/components/schemas/AgentRecord"
+        - type: object
+          required: [protocolVersion, protocolHash]
+          properties:
+            protocolVersion: { type: integer }
+            protocolHash: { type: string }
+    Review:
+      description: A verdict the Lab Manager accepted because it cites exactly the protocol, results and snapshot issued for review.
+      allOf:
+        - $ref: "#/components/schemas/AgentRecord"
+        - type: object
+          required: [verdict, protocolHash, resultHashes, snapshotHash, independence]
+          properties:
+            verdict: { type: string, enum: [supported, notSupported, inconclusive, methodologyProblem] }
+            protocolHash: { type: string }
+            resultHashes: { type: array, items: { type: string } }
+            snapshotHash: { type: [string, "null"] }
+            independence: { $ref: "#/components/schemas/ReviewIndependence" }
     Finding:
       allOf:
-        - $ref: "#/components/schemas/ResearchRecord"
+        - $ref: "#/components/schemas/AgentRecord"
         - type: object
-          required: [supportingExperimentIds, reviewStatus]
+          required: [summary, supportingExperimentIds, reviewStatus, supportingVerdicts]
           properties:
             summary: { type: string }
             supportingExperimentIds: { type: array, items: { type: string } }
-            reviewStatus: { type: string, enum: [unreviewed, reviewed, disputed] }
+            supportingVerdicts:
+              type: object
+              description: The review verdict of each cited experiment, or null where there is none yet. A finding may rest on a negative verdict.
+              additionalProperties: { type: [string, "null"] }
+            reviewStatus:
+              type: string
+              description: "`reviewed` only when it cites at least one experiment and every cited experiment has a recorded review. Read `supportingVerdicts` for what the reviews said."
+              enum: [unreviewed, reviewed, disputed]
     Handoff:
       allOf:
-        - $ref: "#/components/schemas/ResearchRecord"
+        - $ref: "#/components/schemas/AgentRecord"
         - type: object
           required: [fromRole, toRole]
           properties:
             fromRole: { $ref: "#/components/schemas/AgentRole" }
             toRole: { $ref: "#/components/schemas/AgentRole" }
-            jobId: { type: [string, "null"] }
+    ResearchDecision:
+      allOf:
+        - $ref: "#/components/schemas/AgentRecord"
+        - type: object
+          properties:
+            outcome: { type: string, enum: [agree, disagree, abandoned, answered, dropped], description: "Present when the entry records owner feedback, an abandonment or a question's resolution." }
+            reviewVerdict: { type: [string, "null"] }
+            questionId: { type: string }
+            source: { type: string, enum: [human] }
+            authentication: { type: string, const: unsigned, description: "Present on owner feedback. Nothing in the decision log is signed." }
+    Escalation:
+      description: |
+        Something a person should look at: a stop condition the Lab Manager
+        met (`source: manager`) or a request from an agent. Resolving one is
+        an acknowledgement only.
+      allOf:
+        - $ref: "#/components/schemas/AgentRecord"
+        - type: object
+          required: [reason, source]
+          properties:
+            status: { type: string, enum: [open, resolved] }
+            reason:
+              type: string
+              enum: [unauthorized_charge, security_boundary, runtime_exhausted, no_open_questions, repeated_failures, no_progress, disk_low, human_decision]
+            source: { type: string, enum: [manager, agent] }
+            resolution:
+              type: object
+              required: [actor, at]
+              properties:
+                actor: { $ref: "#/components/schemas/Actor" }
+                note: { type: [string, "null"] }
+                at: { $ref: "#/components/schemas/Timestamp" }
+    Checkpoint:
+      description: |
+        A progress report. `source: agent`: the Orchestrator's narrative,
+        with the Lab Manager's own measurements attached as `facts`.
+        `source: manager`: facts only, written when the Orchestrator
+        produced nothing. A checkpoint is for visibility; it gates nothing.
+      allOf:
+        - $ref: "#/components/schemas/AgentRecord"
+        - type: object
+          required: [source, facts]
+          properties:
+            source: { type: string, enum: [agent, manager] }
+            facts:
+              type: object
+              required: [at, experimentsReviewed, experiments, runtime, jobs, estimates, spend, policyDecisions, openQuestions]
+              properties:
+                at: { $ref: "#/components/schemas/Timestamp" }
+                experimentsReviewed: { type: integer }
+                experiments: { type: array, items: { type: object, additionalProperties: true } }
+                runtime: { type: object, additionalProperties: true }
+                jobs: { type: object, additionalProperties: { type: integer }, description: "Job counts by status." }
+                estimates: { type: object, additionalProperties: true, description: "Agent-reported." }
+                spend: { type: object, additionalProperties: true }
+                policyDecisions:
+                  type: object
+                  description: What ran without a person, by rule.
+                  additionalProperties:
+                    type: object
+                    required: [allow, deny]
+                    properties: { allow: { type: integer }, deny: { type: integer } }
+                openQuestions: { type: array, items: { type: object, additionalProperties: true } }
     Artifact:
       type: object
-      required: [path, commit, contentType, encoding, content, truncated]
+      required: [hash, size, contentType, encoding, content, truncated]
       properties:
-        path: { type: string }
-        commit: { type: string }
+        hash: { type: string, pattern: "^[0-9a-f]{64}$" }
+        size: { type: integer }
         contentType: { type: string }
-        encoding: { type: string, enum: [utf8, base64] }
+        encoding: { type: string, enum: [utf8] }
         content: { type: string }
-        truncated: { type: boolean }
+        truncated: { type: boolean, const: false }
 
     EventType:
       type: string
@@ -1525,10 +2405,17 @@ components:
         - approval.requested
         - approval.resolved
         - question.created
+        - question.updated
+        - result.recorded
+        - review.recorded
         - experiment.updated
         - finding.recorded
         - decision.recorded
         - handoff.recorded
+        - escalation.recorded
+        - escalation.resolved
+        - checkpoint.recorded
+        - policy.decided
         - budget.updated
         - budget.thresholdCrossed
         - manager.healthChanged
@@ -1550,7 +2437,7 @@ components:
       type: object
       required: [metric, threshold, consumed, limit]
       properties:
-        metric: { type: string, enum: [costUsd, wallClockMinutes] }
+        metric: { type: string, enum: [wallClockMinutes] }
         threshold: { type: number, description: "Fraction of the limit, e.g. 0.8." }
         consumed: { type: number }
         limit: { type: number }
@@ -1577,9 +2464,14 @@ components:
             id. By type: lab.* -> Lab · agent.* -> Agent · transcript.* ->
             TranscriptItem · job.* -> Job · approval.* -> Approval
             (approval.resolved also fires for expired and cancelled) ·
-            question.created -> Question · experiment.updated -> Experiment ·
-            finding.recorded -> Finding · decision.recorded -> ResearchRecord ·
-            handoff.recorded -> Handoff · budget.updated -> Budget (on job end
+            question.created, question.updated -> Question ·
+            experiment.updated -> Experiment · result.recorded -> Result ·
+            review.recorded -> Review · finding.recorded -> Finding ·
+            decision.recorded -> ResearchDecision · handoff.recorded -> Handoff ·
+            escalation.recorded, escalation.resolved -> Escalation ·
+            checkpoint.recorded -> Checkpoint · policy.decided ->
+            PolicyDecision (experiment and job decisions only; tool
+            decisions are on the transcript item and in the list) · budget.updated -> Budget (on job end
             and at most every 30 seconds while a job runs) ·
             budget.thresholdCrossed -> BudgetThresholdData · manager.started ->
             ManagerStartedData · manager.healthChanged -> Health.

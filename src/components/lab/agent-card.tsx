@@ -11,14 +11,14 @@ import type {
 import { LabButton, StatusLight, toneClass, type LabTone } from "./lab-ui";
 import type { LabFailure } from "./use-lab";
 
-const ROLE_LABELS: Record<LabAgent["role"], string> = {
+export const ROLE_LABELS: Record<LabAgent["role"], string> = {
   advisor: "Advisor",
   executor: "Executor",
   reviewer: "Reviewer",
   orchestrator: "Orchestrator",
 };
 
-const STATE_PRESENTATION: Record<LabAgentState, { label: string; tone: LabTone; pulse?: boolean }> = {
+export const STATE_PRESENTATION: Record<LabAgentState, { label: string; tone: LabTone; pulse?: boolean }> = {
   notProvisioned: { label: "Not provisioned", tone: "off" },
   starting: { label: "Starting", tone: "warn", pulse: true },
   idle: { label: "Idle", tone: "ok" },
@@ -30,7 +30,7 @@ const STATE_PRESENTATION: Record<LabAgentState, { label: string; tone: LabTone; 
 
 // Which controls make sense in each state. The Lab Manager is the authority
 // and still answers 409 if the state changed underneath us.
-const ALLOWED: Record<LabAgentState, AgentAction[]> = {
+export const ALLOWED: Record<LabAgentState, AgentAction[]> = {
   notProvisioned: ["start"],
   starting: ["stop"],
   idle: ["stop", "restart"],
@@ -40,21 +40,21 @@ const ALLOWED: Record<LabAgentState, AgentAction[]> = {
   crashed: ["resume"],
 };
 
-const ACTION_LABELS: Record<AgentAction, string> = {
+export const ACTION_LABELS: Record<AgentAction, string> = {
   start: "Start",
   stop: "Stop",
   restart: "Restart",
   resume: "Resume",
 };
 
-const BLOCKED_REASONS: Record<string, string> = {
+export const BLOCKED_REASONS: Record<string, string> = {
   reconciliation: "Held: an interrupted job needs your review",
   labPaused: "Held: the lab is paused",
   isolationRequired: "Held: agent isolation is not configured",
 };
 
 // Interrupting work in progress asks for a second click.
-function needsConfirm(action: AgentAction, state: LabAgentState) {
+export function needsConfirm(action: AgentAction, state: LabAgentState) {
   return (
     (action === "stop" || action === "restart") &&
     (state === "working" || state === "waitingOnHuman")
@@ -82,6 +82,8 @@ interface AgentCardProps {
   /** Latest system note from the manager's transcript for this agent. */
   systemNote?: LabTranscriptItem;
   onAction: (action: AgentAction) => void;
+  /** Opens this agent's conversation and tasks. */
+  onOpen: () => void;
 }
 
 export function AgentCard({
@@ -92,6 +94,7 @@ export function AgentCard({
   failure,
   systemNote,
   onAction,
+  onOpen,
 }: AgentCardProps) {
   const [confirming, setConfirming] = useState<AgentAction | null>(null);
   const presentation = STATE_PRESENTATION[agent.state];
@@ -172,12 +175,15 @@ export function AgentCard({
       )}
 
       <div className="flex flex-wrap gap-2 mt-auto pt-1">
+        <LabButton variant="primary" onClick={onOpen}>
+          Open
+        </LabButton>
         {ALLOWED[agent.state].map((action) => (
           <LabButton
             key={action}
             onClick={() => handleClick(action)}
             disabled={disabled || busy}
-            variant={confirming === action ? "danger" : action === "start" || action === "resume" ? "primary" : "default"}
+            variant={confirming === action ? "danger" : "default"}
           >
             {pendingAction === action
               ? `${ACTION_LABELS[action]}…`
