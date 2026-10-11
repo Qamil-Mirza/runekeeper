@@ -88,7 +88,7 @@ npm run db:migrate   # Apply migrations
 - Session memory system
 
 ### In Progress
-- (none)
+- The Lab (Claude Code research lab control center) on branch `feat/the-lab`, not merged or deployed. Built: owner-gated `/api/lab/*` proxy to the Lab Manager (`src/lib/lab/`), Lab view (`src/components/lab/`), signing primitives, dedicated container uid 61010 in the Dockerfile, file-only Lab secrets. Tests: `npm run test:lab`; full local rehearsal: `scripts/lab/rehearse-deployment.sh`; deploy and rollback rehearsal: `scripts/lab/rehearse-rollback.sh`. Approvals are not wired to routes yet; any decision route must go through `src/lib/lab/decision.ts`. Stage 1 (container identity 61010 only) was deployed to production on 2026-10-10 via PR #64; the previous image is kept on the Acer as `runekeeper-app:pre-identity`. The Lab itself is still not deployed. The design, security and rollout documents are kept out of this public repository. Backend is a separate repo (`../the-lab`); the API contract is pinned in `docs/lab/contract/`.
 
 ### Known Issues
 - (none)
