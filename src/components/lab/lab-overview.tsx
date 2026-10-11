@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import type { LabHealth, LabJob, LabSnapshot } from "@/lib/lab/types";
 import { ROLE_LABELS, formatAgo } from "./agent-card";
+import { ComputePanel } from "./compute-panel";
 import { Chip, LabButton, Strip, toneClass, type LabTone } from "./lab-ui";
 import { NetworkHosts } from "./network-hosts";
 import type { LabFailure } from "./use-lab";
@@ -194,6 +195,8 @@ export function LabOverview({
     return agent ? ROLE_LABELS[agent.role] : "Agent";
   };
   const stage = snapshot.lab.cycleStage;
+  // The compute tile takes a full row once rented compute is connected.
+  const computeActive = health?.spend.metering === "active" && snapshot.budget.compute !== undefined;
   const capabilities = health?.capabilities;
   // Shown when the host has the shell switched on, even while it is withheld.
   const showNetwork =
@@ -250,12 +253,21 @@ export function LabOverview({
         )}
       </Tile>
 
-      <Tile title="GPU compute" note="RunPod">
-        <p className="text-[13.5px]">No GPU rented.</p>
-        <p className="text-[12.5px] text-[var(--lab-dim)]">
-          RunPod is not connected to the Lab, so agents cannot rent compute and nothing here can be charged. When it
-          is connected, each rented GPU will show here with its hourly price, what it is running and for which goal.
-        </p>
+      <Tile
+        title="GPU compute"
+        note={health?.spend.provider === "runpod" || !health?.spend.provider ? "RunPod" : health.spend.provider}
+        className={computeActive ? "md:col-span-2 xl:col-span-3" : undefined}
+      >
+        <ComputePanel
+          labId={snapshot.lab.id}
+          agents={snapshot.agents}
+          jobs={jobs}
+          spend={health?.spend}
+          budget={snapshot.budget.compute}
+          now={now}
+          disabled={disabled}
+          onOpenAgent={onOpenAgent}
+        />
       </Tile>
 
       <Tile title="Lab objective" note="for you · not yet shown to agents" className="xl:col-span-2">

@@ -9,6 +9,8 @@ import type {
   LabJob,
   LabJobPage,
   LabSnapshot,
+  LabComputeRun,
+  LabComputeRuns,
   LabDeletionReceipt,
   LabNetworkHost,
   LabNetworkHosts,
@@ -89,6 +91,14 @@ export function createLab(input: { name: string; objective?: string }) {
 
 export function fetchLabSnapshot(labId: string) {
   return labFetch<LabSnapshot>(`/api/lab/labs/${encodeURIComponent(labId)}`);
+}
+
+export function fetchComputeRuns(labId: string) {
+  return labFetch<LabComputeRuns>(`/api/lab/labs/${encodeURIComponent(labId)}/compute/runs`);
+}
+
+export function cancelComputeRun(runId: string) {
+  return mutate<LabComputeRun>(`/api/lab/compute/runs/${encodeURIComponent(runId)}/cancel`);
 }
 
 export function fetchNetworkHosts() {

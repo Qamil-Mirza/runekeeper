@@ -1,0 +1,14 @@
+import { NextResponse } from "next/server";
+import { labError, withLabOwner } from "@/lib/lab/route";
+import { isValidLabId, listComputeRuns } from "@/lib/lab/manager";
+
+export const dynamic = "force-dynamic";
+
+/** The lab's rented-compute runs and its compute budget. */
+export function GET(req: Request, { params }: { params: Promise<{ labId: string }> }) {
+  return withLabOwner(req, async ({ config, actor }) => {
+    const { labId } = await params;
+    if (!isValidLabId(labId)) return labError(404, "not_found", "Not found");
+    return NextResponse.json(await listComputeRuns(config, actor, labId));
+  });
+}

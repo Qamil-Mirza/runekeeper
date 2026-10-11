@@ -9,6 +9,8 @@ import {
   type LabBudget,
   type LabClientErrorCode,
   type LabConnectionStatus,
+  type LabComputeRun,
+  type LabComputeRuns,
   type LabDeletionReceipt,
   type LabNetworkHost,
   type LabNetworkHosts,
@@ -340,6 +342,28 @@ export async function deleteLab(
   return call<LabDeletionReceipt>(config, {
     method: "DELETE",
     path: `/v1/labs/${assertId(labId)}`,
+    actor,
+    idempotencyKey,
+  });
+}
+
+// ─── Rented compute ──────────────────────────────────────────────────────────
+
+/** A lab's rented-compute runs, newest first, with its compute budget. */
+export async function listComputeRuns(config: LabConfig, actor: LabActor, labId: string): Promise<LabComputeRuns> {
+  return call<LabComputeRuns>(config, { method: "GET", path: `/v1/labs/${assertId(labId)}/compute/runs`, actor });
+}
+
+/** Asks the Lab Manager to stop a run and remove what it rented. */
+export async function cancelComputeRun(
+  config: LabConfig,
+  actor: LabActor,
+  idempotencyKey: string,
+  runId: string
+): Promise<LabComputeRun> {
+  return call<LabComputeRun>(config, {
+    method: "POST",
+    path: `/v1/compute/runs/${assertId(runId)}/cancel`,
     actor,
     idempotencyKey,
   });
