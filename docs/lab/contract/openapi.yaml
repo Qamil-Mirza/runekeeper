@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Lab Manager API
-  version: 1.0.0-draft.21
+  version: 1.0.0-draft.23
   summary: Contract between Runekeeper (client) and the Lab Manager (server).
   description: |
     Status: DRAFT under joint review. Implemented by the Lab Manager, which
@@ -23,6 +23,26 @@ info:
     - PATCH is naturally idempotent and takes no key.
     - Research endpoints (tag `research`) are implemented but new: they
       have not yet been used by a client and may still change before 1.0.
+
+    What changed in draft.23 (additive)
+    - A person's message says whether the agent has it yet:
+      `TranscriptItem.unread` is true while a message sent into a running
+      task has not been taken up, and `transcript.itemUpdated` is now
+      sent when `queued` or `unread` changes, so a client can show
+      "waiting" on the message and clear it without polling.
+
+    What changed in draft.22 (additive)
+    - Delegation no longer ends after one round. When every task the
+      Orchestrator delegated in a turn has ended, the manager gives it a
+      turn of its own with what each agent reported (`Job.origin`
+      `followUp`, `Job.purpose` `followUp`, `Job.followUp` naming the
+      turn it follows and the round). Handoffs it records in that turn
+      are dispatched like those of a message, so the work goes on round
+      after round, with no limit on rounds, until it delegates nothing.
+      A person's messages come first; a later turn that delegated
+      replaces an earlier one; stopping the lab ends it; while the lab
+      is paused it waits. Its instructions are a `managerInstruction`
+      item, never the owner's words.
 
     What changed in draft.21 (additive)
     - A lab can be started from a repository on GitHub: `POST /v1/labs`
@@ -2449,7 +2469,7 @@ components:
             id: { type: string }
             title: { type: string, description: "The task's title, or the start of the message." }
             kind: { type: string, enum: [task, message] }
-            origin: { type: string, enum: [human, policy, delegated] }
+            origin: { type: string, enum: [human, policy, delegated, followUp] }
             startedAt: { $ref: "#/components/schemas/Timestamp" }
         currentActivity:
           type: [object, "null"]
@@ -2489,7 +2509,8 @@ components:
         text: { type: string, description: "Capped at 32 KB. Assistant thinking is never included." }
         truncated: { type: boolean, default: false }
         actor: { $ref: "#/components/schemas/Actor" }
-        queued: { type: boolean, description: "On a `humanMessage`: true while it waits for the agent to be free." }
+        queued: { type: boolean, description: "On a `humanMessage`: true while it waits for the agent to be free. `transcript.itemUpdated` is sent when this changes." }
+        unread: { type: boolean, description: "On a `humanMessage`: true while it has been sent into the task the agent is doing and the agent has not yet taken it up, which it does at its next step. If the task ends first it becomes `queued` instead. `transcript.itemUpdated` is sent when this changes." }
         tool:
           type: object
           required: [name, summary, status]
@@ -2544,8 +2565,15 @@ components:
       properties:
         origin:
           type: string
-          enum: [human, policy, delegated]
-          description: "Who started the job: a person, the host policy, or the Orchestrator by delegation (see `delegation`). Treat as an open string."
+          enum: [human, policy, delegated, followUp]
+          description: "Who started the job: a person, the host policy, the Orchestrator by delegation (see `delegation`), or the Lab Manager because the tasks the Orchestrator delegated had ended (see `followUp`). Treat as an open string."
+        followUp:
+          type: [object, "null"]
+          description: Set when `origin` is `followUp`. The Orchestrator's turn whose delegated tasks ended, and which round of the work this is, counted from 1 after the owner's message.
+          required: [ofJobId, round]
+          properties:
+            ofJobId: { type: string }
+            round: { type: integer }
         delegation:
           type: [object, "null"]
           description: Set when `origin` is `delegated`. The Orchestrator task and handoff this job came from.
@@ -2556,7 +2584,7 @@ components:
             handoffId: { type: string }
         delegations:
           type: array
-          description: One entry per handoff this job recorded that the manager dispatched or refused, oldest first. Empty unless delegation is enabled and this job was a message from the owner to the Orchestrator.
+          description: One entry per handoff this job recorded that the manager dispatched or refused, oldest first. Empty unless delegation is enabled and this job was a message from the owner to the Orchestrator or a `followUp` turn of it.
           items:
             type: object
             required: [handoffId, toRole, title, status, reason, jobId, jobStatus, result, body]
@@ -2581,7 +2609,7 @@ components:
             tasks. Results of other agents are quoted in it, capped at 500
             characters each and marked as another agent's output, not
             instructions. `instructions` holds the owner's words only.
-        purpose: { type: [string, "null"], enum: [plan, execute, review, checkpoint, null] }
+        purpose: { type: [string, "null"], enum: [plan, execute, review, checkpoint, followUp, null] }
         instructions:
           type: string
           description: Exactly what the agent was asked to do. For kind `message`, the message text. Always complete on `GET /v1/jobs/{id}`; capped at 2 KB elsewhere (compare `instructionsHash`).

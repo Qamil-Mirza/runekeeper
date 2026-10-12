@@ -1,19 +1,32 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 import * as labApi from "@/lib/lab/client";
 import { LabApiError } from "@/lib/lab/client";
 import type { LabAgent, LabGitOp } from "@/lib/lab/types";
 import { ROLE_LABELS, formatAgo } from "./agent-card";
-import { Chip, Strip, type LabTone } from "./lab-ui";
+import { Strip, type LabTone } from "./lab-ui";
 
 const POLL_MS = 10_000;
+/** How many entries the timeline shows before scrolling. */
+const SHOWN = 3;
 
 const STATUS: Record<LabGitOp["status"], { label: string; tone: LabTone }> = {
   requested: { label: "In progress", tone: "accent" },
   done: { label: "Done", tone: "ok" },
   failed: { label: "Failed", tone: "bad" },
 };
+
+function describe(op: LabGitOp): string {
+  const number = op.number !== null ? ` #${op.number}` : "";
+  if (op.kind === "push") {
+    return op.status === "done" ? "Pushed a branch" : op.status === "failed" ? "Branch push" : "Pushing a branch";
+  }
+  if (op.status === "failed") return `Pull request${number}`;
+  if (op.status === "requested") return `Opening or editing a pull request${number}`;
+  return `${op.created === false ? "Edited" : "Opened"} pull request${number}`;
+}
 
 /** Only a GitHub page is ever made a link. */
 function githubUrl(url: string | null): string | null {
@@ -64,6 +77,23 @@ export function GitPanel({
     return () => clearInterval(timer);
   }, [refresh]);
 
+  // The list is exactly as tall as its newest three entries.
+  const list = useRef<HTMLOListElement>(null);
+  const sizeKey = ops?.slice(0, SHOWN + 1).map((o) => `${o.id}:${o.status}`).join("|");
+  useLayoutEffect(() => {
+    const el = list.current;
+    if (!el) return;
+    const fit = () => {
+      const next = el.children[SHOWN] as HTMLElement | undefined;
+      // The list is positioned, so a child's offsetTop is measured from it.
+      el.style.maxHeight = next ? `${next.offsetTop}px` : "";
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [sizeKey]);
+
   const roleOf = (agentId: string) => {
     const agent = agents.find((a) => a.id === agentId);
     return agent ? ROLE_LABELS[agent.role] : "Agent";
@@ -90,45 +120,52 @@ export function GitPanel({
       {ops?.length === 0 && <p className="text-[13.5px]">Nothing pushed yet.</p>}
 
       {ops && ops.length > 0 && (
-        <ul className="flex flex-col divide-y divide-[var(--lab-line)]">
-          {ops.map((op) => {
-            const status = STATUS[op.status];
-            const link = githubUrl(op.url);
-            return (
-              <li key={op.id} className="py-2 flex flex-col gap-1 min-w-0">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="min-w-0 text-[13.5px] font-medium break-words">
-                    {op.kind === "push"
-                      ? op.status === "failed" ? "Branch push" : "Pushed a branch"
-                      : `${op.created === false ? "Edited" : "Opened"} pull request${op.number !== null ? ` #${op.number}` : ""}`}
+        <>
+          {/* Sized to show the newest three; older ones are reached by scrolling. */}
+          <ol ref={list} className="lab-timeline lab-scroll" aria-label="What agents did in the repository, newest first">
+            {ops.map((op) => {
+              const status = STATUS[op.status];
+              const link = githubUrl(op.url);
+              return (
+                <li key={op.id} className={cn("lab-timeline-item", `lab-tone-${status.tone}`)}>
+                  <p className="flex items-baseline justify-between gap-2">
+                    <span className="lab-mono text-[11.5px] text-[var(--lab-faint)]">
+                      {formatAgo(op.endedAt ?? op.requestedAt, now)}
+                    </span>
+                    <span className="lab-eyebrow !text-[10.5px] lab-tone-text">{status.label}</span>
+                  </p>
+                  <p className="text-[13.5px] font-medium break-words">
+                    {describe(op)}
                     {op.title && <span className="font-normal">: {op.title}</span>}
                   </p>
-                  <Chip tone={status.tone}>{status.label}</Chip>
-                </div>
-                <p className="lab-mono text-[12px] text-[var(--lab-dim)] break-all">
-                  {op.branch}
-                  {op.commit && ` · ${op.commit.slice(0, 10)}`}
-                </p>
-                <p className="text-[12.5px] text-[var(--lab-dim)]">
-                  <button type="button" className="underline underline-offset-2" onClick={() => onOpenAgent(op.agentId)}>
-                    {roleOf(op.agentId)}
-                  </button>
-                  {" · "}
-                  {formatAgo(op.endedAt ?? op.requestedAt, now)}
-                  {link && (
-                    <>
-                      {" · "}
-                      <a className="underline underline-offset-2" href={link} target="_blank" rel="noopener noreferrer">
-                        Open on GitHub
-                      </a>
-                    </>
-                  )}
-                </p>
-                {op.error && <p className="text-[12.5px] text-[var(--lab-bad)] break-words">{op.error}</p>}
-              </li>
-            );
-          })}
-        </ul>
+                  <p className="lab-mono text-[12px] text-[var(--lab-dim)] break-all">
+                    {op.branch}
+                    {op.commit && ` · ${op.commit.slice(0, 10)}`}
+                  </p>
+                  <p className="text-[12.5px] text-[var(--lab-dim)]">
+                    <button type="button" className="underline underline-offset-2" onClick={() => onOpenAgent(op.agentId)}>
+                      {roleOf(op.agentId)}
+                    </button>
+                    {link && (
+                      <>
+                        {" · "}
+                        <a className="underline underline-offset-2" href={link} target="_blank" rel="noopener noreferrer">
+                          Open on GitHub
+                        </a>
+                      </>
+                    )}
+                  </p>
+                  {op.error && <p className="text-[12.5px] text-[var(--lab-bad)] break-words">{op.error}</p>}
+                </li>
+              );
+            })}
+          </ol>
+          {ops.length > SHOWN && (
+            <p className="lab-eyebrow !text-[10.5px] !text-[var(--lab-faint)]">
+              Newest {SHOWN} of {ops.length} · scroll for earlier
+            </p>
+          )}
+        </>
       )}
 
       {failure && (

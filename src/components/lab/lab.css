@@ -652,3 +652,41 @@
   border: 1px solid var(--lab-line);
   border-top: 2px solid var(--tone);
 }
+
+/* A vertical timeline: a line down the left, one dot per entry. */
+.lab-timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.lab-timeline-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 4px 14px 20px;
+  min-width: 0;
+}
+.lab-timeline-item::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 6px;
+  bottom: -6px;
+  width: 1px;
+  background: var(--lab-line-strong);
+}
+.lab-timeline-item:last-child::before { display: none; }
+.lab-timeline-item::after {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: 5px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--lab-panel);
+  border: 2px solid var(--tone);
+}
