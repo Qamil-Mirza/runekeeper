@@ -14,6 +14,10 @@ export interface LabMessageReceipt {
   /** Absent from a Lab Manager older than draft.19, which only ever starts a task. */
   delivery?: MessageDelivery;
 }
+/** A side question as accepted; its answer arrives later in the transcript. */
+export interface LabAsideReceipt {
+  question: LabTranscriptItem;
+}
 export type LabGitOp = Schemas["GitOp"];
 export interface LabGitOps {
   repo: string | null;
@@ -72,6 +76,8 @@ export interface LabJobPage {
 /** Longest instruction the Lab Manager accepts. */
 export const MAX_INSTRUCTION_LENGTH = 20_000;
 /** The owner's description of a lab, given to every agent of it. */
+/** Longest side question the Lab Manager accepts. */
+export const MAX_ASIDE_LENGTH = 4_000;
 export const MAX_BRIEF_LENGTH = 16_000;
 
 export const LAB_ACTIONS = ["start", "stop"] as const;

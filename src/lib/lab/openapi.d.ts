@@ -552,6 +552,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/agents/{agentId}/asides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask a side question about an agent's conversation, answered at once without touching its work.
+         * @description A copy of the agent's conversation, as last saved (it can be one
+         *     step behind a working agent), is asked the question and discarded.
+         *     The copy has no tools: it cannot read a file, run a command or
+         *     file a record, and nothing of it is saved. The agent itself never
+         *     sees the question or the answer, and its task goes on unchanged;
+         *     this works whether the agent is working, waiting or idle. To
+         *     change what the agent does, send a message instead.
+         *
+         *     The response carries the question as an `asideQuestion` item with
+         *     `pending: true`. The answer follows, usually within seconds and at
+         *     most two minutes later, as `transcript.itemAdded` with an
+         *     `asideAnswer` whose `asideOf` is the question's id, or a
+         *     `systemNote` with that `asideOf` when it could not be answered;
+         *     `transcript.itemUpdated` then clears `pending` on the question.
+         *     It is not a job: it appears in no job list and its time is not
+         *     counted against the lab. It does use the Claude subscription.
+         *
+         *     409 `conflict` when the agent has no conversation yet or a side
+         *     question to it is still being answered; 409 `tmux_mode_active`;
+         *     429 `subscription_limited` while the usage limit holds.
+         */
+        post: operations["askAgentAside"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents/{agentId}/transcript": {
         parameters: {
             query?: never;
@@ -1817,10 +1856,10 @@ export interface components {
             /** @description Strictly increasing per agent. */
             seq: number;
             /**
-             * @description `managerInstruction`: instructions the Lab Manager wrote itself for a job the policy started. `delegatedInstruction`: instructions the Orchestrator wrote in a handoff, as given to the target agent; it carries `delegation`. Neither has an actor and neither is the owner's words.
+             * @description `asideQuestion`: a person's side question (it has an actor); `asideAnswer`: the answer a copy of the agent gave. Neither is part of the agent's own conversation or of any job (`jobId` is null). `managerInstruction`: instructions the Lab Manager wrote itself for a job the policy started. `delegatedInstruction`: instructions the Orchestrator wrote in a handoff, as given to the target agent; it carries `delegation`. Neither has an actor and neither is the owner's words.
              * @enum {string}
              */
-            kind: "humanMessage" | "managerInstruction" | "delegatedInstruction" | "assistantText" | "toolCall" | "systemNote";
+            kind: "humanMessage" | "managerInstruction" | "delegatedInstruction" | "assistantText" | "toolCall" | "systemNote" | "asideQuestion" | "asideAnswer";
             /** @description On a `delegatedInstruction` only. Same as the job's `delegation`. */
             delegation?: Record<string, never> | null;
             createdAt: components["schemas"]["Timestamp"];
@@ -1829,6 +1868,10 @@ export interface components {
             /** @default false */
             truncated: boolean;
             actor?: components["schemas"]["Actor"];
+            /** @description On an `asideQuestion`: true until its answer, or the note that there was none, has been added. */
+            pending?: boolean;
+            /** @description On an `asideAnswer`, and on the `systemNote` saying a side question could not be answered: the id of the `asideQuestion`. */
+            asideOf?: string;
             /** @description On a `humanMessage`: true while it waits for the agent to be free. `transcript.itemUpdated` is sent when this changes. */
             queued?: boolean;
             /** @description On a `humanMessage`: true while it has been sent into the task the agent is doing and the agent has not yet taken it up, which it does at its next step. If the task ends first it becomes `queued` instead. `transcript.itemUpdated` is sent when this changes. */
@@ -3209,6 +3252,39 @@ export interface operations {
                         transcriptItem: components["schemas"]["TranscriptItem"];
                         /** @enum {string} */
                         delivery: "started" | "duringTask" | "queued";
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    askAgentAside: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    text: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Accepted. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        question: components["schemas"]["TranscriptItem"];
                     };
                 };
             };

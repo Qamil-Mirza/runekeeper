@@ -7,6 +7,7 @@ import type {
   LabConnectionStatus,
   LabErrorBody,
   LabJob,
+  LabAsideReceipt,
   LabGitOps,
   LabJobPage,
   LabMessageReceipt,
@@ -148,6 +149,11 @@ export function sendAgentMessage(agentId: string, text: string) {
     `/api/lab/agents/${encodeURIComponent(agentId)}/messages`,
     { text }
   );
+}
+
+/** A side question: answered by a copy of the agent's conversation, never seen by the agent. */
+export function askAgentAside(agentId: string, text: string) {
+  return mutate<LabAsideReceipt>(`/api/lab/agents/${encodeURIComponent(agentId)}/asides`, { text });
 }
 
 export function fetchAgentJobs(labId: string, agentId: string) {
