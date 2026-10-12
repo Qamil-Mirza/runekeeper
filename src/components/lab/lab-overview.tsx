@@ -1,9 +1,10 @@
 "use client";
 
+import { LabMarkdown } from "./lab-markdown";
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { MAX_BRIEF_LENGTH, type LabHealth, type LabJob, type LabSnapshot } from "@/lib/lab/types";
-import { ROLE_LABELS, formatAgo } from "./agent-card";
+import { agentName, formatAgo, leadName } from "./agent-card";
 import { ComputePanel } from "./compute-panel";
 import { GitPanel } from "./git-panel";
 import { Chip, LabButton, Strip, toneClass, type LabTone } from "./lab-ui";
@@ -143,7 +144,7 @@ function Goals({
       {empty && (
         <p className="text-[13.5px] text-[var(--lab-dim)]">
           {orchestratorDecides
-            ? "Not decided yet. The Orchestrator decides the objective and goals from your description on its first turn."
+            ? "Not decided yet. The lab's lead agent decides the objective and goals from your description on its first turn."
             : "No objective or goals set for this lab yet."}
         </p>
       )}
@@ -226,7 +227,11 @@ function Brief({
     <div className="flex flex-col gap-2 border-t border-[var(--lab-line)] pt-3">
       <p className="lab-eyebrow !text-[10.5px]">Your description, given to every agent</p>
       {lab.brief ? (
-        <p className={cn("text-[13.5px] whitespace-pre-wrap break-words", !expanded && "line-clamp-4")}>{lab.brief}</p>
+        expanded ? (
+          <LabMarkdown text={lab.brief} className="text-[13.5px]" />
+        ) : (
+          <p className="text-[13.5px] whitespace-pre-wrap break-words line-clamp-4">{lab.brief}</p>
+        )
       ) : (
         <p className="text-[13.5px] text-[var(--lab-dim)]">None written.</p>
       )}
@@ -286,7 +291,7 @@ export function LabOverview({
   const open = jobs?.filter((j) => OPEN_STATUSES.has(j.status)) ?? null;
   const roleOf = (agentId: string) => {
     const agent = snapshot.agents.find((a) => a.id === agentId);
-    return agent ? ROLE_LABELS[agent.role] : "Agent";
+    return agent ? agentName(agent) : "Agent";
   };
   const stage = snapshot.lab.cycleStage;
   // The compute tile takes a full row once rented compute is connected.
@@ -361,10 +366,10 @@ export function LabOverview({
           snapshot.lab.objectiveSetBy === undefined
             ? "for you · not yet shown to agents"
             : snapshot.lab.objectiveSetBy === "orchestrator"
-              ? `decided by the Orchestrator · ${formatAgo(snapshot.lab.objectiveSetAt, now)}`
+              ? `decided by the ${leadName(snapshot.agents)} · ${formatAgo(snapshot.lab.objectiveSetAt, now)}`
               : snapshot.lab.objectiveSetBy === "owner"
                 ? `set by you · ${formatAgo(snapshot.lab.objectiveSetAt, now)}`
-                : "the Orchestrator decides this"
+                : `the ${leadName(snapshot.agents)} decides this`
         }
         className="xl:col-span-2"
       >
@@ -376,7 +381,7 @@ export function LabOverview({
 
       {snapshot.lab.repo && (
         <Tile title="Code" note="GitHub">
-          <GitPanel labId={snapshot.lab.id} repo={snapshot.lab.repo} agents={snapshot.agents} now={now} onOpenAgent={onOpenAgent} />
+          <GitPanel labId={snapshot.lab.id} repo={snapshot.lab.repo} workBranch={snapshot.lab.workBranch} agents={snapshot.agents} now={now} onOpenAgent={onOpenAgent} />
         </Tile>
       )}
 

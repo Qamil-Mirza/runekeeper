@@ -283,6 +283,46 @@ export function checkReviewTicket(
 
 // ---------------------------------------------------------------------------
 
+export interface ComputeRunRecord {
+  id: string;
+  status: string;
+  usdPerHour: number | null;
+  approval: { worstCaseUsd: number; approvedAt: string | null } | null;
+}
+
+/**
+ * The gate before a decision on a rental is passed to the Lab Manager.
+ * `run` is the record this server just fetched; `confirmation` is what the
+ * browser says the owner was shown. The record decides what is being
+ * approved: the confirmation only proves the owner saw the same figures, so
+ * a price that changed since the page was drawn is refused. Approving spends
+ * the owner's money, so it also needs a recent sign-in; denying does not.
+ */
+export function authorizeComputeDecision(input: {
+  run: ComputeRunRecord;
+  decision: "approve" | "deny";
+  confirmation: unknown;
+  authTime: unknown;
+  now: number;
+  maxAuthAgeMs: number;
+}): { ok: true } | Refusal {
+  const { run, decision } = input;
+  if (run.status !== "awaitingApproval" || !run.approval || run.approval.approvedAt !== null) {
+    return refuse("not_pending", "This rental is no longer waiting for a decision.");
+  }
+  const c = input.confirmation as Record<string, unknown> | null;
+  if (!c || typeof c !== "object" || c.runId !== run.id || c.decision !== decision) {
+    return refuse("confirmation_required", "Confirm this decision explicitly.");
+  }
+  if (c.worstCaseUsd !== run.approval.worstCaseUsd || c.usdPerHour !== run.usdPerHour) {
+    return refuse("stale_view", "The price changed since it was displayed. Review the request again.");
+  }
+  if (decision === "approve" && !isRecentAuthentication(input.authTime, input.now, input.maxAuthAgeMs)) {
+    return refuse("reauthentication_required", "Sign in again to approve spending.");
+  }
+  return { ok: true };
+}
+
 /** Outcomes that let work or spending proceed. Refusing something is not one. */
 export function isConsequential(outcome: AuthzOutcome): boolean {
   return outcome !== "denied";

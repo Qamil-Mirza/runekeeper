@@ -8,6 +8,12 @@ import type {
   LabErrorBody,
   LabJob,
   LabAsideReceipt,
+  ComputeDecisionConfirmation,
+  LabComputeApprovals,
+  LabFileDeletion,
+  LabFileUsage,
+  LabStorage,
+  LabTempCleared,
   LabGitOps,
   LabJobPage,
   LabMessageReceipt,
@@ -104,8 +110,45 @@ export function fetchComputeRuns(labId: string) {
   return labFetch<LabComputeRuns>(`/api/lab/labs/${encodeURIComponent(labId)}/compute/runs`);
 }
 
+/** Rentals waiting for the owner. Empty from a Lab Manager that has no such step. */
+export async function fetchComputeApprovals(): Promise<LabComputeApprovals> {
+  try {
+    return await labFetch<LabComputeApprovals>("/api/lab/compute/approvals");
+  } catch (err) {
+    if (err instanceof LabApiError && err.status === 404) return { items: [] };
+    throw err;
+  }
+}
+
+/** Sends the owner's decision on one rental, with what they were shown. */
+export function decideComputeRun(confirmation: ComputeDecisionConfirmation) {
+  return mutate<LabComputeRun>(
+    `/api/lab/compute/runs/${encodeURIComponent(confirmation.runId)}/${confirmation.decision}`,
+    { confirmation }
+  );
+}
+
 export function cancelComputeRun(runId: string) {
   return mutate<LabComputeRun>(`/api/lab/compute/runs/${encodeURIComponent(runId)}/cancel`);
+}
+
+export function fetchStorage() {
+  return labFetch<LabStorage>("/api/lab/storage");
+}
+
+export function fetchFileUsage(agentId: string, path: string) {
+  return labFetch<LabFileUsage>(
+    `/api/lab/agents/${encodeURIComponent(agentId)}/files/usage?path=${encodeURIComponent(path)}`
+  );
+}
+
+/** Permanently deletes one file or directory of an agent's working directory. */
+export function deleteAgentFile(agentId: string, path: string) {
+  return mutate<LabFileDeletion>(`/api/lab/agents/${encodeURIComponent(agentId)}/files`, { path }, "DELETE");
+}
+
+export function clearAgentTemp(agentId: string) {
+  return mutate<LabTempCleared>(`/api/lab/agents/${encodeURIComponent(agentId)}/files/clear-temp`);
 }
 
 export function fetchNetworkHosts() {

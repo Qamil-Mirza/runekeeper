@@ -108,7 +108,7 @@ function CreateLab({
             <p className={cn("text-[12.5px]", tooLong ? "text-[var(--lab-bad)]" : "text-[var(--lab-dim)]")}>
               {tooLong
                 ? `Too long by ${brief.length - MAX_BRIEF_LENGTH} characters.`
-                : "Every agent in the lab is given this as your words. The Orchestrator decides the lab's objective and goals from it. You can change it later."}
+                : "Every agent in the lab is given this as your words. The lab's lead agent decides its objective and goals from it. You can change it later."}
             </p>
             {codeHost?.available && (
               <>
@@ -173,11 +173,13 @@ export function LabRail({
   needsYou,
   showSites,
   codeHost,
+  className,
 }: {
+  className?: string;
   codeHost?: LabHealth["codeHost"];
   /** Which host-wide page is open instead of a lab, if any. */
-  page: "lab" | "needsYou" | "sites";
-  onPage: (page: "needsYou" | "sites") => void;
+  page: "lab" | "needsYou" | "sites" | "storage";
+  onPage: (page: "needsYou" | "sites" | "storage") => void;
   /** How many things, in every lab, wait for the owner. */
   needsYou: number;
   showSites: boolean;
@@ -192,7 +194,10 @@ export function LabRail({
 }) {
   return (
     <aside
-      className="shrink-0 lg:w-64 border-b lg:border-b-0 lg:border-r border-[var(--lab-line)] flex flex-col min-h-0"
+      className={cn(
+        "shrink-0 lg:w-64 border-b lg:border-b-0 lg:border-r border-[var(--lab-line)] flex flex-col min-h-0",
+        className
+      )}
       aria-label="Labs"
     >
       <div className="flex lg:flex-col border-b border-[var(--lab-line)]" role="tablist" aria-label="Across all labs">
@@ -217,6 +222,14 @@ export function LabRail({
             <span className="text-[14.5px] font-medium">Sites reached</span>
           </button>
         )}
+        <button
+          role="tab"
+          aria-selected={page === "storage"}
+          onClick={() => onPage("storage")}
+          className="lab-rail-item flex-1 lg:flex-none"
+        >
+          <span className="text-[14.5px] font-medium">Storage</span>
+        </button>
       </div>
 
       <p className="lab-eyebrow px-3 sm:px-5 lg:px-4 pt-3 pb-2">

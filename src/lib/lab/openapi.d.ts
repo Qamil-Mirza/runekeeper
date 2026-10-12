@@ -278,6 +278,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/compute/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every rental that waits for the owner's approval, across labs, oldest first. */
+        get: operations["listComputeApprovals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/compute/runs/{runId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The owner approves one rental. It then starts, if it still fits.
+         * @description Only from `awaitingApproval`; 409 `conflict` otherwise. The approval
+         *     covers at most `approval.worstCaseUsd`, the figure shown. The limit,
+         *     the account's balance and the price are checked again before
+         *     anything is rented: the run may then be `refused`, or return to
+         *     `awaitingApproval` with a new figure if the price has risen.
+         *     Unsigned: the caller is the person Runekeeper authenticated. Show
+         *     the request in full (what it runs, GPU, price per hour, the longest
+         *     it may run, the most it could cost, who asked) before sending it.
+         *     Emits `compute.approved`.
+         */
+        post: operations["approveComputeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/compute/runs/{runId}/deny": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The owner refuses one rental. Nothing was started.
+         * @description Only from `awaitingApproval`; 409 `conflict` otherwise. The run ends `refused` with reason `denied_by_owner`, and the agent is told at its next turn. Emits `compute.denied`.
+         */
+        post: operations["denyComputeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/compute/runs/{runId}/cancel": {
         parameters: {
             query?: never;
@@ -626,7 +691,19 @@ export interface paths {
         get: operations["listAgentFiles"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete one file or directory of the agent's workspace. It is gone for good.
+         * @description For the lab's owner, to free space. There is no trash and no undo:
+         *     ask before sending it. Only a path inside the agent's workspace;
+         *     a link is removed as a link, never what it points to. The workspace
+         *     itself cannot be deleted this way (400): deleting the lab does that.
+         *     409 `agent_busy` while the agent is starting, working or waiting on
+         *     a person. 404 when the path is not there. Emits `files.deleted` and
+         *     leaves a `systemNote` in the agent's transcript. The agent is not
+         *     told in its conversation: if it relied on what was deleted, say so
+         *     in a message.
+         */
+        delete: operations["deleteAgentFile"];
         options?: never;
         head?: never;
         patch?: never;
@@ -641,6 +718,76 @@ export interface paths {
         };
         /** Read the first 256 KB of one regular file in the agent's workspace. */
         get: operations["readAgentFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agentId}/files/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One directory of the agent's workspace with what each entry holds on disk, largest first.
+         * @description For deciding what to delete. A directory is counted with everything
+         *     below it; sizes are space used on disk. Links are never followed.
+         *     At most 500 entries. It walks the files, so a large tree can take
+         *     some seconds.
+         */
+        get: operations["getAgentFileUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agentId}/files/clear-temp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Empty the temp folders the agent's commands use.
+         * @description Each agent's processes have temp folders of their own, outside its
+         *     workspace, which nothing else empties. 409 `agent_busy` while the
+         *     agent is starting, working or waiting on a person. Emits
+         *     `files.deleted` with `temp: true`.
+         */
+        post: operations["clearAgentTemp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where the disk space is, by lab and agent, and the manager's own.
+         * @description Measured when asked (it walks the files) and kept for about 20
+         *     seconds. Archived labs are included. A size is null when it could
+         *     not be measured (the worker is not reachable). Database copies left
+         *     by deployments are reported here but are removed on the host, not
+         *     through the API.
+         */
+        get: operations["getStorage"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1252,10 +1399,21 @@ export interface components {
                     inUse: boolean;
                 };
             };
+            /** @description What agents run on, as set on the host. */
+            models?: {
+                /** @description The Orchestrator's model. */
+                oracle: string | null;
+                /** @description The model of an agent that was given none. Null leaves the choice to Claude Code. */
+                default: string | null;
+                /** @description What the Orchestrator may choose from for an agent it adds. */
+                allowed: string[];
+            };
             /** @description Host settings a client may want to show. Not settable through the API. */
             limits?: {
-                /** @description How many handoffs of one owner message are dispatched; further ones are refused with `over_cap`. */
+                /** @description How many handoffs of one turn of the Orchestrator are dispatched; further ones are refused with `over_cap`. */
                 delegationsPerMessage?: number;
+                /** @description How many agents a lab may hold, the Orchestrator included. */
+                maxAgentsPerLab?: number;
                 /** @description The only internet hosts a sandboxed shell command can reach. Empty: commands have no network. This does not limit the agent's own WebSearch and WebFetch tools. */
                 shellAllowedDomains?: string[];
             };
@@ -1345,6 +1503,8 @@ export interface components {
                 networkTofu?: components["schemas"]["Capability"];
                 /** @description Manual mode, set on the host. When allowed, the Orchestrator's handoffs recorded in reply to the owner are started as tasks by the manager. Host-wide; there is no per-lab switch. */
                 delegation?: components["schemas"]["Capability"];
+                /** @description Manual mode, set on the host, on top of `delegation` (reason `needs_delegation` without it). When allowed, a new lab starts with the Orchestrator alone, which adds the other agents by `agent.spawn` records, names them and chooses their models. */
+                spawn?: components["schemas"]["Capability"];
                 /** @description Deprecated; same as shell.executor. */
                 executorShell: components["schemas"]["Capability"];
                 unattendedExecution: components["schemas"]["Capability"];
@@ -1561,8 +1721,11 @@ export interface components {
             labId: string;
             agentId: string;
             jobId: string | null;
-            /** @enum {string} */
-            kind: "push" | "pullRequest";
+            /**
+             * @description `handIn`: an agent's branch given to the Orchestrator to squash into the lab's branch. Nothing reaches the code host; `commit` may be set, `url` is null.
+             * @enum {string}
+             */
+            kind: "push" | "pullRequest" | "handIn";
             repo: string;
             branch: string;
             /** @enum {string} */
@@ -1591,6 +1754,11 @@ export interface components {
         ComputeBudget: {
             /** @description Null: the owner set no limit for this lab, so nothing can start. */
             limitUsd: number | null;
+            /**
+             * @description `each`: every rental waits for the owner's approval. `none`: the owner waived that for this lab on the host, and a rental that fits the limit starts without asking.
+             * @enum {string}
+             */
+            approval?: "each" | "none";
             /** Format: date-time */
             validUntil: string | null;
             expired: boolean;
@@ -1608,6 +1776,13 @@ export interface components {
             source: "managerMeasured";
         };
         ComputeRun: {
+            /** @description Set while the run waits for the owner and after the owner approved it. Null on a run that needed no approval. */
+            approval: {
+                /** @description The most the run could cost at the price it was quoted: what the owner is asked to approve, or approved. */
+                worstCaseUsd: number;
+                approvedAt: components["schemas"]["Timestamp"] | null;
+                approvedBy: components["schemas"]["Actor"] | null;
+            } | null;
             id: string;
             labId: string;
             agentId: string;
@@ -1616,10 +1791,10 @@ export interface components {
             /** @description Agent-written. */
             title: string;
             /**
-             * @description `starting`: rented and being charged, its container not up yet. `running`: up. `removing`: the outcome is decided and the broker has not yet confirmed that nothing paid is left; still held against the limit. `finished`: the turn it was rented for ended and it was removed.
+             * @description `awaitingApproval`: it could start and waits for the owner; nothing is rented or held. `starting`: rented and being charged, its container not up yet. `running`: up. `removing`: the outcome is decided and the broker has not yet confirmed that nothing paid is left; still held against the limit. `finished`: the turn it was rented for ended and it was removed.
              * @enum {string}
              */
-            status: "requested" | "refused" | "starting" | "running" | "removing" | "finished" | "failed" | "timedOut" | "cancelled";
+            status: "requested" | "awaitingApproval" | "refused" | "starting" | "running" | "removing" | "finished" | "failed" | "timedOut" | "cancelled";
             /** @description Why it was refused or failed. Begins with one of: `no_limit_set`, `limit_expired`, `over_limit`, `over_balance`, `gpu_unavailable`, `compute_unavailable`, `lab_archived`, `manager_restarted`, `start`, `price_changed`; otherwise free text. */
             reason: string | null;
             /** @description What the agent asked for. Agent-written. */
@@ -1722,6 +1897,8 @@ export interface components {
             brief: string | null;
             /** @description The GitHub repository the lab was started from (owner/name), cloned for each agent. Set at creation only. */
             repo: string | null;
+            /** @description The one branch the lab publishes and opens its one pull request from, kept by the Orchestrator. Null when the lab has no repository or delegation is off (agents then publish their own branches). */
+            workBranch?: string | null;
             /** @description Decided by the Orchestrator from the brief; the owner may override it. */
             objective: string | null;
             /** @enum {string|null} */
@@ -1807,6 +1984,18 @@ export interface components {
         /** @enum {string} */
         AgentMode: "managed" | "tmux";
         Agent: {
+            /** @description What the agent is called. Unique within its lab, ignoring case. */
+            name: string;
+            model: {
+                /** @description The model its tasks ask Claude Code for. Null leaves the choice to Claude Code. */
+                requested: string | null;
+                /** @description The model Claude Code last reported running for this agent. Null until it has run a task. */
+                actual: string | null;
+            };
+            /** @description On an agent the Orchestrator added: what it is for, in the Orchestrator's words. Text written by an agent. */
+            directive: string | null;
+            /** @description On an agent the Orchestrator added: the Orchestrator's turn that added it. */
+            spawnedByJobId: string | null;
             /** @description Why no new task is dispatched to this agent. */
             blockedBy: {
                 /** @enum {string} */
@@ -1948,6 +2137,8 @@ export interface components {
             /** @description One entry per handoff this job recorded that the manager dispatched or refused, oldest first. Empty unless delegation is enabled and this job was a message from the owner to the Orchestrator or a `followUp` turn of it. */
             delegations?: {
                 handoffId: string;
+                /** @description The name of the agent it went to, or was meant for. Null on a delegation from before draft.27. */
+                toAgent: string | null;
                 toRole: components["schemas"]["AgentRole"];
                 title: string;
                 /** @enum {string} */
@@ -2363,7 +2554,7 @@ export interface components {
             truncated: false;
         };
         /** @enum {string} */
-        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.deleted" | "network.hostTrusted" | "network.hostBlocked" | "compute.run" | "git.op" | "compute.cancelRequested" | "lab.statusChanged" | "agent.stateChanged" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged" | "agent.activity";
+        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.deleted" | "files.deleted" | "network.hostTrusted" | "network.hostBlocked" | "compute.run" | "git.op" | "compute.cancelRequested" | "compute.approved" | "compute.denied" | "lab.statusChanged" | "agent.stateChanged" | "agent.created" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged" | "agent.activity";
         ManagerStartedData: {
             serviceVersion: string;
             interruptedJobs: {
@@ -2883,6 +3074,85 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    listComputeApprovals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The runs in `awaitingApproval`, each with where it comes from. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: (components["schemas"]["ComputeRun"] & {
+                            requestedBy: {
+                                labName: string;
+                                agentName: string;
+                                role: components["schemas"]["AgentRole"];
+                            };
+                        })[];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    approveComputeRun: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run, now `requested` and about to be started or refused. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComputeRun"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    denyComputeRun: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run, now `refused`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComputeRun"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     cancelComputeRun: {
         parameters: {
             query?: never;
@@ -3362,6 +3632,38 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    deleteAgentFile: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        agentId: string;
+                        path: string;
+                        removed: boolean;
+                        freedBytes: number;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     readAgentFile: {
         parameters: {
             query: {
@@ -3390,6 +3692,121 @@ export interface operations {
                         content: string | null;
                         truncated: boolean;
                         binary: boolean;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getAgentFileUsage: {
+        parameters: {
+            query?: {
+                path?: string;
+            };
+            header?: never;
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The directory's entries with their sizes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        agentId: string;
+                        path: string;
+                        /** @description Everything in this directory. */
+                        totalBytes: number;
+                        entries: {
+                            name: string;
+                            /** @enum {string} */
+                            type: "file" | "directory" | "other";
+                            bytes: number;
+                        }[];
+                        truncated: boolean;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    clearAgentTemp: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Emptied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        agentId: string;
+                        freedBytes: number;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getStorage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sizes in bytes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        measuredAt: components["schemas"]["Timestamp"];
+                        /** @description Free space per storage area, as in Health. */
+                        freeBytes: {
+                            [key: string]: number | null;
+                        };
+                        labs: {
+                            labId: string;
+                            name: string;
+                            archived: boolean;
+                            totalBytes: number;
+                            agents: {
+                                agentId: string;
+                                role: string;
+                                state: components["schemas"]["AgentState"];
+                                workspaceBytes: number | null;
+                                tempBytes: number | null;
+                            }[];
+                        }[];
+                        manager: {
+                            databaseBytes: number;
+                            /** @description Copies of the database left by deployments. Null when the folder cannot be read. */
+                            backups: {
+                                count: number;
+                                bytes: number;
+                                oldest: string | null;
+                                newest: string | null;
+                            } | null;
+                        };
                     };
                 };
             };

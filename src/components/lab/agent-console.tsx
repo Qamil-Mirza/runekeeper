@@ -16,11 +16,15 @@ import {
   ACTION_LABELS,
   ALLOWED,
   BLOCKED_REASONS,
+  ModelTag,
   ROLE_LABELS,
   STATE_PRESENTATION,
+  agentName,
+  leadName,
   formatAgo,
   needsConfirm,
 } from "./agent-card";
+import { LabMarkdown } from "./lab-markdown";
 import { Chip, LabButton, StatusLight, Strip, toneClass, type LabTone } from "./lab-ui";
 import { CANCELLABLE, useAgentConsole } from "./use-agent-console";
 import type { LabFailure } from "./use-lab";
@@ -83,6 +87,7 @@ const REFUSAL_REASONS: Record<string, string> = {
   host_busy: "the host was running as many tasks as it allows",
   disk_low: "the host is low on disk space",
   reconciliation_required: "that agent has an interrupted task to settle",
+  no_such_agent: "the lab has no agent of that name",
 };
 
 type Delegation = NonNullable<LabJob["delegations"]>[number];
@@ -90,15 +95,19 @@ type Delegation = NonNullable<LabJob["delegations"]>[number];
 /** What became of one piece of work the Orchestrator handed on. */
 function DelegationCard({
   delegation,
+  lead,
   onOpen,
   onResend,
 }: {
   delegation: Delegation;
+  /** The name of the lab's lead agent, which wrote the handoff. */
+  lead: string;
   onOpen?: () => void;
   /** Opens the target agent with these instructions ready to read and send. */
   onResend?: (body: string) => void;
 }) {
-  const role = ROLE_LABELS[delegation.toRole];
+  // From draft.27 a handoff names one agent; before that it named a role.
+  const role = delegation.toAgent ?? (ROLE_LABELS as Record<string, string>)[delegation.toRole] ?? "agent";
   const status =
     delegation.status === "refused"
       ? { label: "Not started", tone: "warn" as LabTone }
@@ -120,12 +129,12 @@ function DelegationCard({
       )}
       {delegation.status === "refused" && typeof delegation.body === "string" && (
         <details>
-          <summary className="lab-eyebrow !text-[11px] cursor-pointer">What the Orchestrator wanted to ask</summary>
-          <AgentWritten label="Written by the Orchestrator" text={delegation.body} truncated={delegation.body.length >= 8000} />
+          <summary className="lab-eyebrow !text-[11px] cursor-pointer">What the {lead} wanted to ask</summary>
+          <AgentWritten label={`Written by the ${lead}`} text={delegation.body} truncated={delegation.body.length >= 8000} formatted />
         </details>
       )}
       {typeof delegation.result === "string" && delegation.result.length > 0 && (
-        <AgentWritten label={`Result · written by the ${role}`} text={delegation.result} truncated={delegation.result.length >= 2000} />
+        <AgentWritten label={`Result · written by the ${role}`} text={delegation.result} truncated={delegation.result.length >= 2000} formatted />
       )}
       {(onOpen || onResend) && (
         <div className="flex flex-wrap gap-2">
@@ -151,19 +160,30 @@ function formatDuration(seconds: number): string {
   return `${minutes}m ${Math.round(seconds - minutes * 60)}s`;
 }
 
-function AgentWritten({ label, text, truncated }: { label: string; text: string; truncated?: boolean }) {
+function AgentWritten({
+  label,
+  text,
+  truncated,
+  formatted,
+}: {
+  label: string;
+  text: string;
+  truncated?: boolean;
+  /** Prose from an agent, shown with its formatting; tool input and output stay as written. */
+  formatted?: boolean;
+}) {
   return (
     <div className="mt-2">
       <p className="lab-eyebrow !text-[11px]">
         {label}
         {truncated && " · shortened"}
       </p>
-      <pre className="lab-pre mt-1">{text}</pre>
+      {formatted ? <LabMarkdown text={text} className="mt-1 text-[13.5px]" /> : <pre className="lab-pre mt-1">{text}</pre>}
     </div>
   );
 }
 
-function TranscriptEntry({ item, role, now }: { item: LabTranscriptItem; role: string; now: number }) {
+function TranscriptEntry({ item, role, lead, now }: { item: LabTranscriptItem; role: string; lead: string; now: number }) {
   const when = <span className="lab-mono text-[11.5px] text-[var(--lab-faint)]">{formatAgo(item.createdAt, now)}</span>;
 
   if (item.kind === "toolCall" && item.tool) {
@@ -197,10 +217,10 @@ function TranscriptEntry({ item, role, now }: { item: LabTranscriptItem; role: s
     return (
       <li className="lab-entry lab-entry-delegated">
         <p className="flex items-baseline justify-between gap-3">
-          <span className="lab-eyebrow !text-[11px]">Delegated by the Orchestrator · not written by you</span>
+          <span className="lab-eyebrow !text-[11px]">Delegated by the {lead} · not written by you</span>
           {when}
         </p>
-        <p className="mt-1 whitespace-pre-wrap break-words">{item.text}</p>
+        <LabMarkdown text={item.text ?? ""} className="mt-1" />
       </li>
     );
   }
@@ -217,10 +237,10 @@ function TranscriptEntry({ item, role, now }: { item: LabTranscriptItem; role: s
         {thought.length > 400 ? (
           <details className="mt-1">
             <summary className="cursor-pointer break-words">{thought.slice(0, 200).trimEnd()}… Show all</summary>
-            <p className="mt-2 whitespace-pre-wrap break-words">{thought}</p>
+            <LabMarkdown text={thought} className="mt-2" />
           </details>
         ) : (
-          <p className="mt-1 whitespace-pre-wrap break-words">{thought}</p>
+          <LabMarkdown text={thought} className="mt-1" />
         )}
       </li>
     );
@@ -240,7 +260,11 @@ function TranscriptEntry({ item, role, now }: { item: LabTranscriptItem; role: s
           </span>
           {when}
         </p>
-        <p className="mt-1 whitespace-pre-wrap break-words">{item.text}</p>
+        {item.kind === "asideAnswer" ? (
+          <LabMarkdown text={item.text ?? ""} className="mt-1" />
+        ) : (
+          <p className="mt-1 whitespace-pre-wrap break-words">{item.text}</p>
+        )}
         {item.kind === "asideQuestion" && item.pending && (
           <p className="mt-1 flex items-center gap-2 text-[12.5px] text-[var(--lab-dim)]" role="status">
             <StatusLight tone="accent" pulse />
@@ -268,10 +292,10 @@ function TranscriptEntry({ item, role, now }: { item: LabTranscriptItem; role: s
               The Lab Manager gave the {role} its next instructions ({Math.ceil((item.text?.length ?? 0) / 1000)}k
               characters). Show them
             </summary>
-            <p className="mt-2 whitespace-pre-wrap break-words">{item.text}</p>
+            <LabMarkdown text={item.text ?? ""} className="mt-2" />
           </details>
         ) : (
-          <p className="mt-1 whitespace-pre-wrap break-words text-[13.5px] text-[var(--lab-dim)]">{item.text}</p>
+          <LabMarkdown text={item.text ?? ""} className="mt-1 text-[13.5px] text-[var(--lab-dim)]" />
         )}
       </li>
     );
@@ -294,7 +318,12 @@ function TranscriptEntry({ item, role, now }: { item: LabTranscriptItem; role: s
             : `The ${role} has not seen this yet. It takes it at its next step, which can be a while if a command is running.`}
         </p>
       )}
-      <p className="mt-1 whitespace-pre-wrap break-words">{item.text}</p>
+      {mine ? (
+        // The owner's own typing is shown exactly as typed.
+        <p className="mt-1 whitespace-pre-wrap break-words">{item.text}</p>
+      ) : (
+        <LabMarkdown text={item.text ?? ""} className="mt-1" />
+      )}
       {item.truncated && <p className="mt-1 text-[12.5px] text-[var(--lab-warn)]">Shortened by the Lab Manager (32 KB limit).</p>}
     </li>
   );
@@ -302,6 +331,7 @@ function TranscriptEntry({ item, role, now }: { item: LabTranscriptItem; role: s
 
 function TaskRow({
   job,
+  lead,
   now,
   disabled,
   cancelling,
@@ -310,6 +340,7 @@ function TaskRow({
   onReconcile,
 }: {
   job: LabJob;
+  lead: string;
   now: number;
   disabled: boolean;
   cancelling: boolean;
@@ -333,7 +364,7 @@ function TaskRow({
         {formatAgo(job.createdAt, now)}
         {job.usage.wallClockSeconds > 0 && ` · ${formatDuration(job.usage.wallClockSeconds)}`}
         {job.usage.turns > 0 && ` · ${job.usage.turns} turn${job.usage.turns === 1 ? "" : "s"}`}
-        {job.origin === "delegated" && " · delegated by the Orchestrator"}
+        {job.origin === "delegated" && ` · delegated by the ${lead}`}
         {job.origin === "policy" && " · started by host policy"}
         {job.origin === "followUp" &&
           ` · round ${job.followUp?.round ?? "?"}, started by the Lab Manager with the delegated results`}
@@ -406,6 +437,7 @@ function composerBlock(agent: LabAgent, disabled: boolean, runtimeLeft: number |
 
 export function AgentConsole({
   labId,
+  labName,
   agent,
   now,
   disabled,
@@ -428,6 +460,8 @@ export function AgentConsole({
   /** Text to start the composer with, shown for review and never sent by itself. */
   initialDraft?: string;
   labId: string;
+  /** Shown in the header on a phone, where the lab's own header is out of view. */
+  labName?: string;
   agent: LabAgent;
   now: number;
   /** True when the Lab Manager is unreachable or the snapshot is stale. */
@@ -444,7 +478,9 @@ export function AgentConsole({
   const [confirming, setConfirming] = useState<AgentAction | null>(null);
   const [tab, setTab] = useState<"conversation" | "tasks">("conversation");
   const presentation = STATE_PRESENTATION[agent.state];
-  const role = ROLE_LABELS[agent.role];
+  // The agent's name; called `role` here from when a lab had one agent per role.
+  const role = agentName(agent);
+  const lead = leadName(agents);
   const messageBlocked = composerBlock(agent, disabled, runtimeLeftMinutes);
 
   // What became of the last message sent, said once under the composer.
@@ -485,7 +521,7 @@ export function AgentConsole({
     : agent.mode === "tmux"
       ? "This agent is being driven at a terminal on the host."
       : !agent.sessionId
-        ? `The ${ROLE_LABELS[agent.role]} has no conversation to ask about yet.`
+        ? `The ${agentName(agent)} has no conversation to ask about yet.`
         : answering
           ? "The last side question is still being answered."
           : null;
@@ -540,17 +576,22 @@ export function AgentConsole({
       if (last && job.delegations?.length) cardsAfter.set(last, job);
     }
   }
-  const agentFor = (r: LabAgent["role"]) => agents.find((a) => a.role === r);
+  // Several agents can share a role, so a handoff's target is found by name when it has one.
+  const agentFor = (d: { toAgent?: string | null; toRole: string }) =>
+    d.toAgent
+      ? agents.find((a) => agentName(a).toLowerCase() === d.toAgent!.toLowerCase())
+      : agents.find((a) => a.role === d.toRole);
   const delegatingJobs = new Set([...cardsAfter.values()].map((j) => j.id));
   const cards = (job: LabJob) => (
     <li>
       <ul className="grid gap-2 sm:grid-cols-2" aria-label="Work handed to other agents">
         {(job.delegations ?? []).map((d) => {
-          const target = agentFor(d.toRole);
+          const target = agentFor(d);
           return (
             <DelegationCard
               key={d.handoffId}
               delegation={d}
+              lead={lead}
               onOpen={target && onOpenAgent ? () => onOpenAgent(target.id) : undefined}
               onResend={target && onOpenAgent ? (body) => onOpenAgent(target.id, body) : undefined}
             />
@@ -575,8 +616,16 @@ export function AgentConsole({
           <span aria-hidden="true">←</span>
           <span className="hidden sm:inline">Agents</span>
         </LabButton>
-        <h4 className="text-[18px] font-semibold tracking-tight">{central ? "Central chat" : role}</h4>
-        {central && <span className="lab-eyebrow !text-[11px] hidden md:inline">the Orchestrator hands work to the right agent</span>}
+        <h4 className="min-w-0 text-[18px] font-semibold tracking-tight">
+          {central ? "Central chat" : role}
+          {labName && <span className="lab-eyebrow !text-[10.5px] block truncate lg:hidden">{labName}</span>}
+        </h4>
+        {central && <span className="lab-eyebrow !text-[11px] hidden md:inline">the {role} hands work to the right agent</span>}
+        {agent.model && (
+          <span className="hidden sm:inline min-w-0" title="The model this agent runs on">
+            <ModelTag model={agent.model} />
+          </span>
+        )}
         <span className="flex items-center gap-2 lab-tone-text text-[13.5px] font-medium" role="status">
           <StatusLight tone={presentation.tone} pulse={presentation.pulse} />
           {presentation.label}
@@ -676,7 +725,7 @@ export function AgentConsole({
                 }
                 return (
                   <Fragment key={item.id}>
-                    <TranscriptEntry item={item} role={role} now={now} />
+                    <TranscriptEntry item={item} role={role} lead={lead} now={now} />
                     {job && cards(job)}
                   </Fragment>
                 );
@@ -717,7 +766,7 @@ export function AgentConsole({
                   {m === "message" ? "Message" : "Side question"}
                 </button>
               ))}
-              <span className="min-w-0 text-[12.5px] text-[var(--lab-dim)]">
+              <span className="hidden sm:inline min-w-0 text-[12.5px] text-[var(--lab-dim)]">
                 {aside
                   ? `Only asks. The ${role} never sees it and its work carries on.`
                   : `Steers the ${role}'s work. Start with /btw to only ask.`}
@@ -731,7 +780,7 @@ export function AgentConsole({
               className="lab-input lab-textarea"
               rows={3}
               placeholder={
-                blocked ?? (aside ? `Ask what the ${role} is doing, or anything about its conversation` : central ? "Say what you want done. The Orchestrator hands it to the right agent." : `Tell the ${role} what to do`)
+                blocked ?? (aside ? `Ask what the ${role} is doing, or anything about its conversation` : central ? `Say what you want done. The ${role} hands it to the right agent.` : `Tell the ${role} what to do`)
               }
               value={draft}
               disabled={(blocked !== null && !(aside && answering)) || busy}
@@ -800,6 +849,7 @@ export function AgentConsole({
               <TaskRow
                 key={job.id}
                 job={job}
+                lead={lead}
                 now={now}
                 disabled={disabled}
                 cancelling={con.cancelling[job.id] === true}

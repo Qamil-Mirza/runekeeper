@@ -20,6 +20,12 @@ import {
   type LabGitOps,
   type LabJobPage,
   type LabAsideReceipt,
+  type LabComputeApprovals,
+  type LabFileDeletion,
+  type LabFileUsage,
+  type LabStorage,
+  type LabTempCleared,
+  isWorkspacePath,
   type LabMessageReceipt,
   type LabSnapshot,
   type LabSummary,
@@ -503,6 +509,101 @@ export async function askAgentAside(
     actor,
     idempotencyKey,
     body: { text },
+  });
+}
+
+/** One rented-compute run, as the Lab Manager records it now. */
+export async function getComputeRun(config: LabConfig, actor: LabActor, runId: string): Promise<LabComputeRun> {
+  return call<LabComputeRun>(config, { method: "GET", path: `/v1/compute/runs/${assertId(runId)}`, actor });
+}
+
+/** Every rental that waits for the owner's approval, across labs, oldest first. */
+export async function listComputeApprovals(config: LabConfig, actor: LabActor): Promise<LabComputeApprovals> {
+  return call<LabComputeApprovals>(config, { method: "GET", path: "/v1/compute/approvals", actor });
+}
+
+/**
+ * Passes on the owner's decision on one rental. Approving lets the Lab
+ * Manager rent a machine on the owner's provider account; the route that
+ * calls this checks the owner's confirmation and sign-in first.
+ */
+export async function decideComputeRun(
+  config: LabConfig,
+  actor: LabActor,
+  idempotencyKey: string,
+  runId: string,
+  decision: "approve" | "deny"
+): Promise<LabComputeRun> {
+  return call<LabComputeRun>(config, {
+    method: "POST",
+    path: `/v1/compute/runs/${assertId(runId)}/${decision === "approve" ? "approve" : "deny"}`,
+    actor,
+    idempotencyKey,
+  });
+}
+
+// ─── Storage and cleanup ─────────────────────────────────────────────────────
+
+// Sizes are measured by walking the files, which can take some seconds.
+const STORAGE_TIMEOUT_MS = 30_000;
+
+function assertWorkspacePath(path: string, allowEmpty: boolean): string {
+  if (!isWorkspacePath(path, allowEmpty)) {
+    throw new LabManagerError(400, "validation_failed", "Invalid path", false);
+  }
+  return encodeURIComponent(path);
+}
+
+/** Where the disk space is, by lab and agent, and the Lab Manager's own. */
+export async function getStorage(config: LabConfig, actor: LabActor): Promise<LabStorage> {
+  return call<LabStorage>(config, { method: "GET", path: "/v1/storage", actor, timeoutMs: STORAGE_TIMEOUT_MS });
+}
+
+/** One directory of an agent's working directory with the size of each entry. */
+export async function getAgentFileUsage(
+  config: LabConfig,
+  actor: LabActor,
+  agentId: string,
+  path: string
+): Promise<LabFileUsage> {
+  return call<LabFileUsage>(config, {
+    method: "GET",
+    path: `/v1/agents/${assertId(agentId)}/files/usage?path=${assertWorkspacePath(path, true)}`,
+    actor,
+    timeoutMs: STORAGE_TIMEOUT_MS,
+  });
+}
+
+/** Deletes one file or directory of an agent's working directory. There is no undo. */
+export async function deleteAgentFile(
+  config: LabConfig,
+  actor: LabActor,
+  idempotencyKey: string,
+  agentId: string,
+  path: string
+): Promise<LabFileDeletion> {
+  return call<LabFileDeletion>(config, {
+    method: "DELETE",
+    path: `/v1/agents/${assertId(agentId)}/files?path=${assertWorkspacePath(path, false)}`,
+    actor,
+    idempotencyKey,
+    timeoutMs: STORAGE_TIMEOUT_MS,
+  });
+}
+
+/** Empties the temp folders an agent's commands use. */
+export async function clearAgentTemp(
+  config: LabConfig,
+  actor: LabActor,
+  idempotencyKey: string,
+  agentId: string
+): Promise<LabTempCleared> {
+  return call<LabTempCleared>(config, {
+    method: "POST",
+    path: `/v1/agents/${assertId(agentId)}/files/clear-temp`,
+    actor,
+    idempotencyKey,
+    timeoutMs: STORAGE_TIMEOUT_MS,
   });
 }
 

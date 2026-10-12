@@ -25,7 +25,7 @@ const files = [...sourceFiles(join(ROOT, "src")), join(ROOT, "server.ts")].map((
   text: readFileSync(path, "utf8"),
 }));
 
-const PRIVILEGED = /from\s+["'](?:@\/lib\/lab|\.{1,2}(?:\/[\w-]+)*)\/(manager|authz|decision|config|secrets|route)["']/;
+const PRIVILEGED = /from\s+["'](?:@\/lib\/lab|\.{1,2}(?:\/[\w-]+)*)\/(manager|authz|decision|compute-decision|config|secrets|route)["']/;
 const isTest = (rel: string) => rel.endsWith(".test.ts");
 
 describe("who may reach the Lab Manager client and the signing key", () => {
@@ -33,7 +33,7 @@ describe("who may reach the Lab Manager client and the signing key", () => {
     const offenders = files
       .filter((f) => !isTest(f.rel))
       .filter((f) => !f.rel.startsWith("src/lib/lab/") && !f.rel.startsWith("src/app/api/lab/"))
-      .filter((f) => /lib\/lab\/(manager|authz|decision|config|secrets|route)\b/.test(f.text))
+      .filter((f) => /lib\/lab\/(manager|authz|decision|compute-decision|config|secrets|route)\b/.test(f.text))
       .map((f) => f.rel);
     assert.deepEqual(offenders, []);
   });

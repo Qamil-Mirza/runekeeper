@@ -7,6 +7,7 @@ import {
   AUTHORIZATION_LIFETIME_MS,
   MAX_REVIEW_MS,
   MIN_REVIEW_MS,
+  authorizeComputeDecision,
   authorizeDecision,
   checkReviewTicket,
   isRecentAuthentication,
@@ -287,5 +288,61 @@ describe("authorizeDecision: the last gate before the signer", () => {
     assert.equal(code({ outcome: ["approved"] }), "confirmation_required");
     const denyOnly = { ...review, outcomes: ["denied" as const] };
     assert.equal(code({ review: denyOnly }), "unsupported_kind");
+  });
+});
+
+describe("a decision on a rental of compute", () => {
+  const run = { id: "run_1", status: "awaitingApproval", usdPerHour: 0.44, approval: { worstCaseUsd: 1.32, approvedAt: null } };
+  const seen = (decision: "approve" | "deny") => ({ runId: "run_1", decision, worstCaseUsd: 1.32, usdPerHour: 0.44 });
+  const base = { run, now: NOW, maxAuthAgeMs: 30 * 60_000, authTime: NOW / 1000 - 60 };
+  const code = (r: ReturnType<typeof authorizeComputeDecision>) => (r.ok ? "ok" : r.code);
+
+  it("passes an approval the owner confirmed with the figures on record and a recent sign-in", () => {
+    assert.equal(code(authorizeComputeDecision({ ...base, decision: "approve", confirmation: seen("approve") })), "ok");
+  });
+
+  it("refuses an approval without a recent sign-in, and one with no sign-in time at all", () => {
+    const old = { ...base, authTime: NOW / 1000 - 31 * 60 };
+    assert.equal(code(authorizeComputeDecision({ ...old, decision: "approve", confirmation: seen("approve") })), "reauthentication_required");
+    assert.equal(
+      code(authorizeComputeDecision({ ...base, authTime: undefined, decision: "approve", confirmation: seen("approve") })),
+      "reauthentication_required"
+    );
+  });
+
+  it("lets a denial through without a recent sign-in", () => {
+    assert.equal(code(authorizeComputeDecision({ ...base, authTime: undefined, decision: "deny", confirmation: seen("deny") })), "ok");
+  });
+
+  it("refuses when the confirmation is missing, for another run, or for the other decision", () => {
+    for (const confirmation of [undefined, null, "yes", {}, { ...seen("approve"), runId: "run_2" }, seen("deny")]) {
+      assert.equal(code(authorizeComputeDecision({ ...base, decision: "approve", confirmation })), "confirmation_required");
+    }
+  });
+
+  it("refuses when the price on record is not the one the owner was shown", () => {
+    assert.equal(
+      code(authorizeComputeDecision({ ...base, decision: "approve", confirmation: { ...seen("approve"), worstCaseUsd: 1.0 } })),
+      "stale_view"
+    );
+    assert.equal(
+      code(authorizeComputeDecision({ ...base, decision: "approve", confirmation: { ...seen("approve"), usdPerHour: 0.4 } })),
+      "stale_view"
+    );
+    assert.equal(
+      code(authorizeComputeDecision({ ...base, decision: "approve", confirmation: { ...seen("approve"), worstCaseUsd: "1.32" } })),
+      "stale_view"
+    );
+  });
+
+  it("refuses a run that is not waiting, or was already approved", () => {
+    for (const r of [
+      { ...run, status: "requested" },
+      { ...run, status: "refused" },
+      { ...run, approval: null },
+      { ...run, approval: { worstCaseUsd: 1.32, approvedAt: "2026-10-10T11:59:00.000Z" } },
+    ]) {
+      assert.equal(code(authorizeComputeDecision({ ...base, run: r, decision: "approve", confirmation: seen("approve") })), "not_pending");
+    }
   });
 });
