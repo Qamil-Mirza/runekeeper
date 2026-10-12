@@ -19,6 +19,7 @@ import {
   type LabJob,
   type LabGitOps,
   type LabJobPage,
+  type LabAsideReceipt,
   type LabMessageReceipt,
   type LabSnapshot,
   type LabSummary,
@@ -479,6 +480,26 @@ export async function sendAgentMessage(
   return call(config, {
     method: "POST",
     path: `/v1/agents/${assertId(agentId)}/messages`,
+    actor,
+    idempotencyKey,
+    body: { text },
+  });
+}
+
+/**
+ * Asks a side question about the agent's conversation. A copy of the
+ * conversation answers it; the agent never sees it and its work is untouched.
+ */
+export async function askAgentAside(
+  config: LabConfig,
+  actor: LabActor,
+  idempotencyKey: string,
+  agentId: string,
+  text: string
+): Promise<LabAsideReceipt> {
+  return call(config, {
+    method: "POST",
+    path: `/v1/agents/${assertId(agentId)}/asides`,
     actor,
     idempotencyKey,
     body: { text },

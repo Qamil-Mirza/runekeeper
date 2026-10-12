@@ -110,7 +110,9 @@ export function useAgentConsole(labId: string, agent: LabAgent, enabled: boolean
         j.delegations?.some((d) => d.jobStatus !== null && OPEN.has(d.jobStatus)) ||
         (j.endedAt !== null && Date.now() - new Date(j.endedAt).getTime() < SETTLE_MS)
     ) ?? false;
-  const active = isActive(agent.state) || sending || delegating;
+  // A side question is answered within seconds, whatever the agent is doing.
+  const asking = items.some((i) => i.kind === "asideQuestion" && i.pending);
+  const active = isActive(agent.state) || sending || delegating || asking;
   useEffect(() => {
     if (!enabled) return;
     void refresh();
@@ -165,6 +167,26 @@ export function useAgentConsole(labId: string, agent: LabAgent, enabled: boolean
     [refresh]
   );
 
+  /** Asks a side question; true when the Lab Manager accepted it. The answer arrives in the transcript. */
+  const ask = useCallback(
+    async (text: string): Promise<boolean> => {
+      const id = agentRef.current;
+      setSending(true);
+      setSendFailure(null);
+      try {
+        await labApi.askAgentAside(id, text);
+        return true;
+      } catch (err) {
+        if (agentRef.current === id) setSendFailure(toFailure(err));
+        return false;
+      } finally {
+        setSending(false);
+        void refresh();
+      }
+    },
+    [refresh]
+  );
+
   const cancel = useCallback(
     async (jobId: string) => {
       setCancelling((c) => ({ ...c, [jobId]: true }));
@@ -211,6 +233,7 @@ export function useAgentConsole(labId: string, agent: LabAgent, enabled: boolean
     sending,
     sendFailure,
     send,
+    ask,
     cancelling,
     cancelFailures,
     cancel,

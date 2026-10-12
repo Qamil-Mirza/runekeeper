@@ -15,6 +15,7 @@ import {
   getJob,
   listJobs,
   sendAgentMessage,
+  askAgentAside,
   setRuntimeLimit,
   cancelComputeRun,
   deleteLab,
@@ -182,6 +183,14 @@ describe("over a unix socket", () => {
       ]
     );
     assert.deepEqual(JSON.parse(seen[5].body), { newSession: false });
+  });
+
+  it("sends a side question to the agent's asides and nowhere else", async () => {
+    const { config, seen } = await onUnixSocket((_s, res) => json(res, 202, { question: { id: "ti_1" } }));
+    await askAgentAside(config, ACTOR, KEY, "agt_1", "What are you doing?");
+    assert.deepEqual(seen.map((s) => `${s.method} ${s.url}`), ["POST /v1/agents/agt_1/asides"]);
+    assert.deepEqual(JSON.parse(seen[0].body), { text: "What are you doing?" });
+    assert.equal(seen[0].headers["idempotency-key"], KEY);
   });
 
   it("maps instructions, tasks and the runtime limit to the contract's paths", async () => {

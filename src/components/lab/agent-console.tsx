@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
+  MAX_ASIDE_LENGTH,
   MAX_INSTRUCTION_LENGTH,
   type AgentAction,
   type LabAgent,
@@ -204,6 +205,53 @@ function TranscriptEntry({ item, role, now }: { item: LabTranscriptItem; role: s
     );
   }
 
+  // The agent's reasoning, as summarised by the model's provider. Not something it said to anyone.
+  if (item.kind === "assistantThinking") {
+    const thought = item.text ?? "";
+    return (
+      <li className="lab-entry lab-entry-thinking">
+        <p className="flex items-baseline justify-between gap-3">
+          <span className="lab-eyebrow !text-[11px]">{role} thinking · a summary of its reasoning, not a reply</span>
+          {when}
+        </p>
+        {thought.length > 400 ? (
+          <details className="mt-1">
+            <summary className="cursor-pointer break-words">{thought.slice(0, 200).trimEnd()}… Show all</summary>
+            <p className="mt-2 whitespace-pre-wrap break-words">{thought}</p>
+          </details>
+        ) : (
+          <p className="mt-1 whitespace-pre-wrap break-words">{thought}</p>
+        )}
+      </li>
+    );
+  }
+
+  // A side question and its answer sit apart: they are about the conversation, not in it.
+  if (item.kind === "asideQuestion" || item.kind === "asideAnswer" || (item.kind === "systemNote" && item.asideOf)) {
+    return (
+      <li className="lab-entry lab-entry-aside">
+        <p className="flex items-baseline justify-between gap-3">
+          <span className="lab-eyebrow !text-[11px]">
+            {item.kind === "asideQuestion"
+              ? `Side question · the ${role} never sees this`
+              : item.kind === "asideAnswer"
+                ? `Side answer · from a copy of the ${role}, not part of its work`
+                : "Side question not answered"}
+          </span>
+          {when}
+        </p>
+        <p className="mt-1 whitespace-pre-wrap break-words">{item.text}</p>
+        {item.kind === "asideQuestion" && item.pending && (
+          <p className="mt-1 flex items-center gap-2 text-[12.5px] text-[var(--lab-dim)]" role="status">
+            <StatusLight tone="accent" pulse />
+            Answering. The {role} carries on with its work.
+          </p>
+        )}
+        {item.truncated && <p className="mt-1 text-[12.5px] text-[var(--lab-warn)]">Shortened by the Lab Manager (32 KB limit).</p>}
+      </li>
+    );
+  }
+
   if (item.kind === "systemNote" || item.kind === "managerInstruction") {
     return (
       <li className="lab-entry lab-entry-note">
@@ -349,9 +397,6 @@ function composerBlock(agent: LabAgent, disabled: boolean, runtimeLeft: number |
     case "starting":
       return "The agent is starting.";
   }
-  if (agent.blockedBy?.reason === "reconciliation") {
-    return "A task was interrupted by a restart. Choose Run again or Dismiss under Tasks first.";
-  }
   if (agent.blockedBy?.reason === "labPaused") return "The lab is paused.";
   if (runtimeLeft !== null && runtimeLeft <= 0) {
     return "This lab has no runtime left. Raise its runtime limit to continue.";
@@ -400,7 +445,7 @@ export function AgentConsole({
   const [tab, setTab] = useState<"conversation" | "tasks">("conversation");
   const presentation = STATE_PRESENTATION[agent.state];
   const role = ROLE_LABELS[agent.role];
-  const blocked = composerBlock(agent, disabled, runtimeLeftMinutes);
+  const messageBlocked = composerBlock(agent, disabled, runtimeLeftMinutes);
 
   // What became of the last message sent, said once under the composer.
   const [delivered, setDelivered] = useState<MessageDelivery | null>(null);
@@ -409,6 +454,7 @@ export function AgentConsole({
   useEffect(() => {
     setDelivered(null);
     setDraft(initialDraft ?? "");
+    setMode("message");
     setTab("conversation");
   }, [agent.id, initialDraft]);
 
@@ -426,8 +472,27 @@ export function AgentConsole({
     if (el && pinned.current) el.scrollTop = el.scrollHeight;
   }, [lastSeq, con.loaded, tab, cardsKey]);
 
-  const text = draft.trim();
-  const tooLong = draft.length > MAX_INSTRUCTION_LENGTH;
+  // A message steers the agent's work; a side question only asks about it.
+  const [mode, setMode] = useState<"message" | "aside">("message");
+  const prefixed = /^\/btw(\s|$)/i.test(draft);
+  const aside = mode === "aside" || prefixed;
+  const body = prefixed ? draft.replace(/^\/btw\s*/i, "") : draft;
+  const [lastWasAside, setLastWasAside] = useState(false);
+  const answering = con.items.some((i) => i.kind === "asideQuestion" && i.pending);
+  // A side question touches nothing, so little stands in its way.
+  const asideBlocked = disabled
+    ? "The Lab Manager is not answering."
+    : agent.mode === "tmux"
+      ? "This agent is being driven at a terminal on the host."
+      : !agent.sessionId
+        ? `The ${ROLE_LABELS[agent.role]} has no conversation to ask about yet.`
+        : answering
+          ? "The last side question is still being answered."
+          : null;
+
+  const text = body.trim();
+  const limit = aside ? MAX_ASIDE_LENGTH : MAX_INSTRUCTION_LENGTH;
+  const tooLong = body.length > limit;
   const asleep = agent.state === "notProvisioned" || agent.state === "stopped";
   // An instruction for a stopped agent starts it first, then goes out once it is ready.
   const [queued, setQueued] = useState<string | null>(null);
@@ -443,9 +508,17 @@ export function AgentConsole({
   }, [queued, agent.state, asleep, pendingAction, actionFailure, send]);
   useEffect(() => setQueued(null), [agent.id]);
 
+  const blocked = aside ? asideBlocked : messageBlocked;
+
   const submit = async () => {
     if (!text || tooLong || blocked || con.sending || queued !== null) return;
     pinned.current = true;
+    setLastWasAside(aside);
+    if (aside) {
+      setDelivered(null);
+      if (await con.ask(body)) setDraft("");
+      return;
+    }
     if (asleep) {
       setQueued(draft);
       onAction("start");
@@ -630,18 +703,38 @@ export function AgentConsole({
               void submit();
             }}
           >
+            <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="What to send">
+              {(["message", "aside"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="radio"
+                  aria-checked={(m === "aside") === aside}
+                  className="lab-choice"
+                  disabled={prefixed}
+                  onClick={() => setMode(m)}
+                >
+                  {m === "message" ? "Message" : "Side question"}
+                </button>
+              ))}
+              <span className="min-w-0 text-[12.5px] text-[var(--lab-dim)]">
+                {aside
+                  ? `Only asks. The ${role} never sees it and its work carries on.`
+                  : `Steers the ${role}'s work. Start with /btw to only ask.`}
+              </span>
+            </div>
             <label htmlFor="lab-instruction" className="sr-only">
-              Instruction for the {role}
+              {aside ? `Side question about the ${role}` : `Instruction for the ${role}`}
             </label>
             <textarea
               id="lab-instruction"
               className="lab-input lab-textarea"
               rows={3}
               placeholder={
-                blocked ?? (central ? "Say what you want done. The Orchestrator hands it to the right agent." : `Tell the ${role} what to do`)
+                blocked ?? (aside ? `Ask what the ${role} is doing, or anything about its conversation` : central ? "Say what you want done. The Orchestrator hands it to the right agent." : `Tell the ${role} what to do`)
               }
               value={draft}
-              disabled={blocked !== null || busy}
+              disabled={(blocked !== null && !(aside && answering)) || busy}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => {
                 // Enter sends; Shift+Enter makes a new line. On a touch keyboard
@@ -656,9 +749,11 @@ export function AgentConsole({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className={cn("text-[12.5px]", tooLong ? "text-[var(--lab-bad)]" : "text-[var(--lab-dim)]")}>
                 {tooLong
-                  ? `Too long by ${draft.length - MAX_INSTRUCTION_LENGTH} characters.`
+                  ? `Too long by ${body.length - limit} characters.`
                   : (blocked ??
-                    (queued !== null
+                    (aside
+                      ? "Answered within seconds by a copy of its conversation, which has no tools."
+                      : queued !== null
                       ? `Starting the ${role}; your instruction goes out as soon as it is ready.`
                       : asleep
                         ? `The ${role} is stopped. Sending starts it.`
@@ -666,6 +761,8 @@ export function AgentConsole({
                           ? `Sent. The ${role} will see it at its next step, which can take a few minutes.`
                           : delivered === "queued"
                             ? `Sent. It waits until the ${role} is free.`
+                            : agent.blockedBy?.reason === "reconciliation"
+                              ? `You can write to the ${role}. It takes no new task until you choose Run again or Dismiss under Tasks.`
                             : agent.state === "waitingOnHuman"
                               ? `You can write to the ${role}, but a message does not answer its tool request.`
                               : agent.state === "working"
@@ -673,12 +770,12 @@ export function AgentConsole({
                                 : "Enter to send · Shift+Enter for a new line."))}
               </p>
               <LabButton type="submit" variant="primary" disabled={!text || tooLong || blocked !== null || busy}>
-                {queued !== null ? "Starting…" : con.sending ? "Sending…" : "Send"}
+                {queued !== null ? "Starting…" : con.sending ? (aside ? "Asking…" : "Sending…") : aside ? "Ask" : "Send"}
               </LabButton>
             </div>
             {con.sendFailure && (
               <Strip tone="bad" role="alert">
-                Not sent: {con.sendFailure.message}
+                {lastWasAside ? "Not asked" : "Not sent"}: {con.sendFailure.message}
               </Strip>
             )}
           </form>

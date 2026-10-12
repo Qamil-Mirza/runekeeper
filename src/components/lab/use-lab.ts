@@ -173,7 +173,7 @@ export function useLab() {
       labApi
         .fetchAgentTranscript(agent.id, { limit: 20 })
         .then(({ items }) => {
-          const note = [...items].reverse().find((i) => i.kind === "systemNote");
+          const note = [...items].reverse().find((i) => i.kind === "systemNote" && !i.asideOf);
           if (note) setSystemNotes((n) => ({ ...n, [agent.id]: note }));
           const did = [...items].reverse().find((i) => i.kind === "toolCall" || i.kind === "assistantText");
           if (did) setActivity((a) => ({ ...a, [agent.id]: did }));
