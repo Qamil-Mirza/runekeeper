@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import * as labApi from "@/lib/lab/client";
 import { LabApiError } from "@/lib/lab/client";
 import type { LabAgent, LabComputeBudget, LabComputeRun, LabHealth, LabJob } from "@/lib/lab/types";
-import { agentName, formatAgo } from "./agent-card";
+import { agentName, formatAgo, jobSummary } from "./agent-card";
 import { cn } from "@/lib/utils";
 import { Chip, LabButton, Strip, type LabTone } from "./lab-ui";
 
@@ -184,7 +184,7 @@ export function ComputePanel({
   const taskOf = (jobId: string | null) => {
     const job = jobId ? jobs?.find((j) => j.id === jobId) : undefined;
     if (!job) return null;
-    return job.kind === "task" ? job.title : job.instructions;
+    return jobSummary(job);
   };
 
   return (

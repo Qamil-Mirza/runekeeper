@@ -136,6 +136,17 @@ function firstLine(text: string, max = 140): string {
   return line.length > max ? `${line.slice(0, max)}…` : line;
 }
 
+/**
+ * One line saying what a task is about: its title, which the Lab Manager
+ * gives every task, or failing that the first line of its instructions.
+ * Never the whole prompt.
+ */
+export function jobSummary(job: Pick<LabJob, "title" | "instructions">, max = 110): string {
+  const source = job.title?.trim() || job.instructions;
+  const line = source.split("\n").find((l) => l.trim()) ?? "";
+  return firstLine(line.replace(/^\s*#{1,6}\s+/, ""), max) || "Untitled task";
+}
+
 /** One line for what a working agent last did, from its transcript. */
 function doingNow(agent: LabAgent, last: LabTranscriptItem | undefined): string {
   // A Lab Manager from draft.20 on says it itself; older ones leave it to the transcript.
@@ -232,7 +243,7 @@ export function AgentCard({
         )}
         <dt className="text-[var(--lab-dim)]">Goal</dt>
         <dd className="line-clamp-2 break-words">
-          {job ? firstLine(job.kind === "task" ? job.title : job.instructions) : (agent.currentJob?.title ?? "—")}
+          {job ? jobSummary(job) : (agent.currentJob?.title ?? "—")}
         </dd>
         <dt className="text-[var(--lab-dim)]">Doing</dt>
         <dd className="line-clamp-2 break-words">{doingNow(agent, lastItem)}</dd>
