@@ -13,6 +13,7 @@ const QUIET_POLL_MS = 15_000;
 
 const STATUS: Record<LabComputeRun["status"], { label: string; tone: LabTone }> = {
   requested: { label: "Requested", tone: "off" },
+  awaitingApproval: { label: "Waiting for your approval", tone: "warn" },
   refused: { label: "Refused", tone: "bad" },
   starting: { label: "Starting up", tone: "warn" },
   running: { label: "Up", tone: "accent" },
@@ -24,7 +25,7 @@ const STATUS: Record<LabComputeRun["status"], { label: string; tone: LabTone }> 
 };
 
 /** States in which something is, or may still be, rented. */
-const LIVE: ReadonlySet<LabComputeRun["status"]> = new Set(["requested", "starting", "running", "removing"]);
+const LIVE: ReadonlySet<LabComputeRun["status"]> = new Set(["requested", "awaitingApproval", "starting", "running", "removing"]);
 const CANCELLABLE: ReadonlySet<LabComputeRun["status"]> = new Set(["requested", "starting", "running"]);
 
 const REASONS: Record<string, string> = {
@@ -38,6 +39,7 @@ const REASONS: Record<string, string> = {
   manager_restarted: "the Lab Manager restarted",
   start: "the machine could not be started",
   price_changed: "the provider's price was higher than the one quoted",
+  denied_by_owner: "you denied it",
 };
 
 const UNAVAILABLE: Record<string, string> = {
@@ -262,7 +264,7 @@ export function ComputePanel({
                 </div>
 
                 <p className="text-[12.5px] text-[var(--lab-dim)] break-words">
-                  Rented by the{" "}
+                  {run.status === "awaitingApproval" ? "Asked for by the" : "Rented by the"}{" "}
                   <button type="button" className="underline underline-offset-2" onClick={() => onOpenAgent(run.agentId)}>
                     {roleOf(run.agentId)}
                   </button>
@@ -273,6 +275,12 @@ export function ComputePanel({
                   {live && <> of at most {run.request.maxMinutes}</>}
                 </p>
 
+                {run.status === "awaitingApproval" && (
+                  <p className="text-[12.5px] text-[var(--lab-warn)] break-words">
+                    {run.approval ? `Could cost up to ${usd(run.approval.worstCaseUsd)}. ` : ""}Nothing is rented yet:
+                    approve or deny it under Needs you.
+                  </p>
+                )}
                 {run.reason && (
                   <p className="text-[12.5px] text-[var(--lab-bad)] break-words line-clamp-3" title={reasonText(run.reason)}>
                     {reasonText(run.reason)}

@@ -15,6 +15,9 @@ import {
   getJob,
   listJobs,
   sendAgentMessage,
+  listComputeApprovals,
+  getComputeRun,
+  decideComputeRun,
   getStorage,
   getAgentFileUsage,
   deleteAgentFile,
@@ -195,6 +198,20 @@ describe("over a unix socket", () => {
     assert.deepEqual(seen.map((s) => `${s.method} ${s.url}`), ["POST /v1/agents/agt_1/asides"]);
     assert.deepEqual(JSON.parse(seen[0].body), { text: "What are you doing?" });
     assert.equal(seen[0].headers["idempotency-key"], KEY);
+  });
+
+  it("maps rental approvals to the contract's paths, with no body", async () => {
+    const { config, seen } = await onUnixSocket((_s, res) => json(res, 200, { items: [] }));
+    await listComputeApprovals(config, ACTOR);
+    await getComputeRun(config, ACTOR, "run_1");
+    await decideComputeRun(config, ACTOR, KEY, "run_1", "approve");
+    await decideComputeRun(config, ACTOR, KEY, "run_1", "deny");
+    assert.deepEqual(
+      seen.map((s) => `${s.method} ${s.url}`),
+      ["GET /v1/compute/approvals", "GET /v1/compute/runs/run_1", "POST /v1/compute/runs/run_1/approve", "POST /v1/compute/runs/run_1/deny"]
+    );
+    assert.equal(seen[2].body, "");
+    assert.equal(seen[2].headers["idempotency-key"], KEY);
   });
 
   it("maps storage and file cleanup to the contract's paths, with the path encoded", async () => {

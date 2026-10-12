@@ -278,6 +278,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/compute/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every rental that waits for the owner's approval, across labs, oldest first. */
+        get: operations["listComputeApprovals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/compute/runs/{runId}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The owner approves one rental. It then starts, if it still fits.
+         * @description Only from `awaitingApproval`; 409 `conflict` otherwise. The approval
+         *     covers at most `approval.worstCaseUsd`, the figure shown. The limit,
+         *     the account's balance and the price are checked again before
+         *     anything is rented: the run may then be `refused`, or return to
+         *     `awaitingApproval` with a new figure if the price has risen.
+         *     Unsigned: the caller is the person Runekeeper authenticated. Show
+         *     the request in full (what it runs, GPU, price per hour, the longest
+         *     it may run, the most it could cost, who asked) before sending it.
+         *     Emits `compute.approved`.
+         */
+        post: operations["approveComputeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/compute/runs/{runId}/deny": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The owner refuses one rental. Nothing was started.
+         * @description Only from `awaitingApproval`; 409 `conflict` otherwise. The run ends `refused` with reason `denied_by_owner`, and the agent is told at its next turn. Emits `compute.denied`.
+         */
+        post: operations["denyComputeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/compute/runs/{runId}/cancel": {
         parameters: {
             query?: never;
@@ -1686,6 +1751,11 @@ export interface components {
         ComputeBudget: {
             /** @description Null: the owner set no limit for this lab, so nothing can start. */
             limitUsd: number | null;
+            /**
+             * @description `each`: every rental waits for the owner's approval. `none`: the owner waived that for this lab on the host, and a rental that fits the limit starts without asking.
+             * @enum {string}
+             */
+            approval?: "each" | "none";
             /** Format: date-time */
             validUntil: string | null;
             expired: boolean;
@@ -1703,6 +1773,13 @@ export interface components {
             source: "managerMeasured";
         };
         ComputeRun: {
+            /** @description Set while the run waits for the owner and after the owner approved it. Null on a run that needed no approval. */
+            approval: {
+                /** @description The most the run could cost at the price it was quoted: what the owner is asked to approve, or approved. */
+                worstCaseUsd: number;
+                approvedAt: components["schemas"]["Timestamp"] | null;
+                approvedBy: components["schemas"]["Actor"] | null;
+            } | null;
             id: string;
             labId: string;
             agentId: string;
@@ -1711,10 +1788,10 @@ export interface components {
             /** @description Agent-written. */
             title: string;
             /**
-             * @description `starting`: rented and being charged, its container not up yet. `running`: up. `removing`: the outcome is decided and the broker has not yet confirmed that nothing paid is left; still held against the limit. `finished`: the turn it was rented for ended and it was removed.
+             * @description `awaitingApproval`: it could start and waits for the owner; nothing is rented or held. `starting`: rented and being charged, its container not up yet. `running`: up. `removing`: the outcome is decided and the broker has not yet confirmed that nothing paid is left; still held against the limit. `finished`: the turn it was rented for ended and it was removed.
              * @enum {string}
              */
-            status: "requested" | "refused" | "starting" | "running" | "removing" | "finished" | "failed" | "timedOut" | "cancelled";
+            status: "requested" | "awaitingApproval" | "refused" | "starting" | "running" | "removing" | "finished" | "failed" | "timedOut" | "cancelled";
             /** @description Why it was refused or failed. Begins with one of: `no_limit_set`, `limit_expired`, `over_limit`, `over_balance`, `gpu_unavailable`, `compute_unavailable`, `lab_archived`, `manager_restarted`, `start`, `price_changed`; otherwise free text. */
             reason: string | null;
             /** @description What the agent asked for. Agent-written. */
@@ -2472,7 +2549,7 @@ export interface components {
             truncated: false;
         };
         /** @enum {string} */
-        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.deleted" | "files.deleted" | "network.hostTrusted" | "network.hostBlocked" | "compute.run" | "git.op" | "compute.cancelRequested" | "lab.statusChanged" | "agent.stateChanged" | "agent.created" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged" | "agent.activity";
+        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.deleted" | "files.deleted" | "network.hostTrusted" | "network.hostBlocked" | "compute.run" | "git.op" | "compute.cancelRequested" | "compute.approved" | "compute.denied" | "lab.statusChanged" | "agent.stateChanged" | "agent.created" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged" | "agent.activity";
         ManagerStartedData: {
             serviceVersion: string;
             interruptedJobs: {
@@ -2981,6 +3058,85 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description The run. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComputeRun"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listComputeApprovals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The runs in `awaitingApproval`, each with where it comes from. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: (components["schemas"]["ComputeRun"] & {
+                            requestedBy: {
+                                labName: string;
+                                agentName: string;
+                                role: components["schemas"]["AgentRole"];
+                            };
+                        })[];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    approveComputeRun: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run, now `requested` and about to be started or refused. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComputeRun"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    denyComputeRun: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run, now `refused`. */
             200: {
                 headers: {
                     [name: string]: unknown;

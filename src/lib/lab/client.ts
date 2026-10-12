@@ -8,6 +8,8 @@ import type {
   LabErrorBody,
   LabJob,
   LabAsideReceipt,
+  ComputeDecisionConfirmation,
+  LabComputeApprovals,
   LabFileDeletion,
   LabFileUsage,
   LabStorage,
@@ -106,6 +108,24 @@ export function fetchGitOps(labId: string) {
 
 export function fetchComputeRuns(labId: string) {
   return labFetch<LabComputeRuns>(`/api/lab/labs/${encodeURIComponent(labId)}/compute/runs`);
+}
+
+/** Rentals waiting for the owner. Empty from a Lab Manager that has no such step. */
+export async function fetchComputeApprovals(): Promise<LabComputeApprovals> {
+  try {
+    return await labFetch<LabComputeApprovals>("/api/lab/compute/approvals");
+  } catch (err) {
+    if (err instanceof LabApiError && err.status === 404) return { items: [] };
+    throw err;
+  }
+}
+
+/** Sends the owner's decision on one rental, with what they were shown. */
+export function decideComputeRun(confirmation: ComputeDecisionConfirmation) {
+  return mutate<LabComputeRun>(
+    `/api/lab/compute/runs/${encodeURIComponent(confirmation.runId)}/${confirmation.decision}`,
+    { confirmation }
+  );
 }
 
 export function cancelComputeRun(runId: string) {

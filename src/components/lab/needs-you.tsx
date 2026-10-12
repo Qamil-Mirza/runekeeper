@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as labApi from "@/lib/lab/client";
-import type { LabSnapshot, LabSummary } from "@/lib/lab/types";
+import type { LabSnapshot, LabSummary, LabComputeApproval } from "@/lib/lab/types";
 import { AgentAvatar } from "./agent-avatar";
+import { ComputeApprovals } from "./compute-approvals";
 import { agentName, formatAgo } from "./agent-card";
 import { Chip, LabButton, Strip } from "./lab-ui";
 
@@ -40,7 +41,16 @@ export function NeedsYou({
   current,
   now,
   onOpen,
+  computeApprovals,
+  provider,
+  disabled,
+  onComputeDecided,
 }: {
+  /** Rentals of compute waiting for approval; these can be decided here. */
+  computeApprovals: LabComputeApproval[];
+  provider: string;
+  disabled: boolean;
+  onComputeDecided: () => void;
   labs: LabSummary[] | null;
   /** The selected lab's snapshot, which is fresher than a refetch. */
   current: LabSnapshot | null;
@@ -102,8 +112,9 @@ export function NeedsYou({
       <header className="lab-panel p-4">
         <h3 className="text-[25px] font-semibold leading-tight tracking-tight">Needs you</h3>
         <p className="mt-2 text-[13.5px] text-[var(--lab-dim)]">
-          What agents in any lab are waiting on you for. Runekeeper cannot approve a tool request; open the agent to
-          cancel the task or answer it. Cost figures here are the agent's own estimate, never a charge.
+          What agents in any lab are waiting on you for. A GPU rental is approved or denied here. Runekeeper cannot
+          approve a tool request; open the agent to cancel the task or answer it. On a tool request, a cost figure is
+          the agent's own estimate, never a charge.
         </p>
       </header>
 
@@ -112,8 +123,17 @@ export function NeedsYou({
           Could not load {failed} lab{failed === 1 ? "" : "s"}; this list may be incomplete.
         </Strip>
       )}
+      {/* Agents are blocked on these, so they come first. */}
+      <ComputeApprovals
+        items={computeApprovals}
+        now={now}
+        disabled={disabled}
+        provider={provider}
+        onDecided={onComputeDecided}
+        onOpen={onOpen}
+      />
       {loading && <p className="lab-eyebrow py-6 text-center">Loading…</p>}
-      {!loading && entries.length === 0 && <p className="lab-eyebrow py-10 text-center">Nothing is waiting on you</p>}
+      {!loading && entries.length === 0 && computeApprovals.length === 0 && <p className="lab-eyebrow py-10 text-center">Nothing is waiting on you</p>}
 
       <ul className="flex flex-col gap-3">
         {entries.map((entry) => {

@@ -20,6 +20,7 @@ import {
   type LabGitOps,
   type LabJobPage,
   type LabAsideReceipt,
+  type LabComputeApprovals,
   type LabFileDeletion,
   type LabFileUsage,
   type LabStorage,
@@ -508,6 +509,36 @@ export async function askAgentAside(
     actor,
     idempotencyKey,
     body: { text },
+  });
+}
+
+/** One rented-compute run, as the Lab Manager records it now. */
+export async function getComputeRun(config: LabConfig, actor: LabActor, runId: string): Promise<LabComputeRun> {
+  return call<LabComputeRun>(config, { method: "GET", path: `/v1/compute/runs/${assertId(runId)}`, actor });
+}
+
+/** Every rental that waits for the owner's approval, across labs, oldest first. */
+export async function listComputeApprovals(config: LabConfig, actor: LabActor): Promise<LabComputeApprovals> {
+  return call<LabComputeApprovals>(config, { method: "GET", path: "/v1/compute/approvals", actor });
+}
+
+/**
+ * Passes on the owner's decision on one rental. Approving lets the Lab
+ * Manager rent a machine on the owner's provider account; the route that
+ * calls this checks the owner's confirmation and sign-in first.
+ */
+export async function decideComputeRun(
+  config: LabConfig,
+  actor: LabActor,
+  idempotencyKey: string,
+  runId: string,
+  decision: "approve" | "deny"
+): Promise<LabComputeRun> {
+  return call<LabComputeRun>(config, {
+    method: "POST",
+    path: `/v1/compute/runs/${assertId(runId)}/${decision === "approve" ? "approve" : "deny"}`,
+    actor,
+    idempotencyKey,
   });
 }
 

@@ -9,6 +9,9 @@ import { labFontClasses } from "./fonts";
 import { LabOverview } from "./lab-overview";
 import { NeedsYou, needsYouCount } from "./needs-you";
 import { StoragePage } from "./storage-page";
+import * as labApi from "@/lib/lab/client";
+import type { LabComputeApproval } from "@/lib/lab/types";
+
 import { SitesPage } from "./sites-page";
 import { LAB_STATUS_TONE, LabRail } from "./lab-rail";
 import { LabTopBar } from "./lab-top-bar";
@@ -16,6 +19,8 @@ import { Chip, LabButton, Strip } from "./lab-ui";
 import { RuntimeMeter } from "./runtime-meter";
 import { useLab } from "./use-lab";
 import "./lab.css";
+
+const PROVIDER_NAMES: Record<string, string> = { runpod: "RunPod" };
 
 const ENTER_MS = 800;
 const LEAVE_MS = 400;
@@ -83,6 +88,23 @@ export function LabView({ onExit }: { onExit: () => void }) {
 
   const { snapshot, status } = lab;
   // Shown data is stale when the manager is gone or the last refresh failed.
+  // Rentals of compute waiting for the owner, in every lab.
+  const [computeApprovals, setComputeApprovals] = useState<LabComputeApproval[]>([]);
+  const loadComputeApprovals = useCallback(() => {
+    labApi.fetchComputeApprovals().then(
+      (r) => setComputeApprovals(r.items),
+      () => {
+        // Keep what was last known; the connection banner says when the Lab Manager is away.
+      }
+    );
+  }, []);
+  useEffect(() => {
+    if (!lab.connected) return;
+    loadComputeApprovals();
+    const timer = setInterval(() => document.visibilityState === "visible" && loadComputeApprovals(), 10_000);
+    return () => clearInterval(timer);
+  }, [lab.connected, loadComputeApprovals]);
+
   const stale = !lab.connected || lab.snapshotFailure !== null;
   const controlsDisabled = stale;
   const labPending = lab.pending.lab;
@@ -154,7 +176,7 @@ export function LabView({ onExit }: { onExit: () => void }) {
             codeHost={status?.health?.codeHost}
             page={page}
             onPage={setPage}
-            needsYou={needsYouCount(lab.labs)}
+            needsYou={needsYouCount(lab.labs) + computeApprovals.length}
             showSites={showSites}
             className={focused ? "max-lg:hidden" : undefined}
           />
@@ -170,6 +192,10 @@ export function LabView({ onExit }: { onExit: () => void }) {
                 labs={lab.labs}
                 current={snapshot}
                 now={now}
+                computeApprovals={computeApprovals}
+                provider={PROVIDER_NAMES[status?.health?.spend?.provider ?? ""] ?? status?.health?.spend?.provider ?? "provider"}
+                disabled={!lab.connected}
+                onComputeDecided={loadComputeApprovals}
                 onOpen={(labId, agentId) => {
                   setPage("lab");
                   if (labId !== lab.selectedLabId) lab.selectLab(labId);

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Lab Manager API
-  version: 1.0.0-draft.27
+  version: 1.0.0-draft.28
   summary: Contract between Runekeeper (client) and the Lab Manager (server).
   description: |
     Status: DRAFT under joint review. Implemented by the Lab Manager, which
@@ -23,6 +23,17 @@ info:
     - PATCH is naturally idempotent and takes no key.
     - Research endpoints (tag `research`) are implemented but new: they
       have not yet been used by a client and may still change before 1.0.
+
+    What changed in draft.28 (a change of behaviour)
+    - A rental of compute now waits for the owner's approval. A request
+      that fits the lab's limit and the account's balance goes to the new
+      status `awaitingApproval` instead of starting, with
+      `ComputeRun.approval.worstCaseUsd`. `GET /v1/compute/approvals`
+      lists what waits across labs; `POST
+      /v1/compute/runs/{runId}/approve` and `/deny` decide. Events
+      `compute.approved`, `compute.denied`; `compute.run` as before.
+      The owner can waive this for a lab in the limits file on the host
+      (`Budget.compute.approval` is then `none`).
 
     What changed in draft.27 (additive, but see the first point)
     - A lab no longer has exactly one agent per role. It may hold several
@@ -754,6 +765,81 @@ paths:
       responses:
         "200": { description: The run., content: { application/json: { schema: { $ref: "#/components/schemas/ComputeRun" } } } }
         default: { $ref: "#/components/responses/Error" }
+  /v1/compute/approvals:
+    get:
+      tags: [labs]
+      operationId: listComputeApprovals
+      summary: Every rental that waits for the owner's approval, across labs, oldest first.
+      responses:
+        "200":
+          description: The runs in `awaitingApproval`, each with where it comes from.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: "#/components/schemas/ComputeRun"
+                        - type: object
+                          required: [requestedBy]
+                          properties:
+                            requestedBy:
+                              type: object
+                              required: [labName, agentName, role]
+                              properties:
+                                labName: { type: string }
+                                agentName: { type: string }
+                                role: { $ref: "#/components/schemas/AgentRole" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/compute/runs/{runId}/approve:
+    post:
+      tags: [labs]
+      operationId: approveComputeRun
+      summary: The owner approves one rental. It then starts, if it still fits.
+      description: |
+        Only from `awaitingApproval`; 409 `conflict` otherwise. The approval
+        covers at most `approval.worstCaseUsd`, the figure shown. The limit,
+        the account's balance and the price are checked again before
+        anything is rented: the run may then be `refused`, or return to
+        `awaitingApproval` with a new figure if the price has risen.
+        Unsigned: the caller is the person Runekeeper authenticated. Show
+        the request in full (what it runs, GPU, price per hour, the longest
+        it may run, the most it could cost, who asked) before sending it.
+        Emits `compute.approved`.
+      parameters: &computeRunActionParams
+        - name: runId
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: The run, now `requested` and about to be started or refused.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ComputeRun" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/compute/runs/{runId}/deny:
+    post:
+      tags: [labs]
+      operationId: denyComputeRun
+      summary: The owner refuses one rental. Nothing was started.
+      description: Only from `awaitingApproval`; 409 `conflict` otherwise. The run ends `refused` with reason `denied_by_owner`, and the agent is told at its next turn. Emits `compute.denied`.
+      parameters: *computeRunActionParams
+      responses:
+        "200":
+          description: The run, now `refused`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ComputeRun" }
+        default: { $ref: "#/components/responses/Error" }
+
   /v1/compute/runs/{runId}/cancel:
     post:
       tags: [labs]
@@ -2513,6 +2599,7 @@ components:
       required: [limitUsd, validUntil, expired, reservedUsd, accruingUsd, chargedUsd, remainingUsd, providerBilledUsd, source]
       properties:
         limitUsd: { type: [number, "null"], description: "Null: the owner set no limit for this lab, so nothing can start." }
+        approval: { type: string, enum: [each, none], description: "`each`: every rental waits for the owner's approval. `none`: the owner waived that for this lab on the host, and a rental that fits the limit starts without asking." }
         validUntil: { type: [string, "null"], format: date-time }
         expired: { type: boolean }
         reservedUsd: { type: number, description: "The most that work now running could still cost. Held against the limit until each run's removal is confirmed." }
@@ -2523,8 +2610,16 @@ components:
         source: { type: string, const: managerMeasured }
     ComputeRun:
       type: object
-      required: [id, labId, agentId, jobId, title, status, reason, request, usdPerHour, reservedUsd, costUsd, providerBilledUsd, url, usedByJobId, requestedAt, startedAt, upAt, deadline, endedAt]
+      required: [id, labId, agentId, jobId, title, status, reason, approval, request, usdPerHour, reservedUsd, costUsd, providerBilledUsd, url, usedByJobId, requestedAt, startedAt, upAt, deadline, endedAt]
       properties:
+        approval:
+          type: [object, "null"]
+          description: Set while the run waits for the owner and after the owner approved it. Null on a run that needed no approval.
+          required: [worstCaseUsd, approvedAt, approvedBy]
+          properties:
+            worstCaseUsd: { type: number, description: "The most the run could cost at the price it was quoted: what the owner is asked to approve, or approved." }
+            approvedAt: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
+            approvedBy: { oneOf: [{ $ref: "#/components/schemas/Actor" }, { type: "null" }] }
         id: { type: string }
         labId: { type: string }
         agentId: { type: string }
@@ -2532,8 +2627,8 @@ components:
         title: { type: string, description: "Agent-written." }
         status:
           type: string
-          enum: [requested, refused, starting, running, removing, finished, failed, timedOut, cancelled]
-          description: "`starting`: rented and being charged, its container not up yet. `running`: up. `removing`: the outcome is decided and the broker has not yet confirmed that nothing paid is left; still held against the limit. `finished`: the turn it was rented for ended and it was removed."
+          enum: [requested, awaitingApproval, refused, starting, running, removing, finished, failed, timedOut, cancelled]
+          description: "`awaitingApproval`: it could start and waits for the owner; nothing is rented or held. `starting`: rented and being charged, its container not up yet. `running`: up. `removing`: the outcome is decided and the broker has not yet confirmed that nothing paid is left; still held against the limit. `finished`: the turn it was rented for ended and it was removed."
         reason:
           type: [string, "null"]
           description: "Why it was refused or failed. Begins with one of: `no_limit_set`, `limit_expired`, `over_limit`, `over_balance`, `gpu_unavailable`, `compute_unavailable`, `lab_archived`, `manager_restarted`, `start`, `price_changed`; otherwise free text."
@@ -3355,6 +3450,8 @@ components:
         - compute.run
         - git.op
         - compute.cancelRequested
+        - compute.approved
+        - compute.denied
         - lab.statusChanged
         - agent.stateChanged
         - agent.created

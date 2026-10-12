@@ -52,6 +52,23 @@ export interface LabGitOps {
 /** "owner/name" or the repository's https://github.com address. */
 export const REPO_PATTERN = /^(https:\/\/github\.com\/)?[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(\.git)?\/?$/;
 export type LabComputeRun = Schemas["ComputeRun"];
+/** A rental that waits for the owner's approval, with where it comes from. */
+export type LabComputeApproval = LabComputeRun & {
+  requestedBy: { labName: string; agentName: string; role: LabAgent["role"] };
+};
+export interface LabComputeApprovals {
+  items: LabComputeApproval[];
+}
+/**
+ * What the owner saw when deciding one rental. The server compares it with
+ * the Lab Manager's own record and refuses if they differ.
+ */
+export interface ComputeDecisionConfirmation {
+  runId: string;
+  decision: "approve" | "deny";
+  worstCaseUsd: number;
+  usdPerHour: number;
+}
 /** A lab's rented-compute budget, counted by the Lab Manager's own clock. */
 export type LabComputeBudget = Schemas["ComputeBudget"];
 export interface LabComputeRuns {
@@ -122,7 +139,11 @@ export type LabClientErrorCode =
   | LabErrorCode
   | "manager_unreachable"
   | "manager_bad_response"
-  | "forbidden_origin";
+  | "forbidden_origin"
+  // Refusals by Runekeeper's own server before a decision is passed on.
+  | "confirmation_required"
+  | "stale_view"
+  | "reauthentication_required";
 
 export interface LabErrorBody {
   error: {
