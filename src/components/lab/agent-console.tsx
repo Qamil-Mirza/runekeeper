@@ -397,9 +397,6 @@ function composerBlock(agent: LabAgent, disabled: boolean, runtimeLeft: number |
     case "starting":
       return "The agent is starting.";
   }
-  if (agent.blockedBy?.reason === "reconciliation") {
-    return "A task was interrupted by a restart. Choose Run again or Dismiss under Tasks first.";
-  }
   if (agent.blockedBy?.reason === "labPaused") return "The lab is paused.";
   if (runtimeLeft !== null && runtimeLeft <= 0) {
     return "This lab has no runtime left. Raise its runtime limit to continue.";
@@ -764,6 +761,8 @@ export function AgentConsole({
                           ? `Sent. The ${role} will see it at its next step, which can take a few minutes.`
                           : delivered === "queued"
                             ? `Sent. It waits until the ${role} is free.`
+                            : agent.blockedBy?.reason === "reconciliation"
+                              ? `You can write to the ${role}. It takes no new task until you choose Run again or Dismiss under Tasks.`
                             : agent.state === "waitingOnHuman"
                               ? `You can write to the ${role}, but a message does not answer its tool request.`
                               : agent.state === "working"
