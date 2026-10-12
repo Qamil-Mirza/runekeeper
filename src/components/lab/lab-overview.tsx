@@ -4,7 +4,7 @@ import { LabMarkdown } from "./lab-markdown";
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { MAX_BRIEF_LENGTH, type LabHealth, type LabJob, type LabSnapshot } from "@/lib/lab/types";
-import { agentName, formatAgo, leadName } from "./agent-card";
+import { agentName, formatAgo, jobSummary, leadName } from "./agent-card";
 import { ComputePanel } from "./compute-panel";
 import { GitPanel } from "./git-panel";
 import { Chip, LabButton, Strip, toneClass, type LabTone } from "./lab-ui";
@@ -404,9 +404,7 @@ export function LabOverview({
                       <span className="lab-eyebrow !text-[11px]">{roleOf(job.agentId)}</span>
                       <Chip tone={status.tone}>{status.label}</Chip>
                     </span>
-                    <span className="mt-1 block text-[13.5px] line-clamp-2 break-words">
-                      {job.kind === "task" ? job.title : job.instructions}
-                    </span>
+                    <span className="mt-1 block truncate text-[13.5px]">{jobSummary(job)}</span>
                   </button>
                 </li>
               );

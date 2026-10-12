@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { AgentCard, formatAgo } from "./agent-card";
+import { AgentCard, RetiredAgentCard, agentName, formatAgo, leadName } from "./agent-card";
+import { DeleteAgentFiles } from "./delete-agent-files";
+import { TeamTree } from "./team-tree";
+import { formatBytes } from "./storage-page";
 import { AgentConsole } from "./agent-console";
 import { DeleteLab } from "./delete-lab";
 import { labFontClasses } from "./fonts";
@@ -49,7 +52,7 @@ export function LabView({ onExit }: { onExit: () => void }) {
   // A page about every lab, shown instead of the selected lab.
   const [page, setPage] = useState<"lab" | "needsYou" | "sites" | "storage">("lab");
   // An agent to open once its lab has loaded, when coming from another page.
-  const [wanted, setWanted] = useState<{ labId: string; agentId: string } | null>(null);
+  const [wanted, setWanted] = useState<{ labId: string; agentId: string; draft?: string } | null>(null);
   const [warp, setWarp] = useState<"in" | "out" | null>("in");
   const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -121,9 +124,19 @@ export function LabView({ onExit }: { onExit: () => void }) {
   const runtimeLeft = runtime ? runtime.limitWallClockMinutes - runtime.usedWallClockMinutes : null;
   useEffect(() => {
     if (!wanted || snapshot?.lab.id !== wanted.labId) return;
-    setOpenAgentId(wanted.agentId);
+    openAgentWith(wanted.agentId, wanted.draft);
     setWanted(null);
-  }, [wanted, snapshot?.lab.id]);
+  }, [wanted, snapshot?.lab.id, openAgentWith]);
+
+  // Retired agents stay in the lab's list but are no longer part of its team.
+  const team = snapshot?.agents.filter((a) => !a.retired) ?? [];
+  const retiredAgents = snapshot?.agents.filter((a) => a.retired) ?? [];
+  const maxAgents = status?.health?.limits?.maxAgentsPerLab;
+  // A Lab Manager from before draft.31 says nothing about retiring and cannot do it.
+  const canRetire = snapshot?.agents.some((a) => a.retired !== undefined) ?? false;
+  const [deletingFilesOf, setDeletingFilesOf] = useState<string | null>(null);
+  const [filesReceipt, setFilesReceipt] = useState<string | null>(null);
+  const deletingFiles = retiredAgents.find((a) => a.id === deletingFilesOf) ?? null;
 
   const capabilities = status?.health?.capabilities;
   // Offered when the host has the shell switched on, even while it is withheld.
@@ -196,10 +209,10 @@ export function LabView({ onExit }: { onExit: () => void }) {
                 provider={PROVIDER_NAMES[status?.health?.spend?.provider ?? ""] ?? status?.health?.spend?.provider ?? "provider"}
                 disabled={!lab.connected}
                 onComputeDecided={loadComputeApprovals}
-                onOpen={(labId, agentId) => {
+                onOpen={(labId, agentId, draft) => {
                   setPage("lab");
                   if (labId !== lab.selectedLabId) lab.selectLab(labId);
-                  if (agentId) setWanted({ labId, agentId });
+                  if (agentId) setWanted({ labId, agentId, draft });
                 }}
               />
             )}
@@ -393,9 +406,16 @@ export function LabView({ onExit }: { onExit: () => void }) {
                       onSaveBrief={lab.saveBrief}
                       onOpenAgent={openAgentWith}
                     />
-                    <p className="lab-eyebrow">Agents · {snapshot.agents.length}</p>
+                    <div className="lab-panel p-4 flex flex-col gap-3 min-w-0">
+                      <p className="lab-eyebrow">Team</p>
+                      <TeamTree agents={snapshot.agents} jobs={lab.labJobs} onOpenAgent={openAgentWith} />
+                    </div>
+                    <p className="lab-eyebrow">
+                      Agents · {team.length}
+                      {maxAgents ? ` of ${maxAgents}` : ""}
+                    </p>
                     <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
-                      {snapshot.agents.map((agent) => (
+                      {team.map((agent) => (
                         <AgentCard
                           key={agent.id}
                           agent={agent}
@@ -408,9 +428,60 @@ export function LabView({ onExit }: { onExit: () => void }) {
                           systemNote={lab.systemNotes[agent.id]}
                           onAction={(action) => void lab.agentAction(agent.id, action)}
                           onOpen={() => openAgentWith(agent.id)}
+                          onRetire={
+                            canRetire && agent.role !== "orchestrator"
+                              ? (reason) => void lab.retireAgent(agent.id, reason)
+                              : undefined
+                          }
                         />
                       ))}
                     </div>
+
+                    {retiredAgents.length > 0 && (
+                      <>
+                        <p className="lab-eyebrow">
+                          Retired · {retiredAgents.length} · not part of the team, take no work
+                        </p>
+                        {filesReceipt && (
+                          <Strip tone="ok" role="status">
+                            {filesReceipt}
+                          </Strip>
+                        )}
+                        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+                          {retiredAgents.map((agent) => (
+                            <RetiredAgentCard
+                              key={agent.id}
+                              agent={agent}
+                              lead={leadName(snapshot.agents)}
+                              now={now}
+                              disabled={controlsDisabled}
+                              pendingAction={lab.pending[agent.id]}
+                              failure={lab.actionFailures[agent.id]}
+                              onOpen={() => openAgentWith(agent.id)}
+                              onRestore={() => void lab.restoreAgent(agent.id)}
+                              onDeleteFiles={() => setDeletingFilesOf(agent.id)}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                    {deletingFiles && (
+                      <DeleteAgentFiles
+                        agent={deletingFiles}
+                        labName={snapshot.lab.name}
+                        disabled={controlsDisabled}
+                        onClose={() => setDeletingFilesOf(null)}
+                        onDeleted={(freed) => {
+                          setFilesReceipt(
+                            freed === 0
+                              ? `${agentName(deletingFiles)} had no files on disk; its saved conversations are cleared.`
+                              : `Deleted the files of ${agentName(deletingFiles)}: ${formatBytes(freed)} freed.`
+                          );
+                          setDeletingFilesOf(null);
+                          void lab.refreshSnapshot();
+                        }}
+                      />
+                    )}
                   </>
                 )}
               </section>

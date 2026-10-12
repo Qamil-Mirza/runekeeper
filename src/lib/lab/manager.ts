@@ -20,6 +20,10 @@ import {
   type LabGitOps,
   type LabJobPage,
   type LabAsideReceipt,
+  type LabAgentFilesDeleted,
+  type LabArtifact,
+  ARTIFACT_HASH_PATTERN,
+  type LabEscalation,
   type LabComputeApprovals,
   type LabFileDeletion,
   type LabFileUsage,
@@ -539,6 +543,72 @@ export async function decideComputeRun(
     path: `/v1/compute/runs/${assertId(runId)}/${decision === "approve" ? "approve" : "deny"}`,
     actor,
     idempotencyKey,
+  });
+}
+
+/** Takes an agent out of the lab's team. It is stopped and given no work; nothing is deleted. */
+export async function retireAgent(
+  config: LabConfig,
+  actor: LabActor,
+  idempotencyKey: string,
+  agentId: string,
+  reason?: string
+): Promise<LabAgent> {
+  return call<LabAgent>(config, {
+    method: "POST",
+    path: `/v1/agents/${assertId(agentId)}/retire`,
+    actor,
+    idempotencyKey,
+    body: reason === undefined ? {} : { reason },
+  });
+}
+
+/** Brings a retired agent back into the team. It is not started by this. */
+export async function restoreAgent(config: LabConfig, actor: LabActor, idempotencyKey: string, agentId: string): Promise<LabAgent> {
+  return call<LabAgent>(config, { method: "POST", path: `/v1/agents/${assertId(agentId)}/restore`, actor, idempotencyKey });
+}
+
+/** Deletes a retired agent's working directory, temp folders and saved conversations. There is no undo. */
+export async function deleteRetiredAgentFiles(
+  config: LabConfig,
+  actor: LabActor,
+  idempotencyKey: string,
+  agentId: string
+): Promise<LabAgentFilesDeleted> {
+  return call<LabAgentFilesDeleted>(config, {
+    method: "POST",
+    path: `/v1/agents/${assertId(agentId)}/delete-files`,
+    actor,
+    idempotencyKey,
+    timeoutMs: 30_000,
+  });
+}
+
+/** One stored document of a lab, whole, by its content hash. */
+export async function getArtifact(config: LabConfig, actor: LabActor, labId: string, hash: string): Promise<LabArtifact> {
+  if (!ARTIFACT_HASH_PATTERN.test(hash)) {
+    throw new LabManagerError(400, "validation_failed", "Invalid hash", false);
+  }
+  return call<LabArtifact>(config, { method: "GET", path: `/v1/labs/${assertId(labId)}/artifacts/${hash}`, actor });
+}
+
+/**
+ * Marks an escalation as seen by the owner. It only clears it from what
+ * waits: nothing is approved or resumed, and the note reaches no agent.
+ */
+export async function resolveEscalation(
+  config: LabConfig,
+  actor: LabActor,
+  idempotencyKey: string,
+  escalationId: string,
+  note?: string
+): Promise<LabEscalation> {
+  return call<LabEscalation>(config, {
+    method: "POST",
+    path: `/v1/escalations/${assertId(escalationId)}/resolve`,
+    actor,
+    idempotencyKey,
+    body: note === undefined ? {} : { note },
   });
 }
 

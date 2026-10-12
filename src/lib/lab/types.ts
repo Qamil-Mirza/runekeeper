@@ -118,6 +118,19 @@ export interface LabJobPage {
 /** Longest instruction the Lab Manager accepts. */
 export const MAX_INSTRUCTION_LENGTH = 20_000;
 /** The owner's description of a lab, given to every agent of it. */
+/** Longest reason the Lab Manager keeps with a retired agent. */
+export const MAX_RETIRE_REASON_LENGTH = 500;
+/** What deleting a retired agent's files removed. */
+export interface LabAgentFilesDeleted {
+  agent: LabAgent;
+  freedBytes: number;
+}
+/** A stored document of a lab, such as the body of a record. */
+export type LabArtifact = Schemas["Artifact"];
+export const ARTIFACT_HASH_PATTERN = /^[0-9a-f]{64}$/;
+/** Longest note the Lab Manager keeps with a resolved escalation. */
+export const MAX_ESCALATION_NOTE_LENGTH = 2_000;
+export type LabEscalation = Schemas["Escalation"];
 /** Longest side question the Lab Manager accepts. */
 export const MAX_ASIDE_LENGTH = 4_000;
 export const MAX_BRIEF_LENGTH = 16_000;

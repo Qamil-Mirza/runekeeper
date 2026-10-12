@@ -277,6 +277,24 @@ export function useLab() {
     [runAction]
   );
 
+  /** Takes an agent out of the team, or brings a retired one back. Nothing is deleted either way. */
+  const retireAgent = useCallback(
+    (agentId: string, reason?: string) =>
+      runAction(agentId, "retire", async () => {
+        const agent = await labApi.retireAgent(agentId, reason);
+        setSnapshot((s) => (s ? { ...s, agents: s.agents.map((a) => (a.id === agent.id ? agent : a)) } : s));
+      }),
+    [runAction]
+  );
+  const restoreAgent = useCallback(
+    (agentId: string) =>
+      runAction(agentId, "restore", async () => {
+        const agent = await labApi.restoreAgent(agentId);
+        setSnapshot((s) => (s ? { ...s, agents: s.agents.map((a) => (a.id === agent.id ? agent : a)) } : s));
+      }),
+    [runAction]
+  );
+
   const setRuntimeLimit = useCallback(
     (wallClockMinutes: number) => {
       const labId = selectedRef.current;
@@ -341,6 +359,9 @@ export function useLab() {
     deleteLab,
     labAction,
     agentAction,
+    retireAgent,
+    restoreAgent,
+    refreshSnapshot,
     setRuntimeLimit,
     labJobs,
     saveGoals,

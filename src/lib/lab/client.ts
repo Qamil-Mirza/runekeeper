@@ -8,6 +8,9 @@ import type {
   LabErrorBody,
   LabJob,
   LabAsideReceipt,
+  LabAgentFilesDeleted,
+  LabArtifact,
+  LabEscalation,
   ComputeDecisionConfirmation,
   LabComputeApprovals,
   LabFileDeletion,
@@ -125,6 +128,33 @@ export function decideComputeRun(confirmation: ComputeDecisionConfirmation) {
   return mutate<LabComputeRun>(
     `/api/lab/compute/runs/${encodeURIComponent(confirmation.runId)}/${confirmation.decision}`,
     { confirmation }
+  );
+}
+
+/** Takes an agent out of the lab's team; nothing is deleted. */
+export function retireAgent(agentId: string, reason?: string) {
+  return mutate<LabAgent>(`/api/lab/agents/${encodeURIComponent(agentId)}/retire`, reason?.trim() ? { reason } : {});
+}
+
+export function restoreAgent(agentId: string) {
+  return mutate<LabAgent>(`/api/lab/agents/${encodeURIComponent(agentId)}/restore`);
+}
+
+/** Permanently deletes a retired agent's files; `confirmName` must be the agent's exact name. */
+export function deleteRetiredAgentFiles(agentId: string, confirmName: string) {
+  return mutate<LabAgentFilesDeleted>(`/api/lab/agents/${encodeURIComponent(agentId)}/delete-files`, { confirmName });
+}
+
+/** The body of a record, by the hash the record carries. */
+export function fetchArtifact(labId: string, hash: string) {
+  return labFetch<LabArtifact>(`/api/lab/labs/${encodeURIComponent(labId)}/artifacts/${encodeURIComponent(hash)}`);
+}
+
+/** Clears an escalation from what waits for the owner. The note is kept on the record only. */
+export function resolveEscalation(escalationId: string, note?: string) {
+  return mutate<LabEscalation>(
+    `/api/lab/escalations/${encodeURIComponent(escalationId)}/resolve`,
+    note?.trim() ? { note } : {}
   );
 }
 

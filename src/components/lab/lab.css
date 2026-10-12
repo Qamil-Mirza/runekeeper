@@ -934,3 +934,137 @@ button.lab-file-toggle:focus-visible {
     margin-left: 8px;
   }
 }
+
+/* An agent taken out of the team: present, but out of the way. */
+.lab-retired {
+  opacity: 0.72;
+  border-style: dashed;
+}
+.lab-retired:hover,
+.lab-retired:focus-within {
+  opacity: 1;
+}
+
+/* ─── Team hierarchy ───────────────────────────────────────────────────── */
+.lab-tree {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+.lab-tree-top {
+  position: relative;
+  padding-bottom: 18px;
+}
+/* The stem from the lead down to its team. */
+.lab-tree-top[aria-expanded="true"]::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  height: 18px;
+  border-left: 1px solid var(--lab-line-strong);
+}
+.lab-tree-node {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--lab-line-strong);
+  background: var(--lab-panel);
+  cursor: pointer;
+  transition: border-color 120ms ease;
+}
+.lab-tree-node:hover {
+  border-color: var(--lab-accent);
+}
+.lab-tree-node:focus-visible {
+  outline: 2px solid var(--lab-accent);
+  outline-offset: 2px;
+}
+.lab-tree-root {
+  width: auto;
+  min-width: 15rem;
+  max-width: 100%;
+  border-color: var(--lab-accent);
+  background: color-mix(in srgb, var(--lab-accent) 7%, var(--lab-panel));
+}
+.lab-tree-busy {
+  border-color: var(--lab-accent);
+}
+.lab-tree-branches {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(11rem, 16rem);
+  justify-content: center;
+  gap: 0 14px;
+  max-width: 100%;
+  overflow-x: auto;
+  border-top: 1px solid var(--lab-line-strong);
+}
+.lab-tree-branch {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 18px;
+}
+/* The tick from the bar down to each branch. */
+.lab-tree-branch::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  height: 12px;
+  border-left: 1px solid var(--lab-line-strong);
+}
+.lab-tree-branch-retired::before {
+  border-left-style: dashed;
+}
+.lab-tree-branch > .lab-eyebrow {
+  text-align: center;
+}
+/* On a phone the tree turns on its side: a rail down the left, branches off it. */
+@media (max-width: 640px) {
+  .lab-tree {
+    align-items: stretch;
+  }
+  .lab-tree-root {
+    width: 100%;
+  }
+  .lab-tree-top {
+    padding-bottom: 0;
+  }
+  .lab-tree-top[aria-expanded="true"]::after {
+    display: none;
+  }
+  .lab-tree-branches {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-left: 14px;
+    border-top: 0;
+    border-left: 1px solid var(--lab-line-strong);
+    overflow-x: visible;
+  }
+  .lab-tree-branch {
+    padding: 12px 0 0 16px;
+  }
+  .lab-tree-branch::before {
+    top: 20px;
+    left: 0;
+    width: 12px;
+    height: 0;
+    border-left: 0;
+    border-top: 1px solid var(--lab-line-strong);
+  }
+  .lab-tree-branch-retired::before {
+    border-top-style: dashed;
+  }
+  .lab-tree-branch > .lab-eyebrow {
+    text-align: left;
+  }
+}

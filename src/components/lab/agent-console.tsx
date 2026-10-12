@@ -21,6 +21,7 @@ import {
   STATE_PRESENTATION,
   agentName,
   leadName,
+  retiredLine,
   formatAgo,
   needsConfirm,
 } from "./agent-card";
@@ -231,7 +232,7 @@ function TranscriptEntry({ item, role, lead, now }: { item: LabTranscriptItem; r
     return (
       <li className="lab-entry lab-entry-thinking">
         <p className="flex items-baseline justify-between gap-3">
-          <span className="lab-eyebrow !text-[11px]">{role} thinking · a summary of its reasoning, not a reply</span>
+          <span className="lab-eyebrow !text-[11px]">{role} thinking</span>
           {when}
         </p>
         {thought.length > 400 ? (
@@ -421,6 +422,7 @@ function TaskRow({
 /** Why the composer cannot take an instruction right now, or null when it can. */
 function composerBlock(agent: LabAgent, disabled: boolean, runtimeLeft: number | null): string | null {
   if (disabled) return "The Lab Manager is not answering.";
+  if (agent.retired) return "This agent is retired and takes no work. Restore it on the lab's page to write to it.";
   if (agent.mode === "tmux") return "This agent is being driven at a terminal on the host.";
   switch (agent.state) {
     case "crashed":
@@ -631,7 +633,7 @@ export function AgentConsole({
           {presentation.label}
         </span>
         <div className="ml-auto flex flex-wrap gap-2">
-          {ALLOWED[agent.state].map((action) => (
+          {(agent.retired ? [] : ALLOWED[agent.state]).map((action) => (
             <LabButton
               key={action}
               onClick={() => clickAction(action)}
@@ -653,8 +655,14 @@ export function AgentConsole({
         </div>
       </header>
 
-      {(actionFailure || agent.blockedBy || agent.lastError) && (
+      {(actionFailure || agent.blockedBy || agent.lastError || agent.retired) && (
         <div className="flex flex-col gap-2 p-3 border-b border-[var(--lab-line)]">
+          {agent.retired && (
+            <Strip tone="off">
+              {retiredLine(agent, lead)}. It takes no work; its conversation stays readable and a side question still
+              works.
+            </Strip>
+          )}
           {actionFailure && (
             <Strip tone="bad" role="alert">
               {actionFailure.message}
@@ -734,7 +742,7 @@ export function AgentConsole({
             {agent.state === "working" && (
               <p className="lab-eyebrow mt-3 flex items-center gap-2 lab-tone-accent">
                 <StatusLight tone="accent" pulse />
-                {role} is working. Output appears as each message completes.
+                {role} is working
               </p>
             )}
             {agent.state === "waitingOnHuman" && (

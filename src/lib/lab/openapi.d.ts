@@ -474,7 +474,16 @@ export interface paths {
         /** List a lab's agents. */
         get: operations["listAgents"];
         put?: never;
-        post?: never;
+        /**
+         * The lab's owner adds an agent by hand.
+         * @description Under the same rules as an agent the Orchestrator adds: a name not
+         *     in use in the lab, a model from `Health.models.allowed` (or none,
+         *     for the default), and at most `Health.limits.maxAgentsPerLab`
+         *     agents in the lab; 400 `validation_failed` otherwise. It is
+         *     started when it is first given work or started by hand. Emits
+         *     `agent.created`.
+         */
+        post: operations["addLabAgent"];
         delete?: never;
         options?: never;
         head?: never;
@@ -611,6 +620,66 @@ export interface paths {
          *     `agent_not_running`; tmux mode 409 `tmux_mode_active`.
          */
         post: operations["sendAgentMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agentId}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Take an agent out of the lab's team. Nothing is deleted.
+         * @description 409 `agent_busy` while it is starting, working or waiting on a person; 409 `conflict` for the Orchestrator or an agent already retired. Messages kept for it are dropped. Emits `agent.retired`.
+         */
+        post: operations["retireAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agentId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bring a retired agent back into the lab's team.
+         * @description 409 `conflict` if it is not retired or the team is at the host's limit. It is not started by this. Emits `agent.restored`.
+         */
+        post: operations["restoreAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agentId}/delete-files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete everything a retired agent left on disk. It is gone for good.
+         * @description Its working directory, temp folders and saved conversations. Only for a retired agent (409 `conflict` otherwise). Its tasks, transcript and records stay. If it is restored later it starts afresh. Ask before sending it. Emits `files.deleted` with `all: true`.
+         */
+        post: operations["deleteRetiredAgentFiles"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1996,6 +2065,18 @@ export interface components {
             directive: string | null;
             /** @description On an agent the Orchestrator added: the Orchestrator's turn that added it. */
             spawnedByJobId: string | null;
+            /** @description Set once the agent was taken out of the lab's team. Null for an agent of the team. */
+            retired: {
+                at: components["schemas"]["Timestamp"];
+                /** @description Why, in the words of whoever retired it. Text written by an agent when `by.type` is `orchestrator`. */
+                reason: string | null;
+                /** @description `{type: orchestrator, jobId}` or `{type: human, actor}`. */
+                by: {
+                    [key: string]: unknown;
+                } | null;
+                /** @description When the owner deleted its working directory and saved conversations, if they did. */
+                filesDeletedAt: components["schemas"]["Timestamp"] | null;
+            } | null;
             /** @description Why no new task is dispatched to this agent. */
             blockedBy: {
                 /** @enum {string} */
@@ -2554,7 +2635,7 @@ export interface components {
             truncated: false;
         };
         /** @enum {string} */
-        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.deleted" | "files.deleted" | "network.hostTrusted" | "network.hostBlocked" | "compute.run" | "git.op" | "compute.cancelRequested" | "compute.approved" | "compute.denied" | "lab.statusChanged" | "agent.stateChanged" | "agent.created" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged" | "agent.activity";
+        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.deleted" | "files.deleted" | "network.hostTrusted" | "network.hostBlocked" | "compute.run" | "git.op" | "compute.cancelRequested" | "compute.approved" | "compute.denied" | "lab.statusChanged" | "agent.stateChanged" | "agent.created" | "agent.retired" | "agent.restored" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged" | "agent.activity";
         ManagerStartedData: {
             serviceVersion: string;
             interruptedJobs: {
@@ -3330,6 +3411,42 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    addLabAgent: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                labId: components["parameters"]["LabId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    role: "advisor" | "executor" | "reviewer";
+                    name: string;
+                    model?: string | null;
+                    /** @description What the agent is for. Given to it as its standing directive. */
+                    directive?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The agent. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     getAgent: {
         parameters: {
             query?: never;
@@ -3522,6 +3639,90 @@ export interface operations {
                         transcriptItem: components["schemas"]["TranscriptItem"];
                         /** @enum {string} */
                         delivery: "started" | "duringTask" | "queued";
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    retireAgent: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    reason?: string;
+                } | null;
+            };
+        };
+        responses: {
+            /** @description The agent, retired. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    restoreAgent: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The agent, part of the team again. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteRetiredAgentFiles: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        agent: components["schemas"]["Agent"];
+                        freedBytes: number;
                     };
                 };
             };

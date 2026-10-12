@@ -15,6 +15,11 @@ import {
   getJob,
   listJobs,
   sendAgentMessage,
+  retireAgent,
+  restoreAgent,
+  deleteRetiredAgentFiles,
+  getArtifact,
+  resolveEscalation,
   listComputeApprovals,
   getComputeRun,
   decideComputeRun,
@@ -212,6 +217,50 @@ describe("over a unix socket", () => {
     );
     assert.equal(seen[2].body, "");
     assert.equal(seen[2].headers["idempotency-key"], KEY);
+  });
+
+  it("reads a stored document by hash and refuses anything that is not a hash", async () => {
+    const { config, seen } = await onUnixSocket((_s, res) => json(res, 200, {}));
+    const hash = "ab".repeat(32);
+    await getArtifact(config, ACTOR, "lab_1", hash);
+    assert.deepEqual(seen.map((s) => `${s.method} ${s.url}`), [`GET /v1/labs/lab_1/artifacts/${hash}`]);
+    for (const bad of ["", "abc", "../jobs", `${hash}/x`, hash.toUpperCase()]) {
+      await assert.rejects(getArtifact(config, ACTOR, "lab_1", bad), /Invalid hash/);
+    }
+    assert.equal(seen.length, 1);
+  });
+
+  it("maps retiring, restoring and deleting a retired agent's files to the contract's paths", async () => {
+    const { config, seen } = await onUnixSocket((_s, res) => json(res, 200, {}));
+    await retireAgent(config, ACTOR, KEY, "agt_1", "No longer needed");
+    await retireAgent(config, ACTOR, KEY, "agt_1");
+    await restoreAgent(config, ACTOR, KEY, "agt_1");
+    await deleteRetiredAgentFiles(config, ACTOR, KEY, "agt_1");
+    assert.deepEqual(
+      seen.map((s) => `${s.method} ${s.url}`),
+      [
+        "POST /v1/agents/agt_1/retire",
+        "POST /v1/agents/agt_1/retire",
+        "POST /v1/agents/agt_1/restore",
+        "POST /v1/agents/agt_1/delete-files",
+      ]
+    );
+    assert.deepEqual(JSON.parse(seen[0].body), { reason: "No longer needed" });
+    assert.deepEqual(JSON.parse(seen[1].body), {});
+    assert.equal(seen[3].body, "");
+    assert.equal(seen[3].headers["idempotency-key"], KEY);
+  });
+
+  it("resolves an escalation with a note, or with an empty body", async () => {
+    const { config, seen } = await onUnixSocket((_s, res) => json(res, 200, {}));
+    await resolveEscalation(config, ACTOR, KEY, "esc_1", "Seen, thanks");
+    await resolveEscalation(config, ACTOR, KEY, "esc_1");
+    assert.deepEqual(seen.map((s) => `${s.method} ${s.url}`), [
+      "POST /v1/escalations/esc_1/resolve",
+      "POST /v1/escalations/esc_1/resolve",
+    ]);
+    assert.deepEqual(JSON.parse(seen[0].body), { note: "Seen, thanks" });
+    assert.deepEqual(JSON.parse(seen[1].body), {});
   });
 
   it("maps storage and file cleanup to the contract's paths, with the path encoded", async () => {
