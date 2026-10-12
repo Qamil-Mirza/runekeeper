@@ -15,6 +15,9 @@ import {
   getJob,
   listJobs,
   sendAgentMessage,
+  retireAgent,
+  restoreAgent,
+  deleteRetiredAgentFiles,
   getArtifact,
   resolveEscalation,
   listComputeApprovals,
@@ -225,6 +228,27 @@ describe("over a unix socket", () => {
       await assert.rejects(getArtifact(config, ACTOR, "lab_1", bad), /Invalid hash/);
     }
     assert.equal(seen.length, 1);
+  });
+
+  it("maps retiring, restoring and deleting a retired agent's files to the contract's paths", async () => {
+    const { config, seen } = await onUnixSocket((_s, res) => json(res, 200, {}));
+    await retireAgent(config, ACTOR, KEY, "agt_1", "No longer needed");
+    await retireAgent(config, ACTOR, KEY, "agt_1");
+    await restoreAgent(config, ACTOR, KEY, "agt_1");
+    await deleteRetiredAgentFiles(config, ACTOR, KEY, "agt_1");
+    assert.deepEqual(
+      seen.map((s) => `${s.method} ${s.url}`),
+      [
+        "POST /v1/agents/agt_1/retire",
+        "POST /v1/agents/agt_1/retire",
+        "POST /v1/agents/agt_1/restore",
+        "POST /v1/agents/agt_1/delete-files",
+      ]
+    );
+    assert.deepEqual(JSON.parse(seen[0].body), { reason: "No longer needed" });
+    assert.deepEqual(JSON.parse(seen[1].body), {});
+    assert.equal(seen[3].body, "");
+    assert.equal(seen[3].headers["idempotency-key"], KEY);
   });
 
   it("resolves an escalation with a note, or with an empty body", async () => {

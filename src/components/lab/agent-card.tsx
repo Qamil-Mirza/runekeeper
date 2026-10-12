@@ -9,6 +9,7 @@ import type {
   LabJob,
   LabTranscriptItem,
 } from "@/lib/lab/types";
+import { MAX_RETIRE_REASON_LENGTH } from "@/lib/lab/types";
 import { AgentAvatar } from "./agent-avatar";
 import { LabButton, StatusLight, toneClass, type LabTone } from "./lab-ui";
 import type { LabFailure } from "./use-lab";
@@ -65,6 +66,15 @@ export function ModelTag({ model }: { model: LabAgent["model"] | undefined }) {
       )}
     </span>
   );
+}
+
+/** Who took a retired agent out of the team, and why, in one line. */
+export function retiredLine(agent: LabAgent, lead: string): string | null {
+  const retired = agent.retired;
+  if (!retired) return null;
+  const by = (retired.by as { type?: string } | null)?.type;
+  const who = by === "orchestrator" ? `Retired by ${lead}` : by === "human" ? "Retired by you" : "Retired";
+  return retired.reason ? `${who}: ${retired.reason}` : who;
 }
 
 export const STATE_PRESENTATION: Record<LabAgentState, { label: string; tone: LabTone; pulse?: boolean }> = {
@@ -174,6 +184,8 @@ interface AgentCardProps {
   onAction: (action: AgentAction) => void;
   /** Opens this agent's conversation and tasks. */
   onOpen: () => void;
+  /** Takes the agent out of the team; absent when that is not offered for it. */
+  onRetire?: (reason?: string) => void;
 }
 
 export function AgentCard({
@@ -187,8 +199,12 @@ export function AgentCard({
   systemNote,
   onAction,
   onOpen,
+  onRetire,
 }: AgentCardProps) {
   const [confirming, setConfirming] = useState<AgentAction | null>(null);
+  // null until the owner asks to retire; then the reason they may give.
+  const [retiring, setRetiring] = useState<string | null>(null);
+  const working = agent.state === "starting" || agent.state === "working" || agent.state === "waitingOnHuman";
   const presentation = STATE_PRESENTATION[agent.state];
   const busy = pendingAction !== undefined;
 
@@ -307,8 +323,120 @@ export function AgentCard({
             Cancel
           </LabButton>
         )}
+        {onRetire && retiring === null && (
+          <LabButton
+            variant="quiet"
+            className="ml-auto"
+            disabled={disabled || busy || working}
+            title={working ? "An agent cannot be retired while it works" : undefined}
+            onClick={() => setRetiring("")}
+          >
+            Retire…
+          </LabButton>
+        )}
       </div>
 
+      {onRetire && retiring !== null && (
+        <div className="flex flex-col gap-2 border-t border-[var(--lab-line)] pt-3">
+          <p className="text-[13px] text-[var(--lab-dim)]">
+            Retiring takes {agentName(agent)} out of the team: it is stopped and given no more work. Nothing is
+            deleted, and you can restore it.
+          </p>
+          <label htmlFor={`lab-retire-${agent.id}`} className="lab-eyebrow !text-[10.5px]">
+            Reason (optional)
+          </label>
+          <input
+            id={`lab-retire-${agent.id}`}
+            className="lab-input"
+            maxLength={MAX_RETIRE_REASON_LENGTH}
+            value={retiring}
+            disabled={busy}
+            onChange={(e) => setRetiring(e.target.value)}
+          />
+          <div className="flex flex-wrap gap-2">
+            <LabButton
+              variant="danger"
+              disabled={disabled || busy || working}
+              onClick={() => {
+                onRetire(retiring);
+                setRetiring(null);
+              }}
+            >
+              Retire {agentName(agent)}
+            </LabButton>
+            <LabButton variant="quiet" onClick={() => setRetiring(null)}>
+              Cancel
+            </LabButton>
+          </div>
+        </div>
+      )}
+
+      {failure && (
+        <p className="lab-strip lab-tone-bad text-[13.5px]" role="alert">
+          {failure.message}
+        </p>
+      )}
+    </article>
+  );
+}
+
+/**
+ * An agent that was taken out of the lab's team. It takes no work and cannot
+ * be started; its conversation and files stay until the owner deletes them.
+ */
+export function RetiredAgentCard({
+  agent,
+  lead,
+  now,
+  disabled,
+  pendingAction,
+  failure,
+  onOpen,
+  onRestore,
+  onDeleteFiles,
+}: {
+  agent: LabAgent;
+  /** The name of the lab's lead agent, which may have retired it. */
+  lead: string;
+  now: number;
+  disabled: boolean;
+  pendingAction?: string;
+  failure?: LabFailure;
+  onOpen: () => void;
+  onRestore: () => void;
+  onDeleteFiles: () => void;
+}) {
+  const retired = agent.retired;
+  if (!retired) return null;
+  const busy = pendingAction !== undefined;
+  return (
+    <article className="lab-card lab-retired p-3 flex flex-col gap-2 min-w-0" aria-label={`${agentName(agent)}, retired agent`}>
+      <header className="flex items-center gap-3">
+        <AgentAvatar role={agent.role} state="stopped" size={40} />
+        <div className="min-w-0 mr-auto">
+          <h4 className="lab-eyebrow !text-[var(--lab-text)] break-words">{agentName(agent)}</h4>
+          <p className="lab-eyebrow mt-1 !text-[11px] !text-[var(--lab-faint)]">
+            {ROLE_LABELS[agent.role]} · retired {formatAgo(retired.at, now)}
+          </p>
+        </div>
+      </header>
+      <p className="text-[13.5px] break-words">{retiredLine(agent, lead)}</p>
+      <p className="text-[12.5px] text-[var(--lab-dim)]">
+        {retired.filesDeletedAt
+          ? `Its files were deleted ${formatAgo(retired.filesDeletedAt, now)}. Its tasks and conversation are still readable.`
+          : "Its files, tasks and conversation are kept."}
+      </p>
+      <div className="flex flex-wrap gap-2 mt-auto pt-1">
+        <LabButton onClick={onOpen}>Open</LabButton>
+        <LabButton onClick={onRestore} disabled={disabled || busy}>
+          {pendingAction === "restore" ? "Restoring…" : "Restore"}
+        </LabButton>
+        {!retired.filesDeletedAt && (
+          <LabButton variant="danger" className="ml-auto" onClick={onDeleteFiles} disabled={disabled || busy}>
+            Delete files…
+          </LabButton>
+        )}
+      </div>
       {failure && (
         <p className="lab-strip lab-tone-bad text-[13.5px]" role="alert">
           {failure.message}

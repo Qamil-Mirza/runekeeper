@@ -4,14 +4,14 @@ The files in this directory are unmodified copies from the Lab Manager repositor
 
 | | |
 |---|---|
-| Spec version | 1.0.0-draft.29 |
-| Source commit | `d5703f8` (branch `feat/m2-service-foundation` in the-lab) |
-| SHA-256 of `openapi.yaml` | `89837b10b8138eb0a12ca21b8e5141fdedcda8b047488dd89eb15edae67e7186` |
+| Spec version | 1.0.0-draft.31 |
+| Source commit | `f3194cd` (branch `feat/m2-service-foundation` in the-lab) |
+| SHA-256 of `openapi.yaml` | `6ad5af8ede2566259cc2436aea7e342dd0694b6b9945edfcc33c176afe6c990f` |
 | SHA-256 of `binding-vectors.json` | `810a758e1c1d47be04f80d70d55dcda0137e1f74d0e186ec7bcde950bd0605e7` |
 | Pinned on | 2026-10-11 |
 | Status | Agreed by both sessions. Additive over draft.8 to draft.11. |
 
-Previous pins: draft.28 at `2ac4ac0`, draft.27 at `8483ee0`, draft.26 at `feba36b`, draft.25 at `e58c685`, draft.24 at `c4bf07b`, draft.23 at `2236a92`, draft.22 at `2f542ff`, draft.21 at `9004345`, draft.20 at `8566245`, draft.18 at `d31b733`, draft.17 at `3022502`, draft.16 at `7ca0439`, draft.15 at `9fa649d`, draft.14 at `9fd203a`, draft.13 at `7918f04`, draft.11 at `5ddfdf3`, draft.9 at `657f691`, draft.8 at `5108015`, draft.6 at `8b4dd31`, draft.3 at `8e63b7a62b26b275e6d8f5eb8a031e507a30cdc7`, draft.4 at `9b7d41f`, draft.5 at `a1b8f3b`. Draft.4 replaced the signed-authorization scheme (`lab-authz-v2`: bindings, expiry, nonce) and added `binding` and `bindingHash` to approvals and jobs. Draft.5 is non-breaking: it defines `keyId`, documents the reasons for a rejected signature, and states that both sides read the service token from a file. Draft.6 is non-breaking: an approval binding's `experimentId` is exactly the job's; experiment, budget and other approvals are never created by a draft manager and a client offers only `denied` for them; approving a budget request never changes a limit by itself. The test vectors are unchanged.
+Previous pins: draft.29 at `d5703f8`, draft.28 at `2ac4ac0`, draft.27 at `8483ee0`, draft.26 at `feba36b`, draft.25 at `e58c685`, draft.24 at `c4bf07b`, draft.23 at `2236a92`, draft.22 at `2f542ff`, draft.21 at `9004345`, draft.20 at `8566245`, draft.18 at `d31b733`, draft.17 at `3022502`, draft.16 at `7ca0439`, draft.15 at `9fa649d`, draft.14 at `9fd203a`, draft.13 at `7918f04`, draft.11 at `5ddfdf3`, draft.9 at `657f691`, draft.8 at `5108015`, draft.6 at `8b4dd31`, draft.3 at `8e63b7a62b26b275e6d8f5eb8a031e507a30cdc7`, draft.4 at `9b7d41f`, draft.5 at `a1b8f3b`. Draft.4 replaced the signed-authorization scheme (`lab-authz-v2`: bindings, expiry, nonce) and added `binding` and `bindingHash` to approvals and jobs. Draft.5 is non-breaking: it defines `keyId`, documents the reasons for a rejected signature, and states that both sides read the service token from a file. Draft.6 is non-breaking: an approval binding's `experimentId` is exactly the job's; experiment, budget and other approvals are never created by a draft manager and a client offers only `denied` for them; approving a budget request never changes a limit by itself. The test vectors are unchanged.
 
 Draft.8 is breaking for signing: the signed text is `lab-authz-v3`, the only signed actions are `approval.decision` and `budget.set` (a lab's spending limit, with the host policy hash in the binding), and no binding carries a dollar figure except the spending limit. Job retry and experiment conclusions are no longer signed. It adds tool input and output in transcripts, read-only workspace files, a three-block budget (runtime, spend, estimates) and policy, subscription and resource status in health. `Budget.limits`, `Budget.consumed` and `Job.usage.costUsd` are kept, deprecated, for one release.
 
@@ -58,3 +58,7 @@ Draft.27 (`8483ee0`): a lab no longer has exactly one agent per role, so agents 
 Draft.28 (`2ac4ac0`) changes behaviour: a rental of compute waits for the owner's approval. New status `awaitingApproval` with `ComputeRun.approval.worstCaseUsd`; `GET /v1/compute/approvals` lists what waits across labs; `POST /v1/compute/runs/{runId}/approve` and `/deny` decide, unsigned, as the person Runekeeper authenticated. Runekeeper's server reads the run itself, requires the owner's confirmation to carry the figures on record, and requires a recent sign-in to approve. `Budget.compute.approval` is `none` when the owner waived this for a lab on the host.
 
 Draft.29 (`d5703f8`) changes behaviour: one branch and one pull request for a lab. `Lab.workBranch` is the branch the Orchestrator alone publishes; another agent's pushed branch is handed in to it (`GitOp.kind` `handIn`, nothing reaches the code host) and squashed into that branch.
+
+Draft.30 is additive: `POST /v1/labs/{labId}/agents` lets the owner add an agent by hand. Runekeeper does not surface it.
+
+Draft.31 (`f3194cd`) is additive: an agent can be retired (`Agent.retired`), by the Orchestrator or by the owner with `POST /v1/agents/{agentId}/retire`. It stays in the lab's list, takes no work and does not count toward `Health.limits.maxAgentsPerLab`. Only the owner restores one (`/restore`) or deletes a retired agent's files for good (`/delete-files`).

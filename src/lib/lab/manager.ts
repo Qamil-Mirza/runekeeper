@@ -20,6 +20,7 @@ import {
   type LabGitOps,
   type LabJobPage,
   type LabAsideReceipt,
+  type LabAgentFilesDeleted,
   type LabArtifact,
   ARTIFACT_HASH_PATTERN,
   type LabEscalation,
@@ -542,6 +543,44 @@ export async function decideComputeRun(
     path: `/v1/compute/runs/${assertId(runId)}/${decision === "approve" ? "approve" : "deny"}`,
     actor,
     idempotencyKey,
+  });
+}
+
+/** Takes an agent out of the lab's team. It is stopped and given no work; nothing is deleted. */
+export async function retireAgent(
+  config: LabConfig,
+  actor: LabActor,
+  idempotencyKey: string,
+  agentId: string,
+  reason?: string
+): Promise<LabAgent> {
+  return call<LabAgent>(config, {
+    method: "POST",
+    path: `/v1/agents/${assertId(agentId)}/retire`,
+    actor,
+    idempotencyKey,
+    body: reason === undefined ? {} : { reason },
+  });
+}
+
+/** Brings a retired agent back into the team. It is not started by this. */
+export async function restoreAgent(config: LabConfig, actor: LabActor, idempotencyKey: string, agentId: string): Promise<LabAgent> {
+  return call<LabAgent>(config, { method: "POST", path: `/v1/agents/${assertId(agentId)}/restore`, actor, idempotencyKey });
+}
+
+/** Deletes a retired agent's working directory, temp folders and saved conversations. There is no undo. */
+export async function deleteRetiredAgentFiles(
+  config: LabConfig,
+  actor: LabActor,
+  idempotencyKey: string,
+  agentId: string
+): Promise<LabAgentFilesDeleted> {
+  return call<LabAgentFilesDeleted>(config, {
+    method: "POST",
+    path: `/v1/agents/${assertId(agentId)}/delete-files`,
+    actor,
+    idempotencyKey,
+    timeoutMs: 30_000,
   });
 }
 
