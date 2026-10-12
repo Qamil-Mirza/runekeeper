@@ -15,6 +15,10 @@ import {
   getJob,
   listJobs,
   sendAgentMessage,
+  getStorage,
+  getAgentFileUsage,
+  deleteAgentFile,
+  clearAgentTemp,
   askAgentAside,
   setRuntimeLimit,
   cancelComputeRun,
@@ -191,6 +195,36 @@ describe("over a unix socket", () => {
     assert.deepEqual(seen.map((s) => `${s.method} ${s.url}`), ["POST /v1/agents/agt_1/asides"]);
     assert.deepEqual(JSON.parse(seen[0].body), { text: "What are you doing?" });
     assert.equal(seen[0].headers["idempotency-key"], KEY);
+  });
+
+  it("maps storage and file cleanup to the contract's paths, with the path encoded", async () => {
+    const { config, seen } = await onUnixSocket((_s, res) => json(res, 200, {}));
+    await getStorage(config, ACTOR);
+    await getAgentFileUsage(config, ACTOR, "agt_1", "");
+    await getAgentFileUsage(config, ACTOR, "agt_1", "runs/a b&c=d");
+    await deleteAgentFile(config, ACTOR, KEY, "agt_1", "runs/old #1");
+    await clearAgentTemp(config, ACTOR, KEY, "agt_1");
+    assert.deepEqual(
+      seen.map((s) => `${s.method} ${s.url}`),
+      [
+        "GET /v1/storage",
+        "GET /v1/agents/agt_1/files/usage?path=",
+        "GET /v1/agents/agt_1/files/usage?path=runs%2Fa%20b%26c%3Dd",
+        "DELETE /v1/agents/agt_1/files?path=runs%2Fold%20%231",
+        "POST /v1/agents/agt_1/files/clear-temp",
+      ]
+    );
+    assert.equal(seen[3].headers["idempotency-key"], KEY);
+    assert.equal(seen[3].body, "");
+  });
+
+  it("refuses a path that leaves the working directory before anything is sent", async () => {
+    const { config, seen } = await onUnixSocket((_s, res) => json(res, 200, {}));
+    for (const bad of ["", "/etc", "..", "a/../b", "a//b", "./a", "a/", "a\0b", "x".repeat(1025)]) {
+      await assert.rejects(deleteAgentFile(config, ACTOR, KEY, "agt_1", bad), /Invalid path/, JSON.stringify(bad));
+    }
+    await assert.rejects(getAgentFileUsage(config, ACTOR, "agt_1", "../x"), /Invalid path/);
+    assert.equal(seen.length, 0);
   });
 
   it("maps instructions, tasks and the runtime limit to the contract's paths", async () => {

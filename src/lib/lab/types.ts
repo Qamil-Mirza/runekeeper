@@ -18,6 +18,31 @@ export interface LabMessageReceipt {
 export interface LabAsideReceipt {
   question: LabTranscriptItem;
 }
+type Json<P extends keyof import("./openapi").paths, M extends string, S extends number> = import("./openapi").paths[P] extends Record<
+  M,
+  { responses: Record<S, { content: { "application/json": infer T } }> }
+>
+  ? T
+  : never;
+/** One directory of an agent's working directory, each entry with what it holds on disk. */
+export type LabFileUsage = Json<"/v1/agents/{agentId}/files/usage", "get", 200>;
+export type LabFileUsageEntry = LabFileUsage["entries"][number];
+export type LabFileDeletion = Json<"/v1/agents/{agentId}/files", "delete", 200>;
+export type LabTempCleared = Json<"/v1/agents/{agentId}/files/clear-temp", "post", 200>;
+/** Where the disk space is, by lab and agent. */
+export type LabStorage = Json<"/v1/storage", "get", 200>;
+/** Longest path inside a working directory the Lab Manager accepts. */
+export const MAX_FILE_PATH_LENGTH = 1024;
+/**
+ * A path inside an agent's working directory, as the browser may name it:
+ * relative, with no step out of the directory. The Lab Manager checks again.
+ */
+export function isWorkspacePath(path: unknown, allowEmpty: boolean): path is string {
+  if (typeof path !== "string" || path.length > MAX_FILE_PATH_LENGTH) return false;
+  if (path === "") return allowEmpty;
+  if (path.startsWith("/") || path.includes("\0")) return false;
+  return path.split("/").every((part) => part !== "" && part !== "." && part !== "..");
+}
 export type LabGitOp = Schemas["GitOp"];
 export interface LabGitOps {
   repo: string | null;

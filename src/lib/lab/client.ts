@@ -8,6 +8,10 @@ import type {
   LabErrorBody,
   LabJob,
   LabAsideReceipt,
+  LabFileDeletion,
+  LabFileUsage,
+  LabStorage,
+  LabTempCleared,
   LabGitOps,
   LabJobPage,
   LabMessageReceipt,
@@ -106,6 +110,25 @@ export function fetchComputeRuns(labId: string) {
 
 export function cancelComputeRun(runId: string) {
   return mutate<LabComputeRun>(`/api/lab/compute/runs/${encodeURIComponent(runId)}/cancel`);
+}
+
+export function fetchStorage() {
+  return labFetch<LabStorage>("/api/lab/storage");
+}
+
+export function fetchFileUsage(agentId: string, path: string) {
+  return labFetch<LabFileUsage>(
+    `/api/lab/agents/${encodeURIComponent(agentId)}/files/usage?path=${encodeURIComponent(path)}`
+  );
+}
+
+/** Permanently deletes one file or directory of an agent's working directory. */
+export function deleteAgentFile(agentId: string, path: string) {
+  return mutate<LabFileDeletion>(`/api/lab/agents/${encodeURIComponent(agentId)}/files`, { path }, "DELETE");
+}
+
+export function clearAgentTemp(agentId: string) {
+  return mutate<LabTempCleared>(`/api/lab/agents/${encodeURIComponent(agentId)}/files/clear-temp`);
 }
 
 export function fetchNetworkHosts() {

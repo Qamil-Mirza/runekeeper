@@ -8,6 +8,7 @@ import { DeleteLab } from "./delete-lab";
 import { labFontClasses } from "./fonts";
 import { LabOverview } from "./lab-overview";
 import { NeedsYou, needsYouCount } from "./needs-you";
+import { StoragePage } from "./storage-page";
 import { SitesPage } from "./sites-page";
 import { LAB_STATUS_TONE, LabRail } from "./lab-rail";
 import { LabTopBar } from "./lab-top-bar";
@@ -41,7 +42,7 @@ export function LabView({ onExit }: { onExit: () => void }) {
   // null until the owner picks: the central chat when the host allows delegation.
   const [viewChoice, setViewChoice] = useState<"chat" | "agents" | null>(null);
   // A page about every lab, shown instead of the selected lab.
-  const [page, setPage] = useState<"lab" | "needsYou" | "sites">("lab");
+  const [page, setPage] = useState<"lab" | "needsYou" | "sites" | "storage">("lab");
   // An agent to open once its lab has loaded, when coming from another page.
   const [wanted, setWanted] = useState<{ labId: string; agentId: string } | null>(null);
   const [warp, setWarp] = useState<"in" | "out" | null>("in");
@@ -167,6 +168,7 @@ export function LabView({ onExit }: { onExit: () => void }) {
                 }}
               />
             )}
+            {page === "storage" && <StoragePage now={now} disabled={controlsDisabled} />}
             {page === "sites" && (
               <SitesPage now={now} disabled={controlsDisabled} firstUse={capabilities?.networkTofu?.allowed === true} />
             )}

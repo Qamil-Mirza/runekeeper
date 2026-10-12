@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Lab Manager API
-  version: 1.0.0-draft.25
+  version: 1.0.0-draft.26
   summary: Contract between Runekeeper (client) and the Lab Manager (server).
   description: |
     Status: DRAFT under joint review. Implemented by the Lab Manager, which
@@ -23,6 +23,15 @@ info:
     - PATCH is naturally idempotent and takes no key.
     - Research endpoints (tag `research`) are implemented but new: they
       have not yet been used by a client and may still change before 1.0.
+
+    What changed in draft.26 (additive)
+    - Cleaning up: `GET /v1/agents/{agentId}/files/usage` gives one
+      directory with what each entry holds on disk;
+      `DELETE /v1/agents/{agentId}/files?path=` deletes a file or
+      directory of an agent's workspace for good (never while it works);
+      `POST /v1/agents/{agentId}/files/clear-temp` empties its temp
+      folders; `GET /v1/storage` says where the space is by lab and
+      agent. New event `files.deleted`.
 
     What changed in draft.25 (additive)
     - The agent's reasoning is shown: new transcript item kind
@@ -1076,6 +1085,41 @@ paths:
                         size: { type: integer }
                         modifiedAt: { type: [string, "null"] }
         default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [agents]
+      operationId: deleteAgentFile
+      summary: Delete one file or directory of the agent's workspace. It is gone for good.
+      description: |
+        For the lab's owner, to free space. There is no trash and no undo:
+        ask before sending it. Only a path inside the agent's workspace;
+        a link is removed as a link, never what it points to. The workspace
+        itself cannot be deleted this way (400): deleting the lab does that.
+        409 `agent_busy` while the agent is starting, working or waiting on
+        a person. 404 when the path is not there. Emits `files.deleted` and
+        leaves a `systemNote` in the agent's transcript. The agent is not
+        told in its conversation: if it relied on what was deleted, say so
+        in a message.
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: path
+          in: query
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 1024 }
+      responses:
+        "200":
+          description: Deleted.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agentId, path, removed, freedBytes]
+                properties:
+                  agentId: { type: string }
+                  path: { type: string }
+                  removed: { type: boolean }
+                  freedBytes: { type: integer }
+        default: { $ref: "#/components/responses/Error" }
 
   /v1/agents/{agentId}/files/content:
     get:
@@ -1104,6 +1148,128 @@ paths:
                   content: { type: [string, "null"] }
                   truncated: { type: boolean }
                   binary: { type: boolean }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/agents/{agentId}/files/usage:
+    get:
+      tags: [agents]
+      operationId: getAgentFileUsage
+      summary: One directory of the agent's workspace with what each entry holds on disk, largest first.
+      description: |
+        For deciding what to delete. A directory is counted with everything
+        below it; sizes are space used on disk. Links are never followed.
+        At most 500 entries. It walks the files, so a large tree can take
+        some seconds.
+      parameters:
+        - $ref: "#/components/parameters/AgentId"
+        - name: path
+          in: query
+          schema: { type: string, maxLength: 1024, default: "" }
+      responses:
+        "200":
+          description: The directory's entries with their sizes.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agentId, path, totalBytes, entries, truncated]
+                properties:
+                  agentId: { type: string }
+                  path: { type: string }
+                  totalBytes: { type: integer, description: "Everything in this directory." }
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      required: [name, type, bytes]
+                      properties:
+                        name: { type: string }
+                        type: { type: string, enum: [file, directory, other] }
+                        bytes: { type: integer }
+                  truncated: { type: boolean }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/agents/{agentId}/files/clear-temp:
+    post:
+      tags: [agents]
+      operationId: clearAgentTemp
+      summary: Empty the temp folders the agent's commands use.
+      description: |
+        Each agent's processes have temp folders of their own, outside its
+        workspace, which nothing else empties. 409 `agent_busy` while the
+        agent is starting, working or waiting on a person. Emits
+        `files.deleted` with `temp: true`.
+      parameters: *agentActionParams
+      responses:
+        "200":
+          description: Emptied.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agentId, freedBytes]
+                properties:
+                  agentId: { type: string }
+                  freedBytes: { type: integer }
+        default: { $ref: "#/components/responses/Error" }
+
+  /v1/storage:
+    get:
+      tags: [system]
+      operationId: getStorage
+      summary: Where the disk space is, by lab and agent, and the manager's own.
+      description: |
+        Measured when asked (it walks the files) and kept for about 20
+        seconds. Archived labs are included. A size is null when it could
+        not be measured (the worker is not reachable). Database copies left
+        by deployments are reported here but are removed on the host, not
+        through the API.
+      responses:
+        "200":
+          description: Sizes in bytes.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [measuredAt, freeBytes, labs, manager]
+                properties:
+                  measuredAt: { $ref: "#/components/schemas/Timestamp" }
+                  freeBytes: { type: object, additionalProperties: { type: [number, "null"] }, description: "Free space per storage area, as in Health." }
+                  labs:
+                    type: array
+                    items:
+                      type: object
+                      required: [labId, name, archived, totalBytes, agents]
+                      properties:
+                        labId: { type: string }
+                        name: { type: string }
+                        archived: { type: boolean }
+                        totalBytes: { type: integer }
+                        agents:
+                          type: array
+                          items:
+                            type: object
+                            required: [agentId, role, state, workspaceBytes, tempBytes]
+                            properties:
+                              agentId: { type: string }
+                              role: { type: string }
+                              state: { $ref: "#/components/schemas/AgentState" }
+                              workspaceBytes: { type: [integer, "null"] }
+                              tempBytes: { type: [integer, "null"] }
+                  manager:
+                    type: object
+                    required: [databaseBytes, backups]
+                    properties:
+                      databaseBytes: { type: integer }
+                      backups:
+                        type: [object, "null"]
+                        description: Copies of the database left by deployments. Null when the folder cannot be read.
+                        required: [count, bytes, oldest, newest]
+                        properties:
+                          count: { type: integer }
+                          bytes: { type: integer }
+                          oldest: { type: [string, "null"] }
+                          newest: { type: [string, "null"] }
         default: { $ref: "#/components/responses/Error" }
 
   /v1/labs/{labId}/jobs:
@@ -3137,6 +3303,7 @@ components:
         - lab.created
         - lab.updated
         - lab.deleted
+        - files.deleted
         - network.hostTrusted
         - network.hostBlocked
         - compute.run
