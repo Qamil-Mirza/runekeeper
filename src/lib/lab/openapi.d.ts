@@ -1856,14 +1856,14 @@ export interface components {
             /** @description Strictly increasing per agent. */
             seq: number;
             /**
-             * @description `asideQuestion`: a person's side question (it has an actor); `asideAnswer`: the answer a copy of the agent gave. Neither is part of the agent's own conversation or of any job (`jobId` is null). `managerInstruction`: instructions the Lab Manager wrote itself for a job the policy started. `delegatedInstruction`: instructions the Orchestrator wrote in a handoff, as given to the target agent; it carries `delegation`. Neither has an actor and neither is the owner's words.
+             * @description `assistantThinking`: a summary of the agent's reasoning before its next text or tool call; show it apart from what the agent said. `asideQuestion`: a person's side question (it has an actor); `asideAnswer`: the answer a copy of the agent gave. Neither is part of the agent's own conversation or of any job (`jobId` is null). `managerInstruction`: instructions the Lab Manager wrote itself for a job the policy started. `delegatedInstruction`: instructions the Orchestrator wrote in a handoff, as given to the target agent; it carries `delegation`. Neither has an actor and neither is the owner's words.
              * @enum {string}
              */
-            kind: "humanMessage" | "managerInstruction" | "delegatedInstruction" | "assistantText" | "toolCall" | "systemNote" | "asideQuestion" | "asideAnswer";
+            kind: "humanMessage" | "managerInstruction" | "delegatedInstruction" | "assistantText" | "assistantThinking" | "toolCall" | "systemNote" | "asideQuestion" | "asideAnswer";
             /** @description On a `delegatedInstruction` only. Same as the job's `delegation`. */
             delegation?: Record<string, never> | null;
             createdAt: components["schemas"]["Timestamp"];
-            /** @description Capped at 32 KB. Assistant thinking is never included. */
+            /** @description Capped at 32 KB. On an `assistantThinking` item this is a summary of the reasoning, never the full reasoning. */
             text?: string;
             /** @default false */
             truncated: boolean;

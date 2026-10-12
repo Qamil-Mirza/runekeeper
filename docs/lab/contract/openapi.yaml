@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Lab Manager API
-  version: 1.0.0-draft.24
+  version: 1.0.0-draft.25
   summary: Contract between Runekeeper (client) and the Lab Manager (server).
   description: |
     Status: DRAFT under joint review. Implemented by the Lab Manager, which
@@ -23,6 +23,16 @@ info:
     - PATCH is naturally idempotent and takes no key.
     - Research endpoints (tag `research`) are implemented but new: they
       have not yet been used by a client and may still change before 1.0.
+
+    What changed in draft.25 (additive)
+    - The agent's reasoning is shown: new transcript item kind
+      `assistantThinking`, a summary of the model's reasoning before the
+      text or tool call that follows it in the same job. It is a summary
+      made by the model's provider, not the full reasoning, and some
+      steps have none. `Agent.currentActivity` can read "Thinking".
+    - The default limits of a task are now host settings and larger:
+      4 hours of running time (was 30 minutes) and a cost estimate of 40
+      (was 2). `Job.limits` reports what applies.
 
     What changed in draft.24 (additive)
     - A side question: `POST /v1/agents/{agentId}/asides` asks about an
@@ -2556,13 +2566,13 @@ components:
         seq: { type: integer, description: "Strictly increasing per agent." }
         kind:
           type: string
-          enum: [humanMessage, managerInstruction, delegatedInstruction, assistantText, toolCall, systemNote, asideQuestion, asideAnswer]
-          description: "`asideQuestion`: a person's side question (it has an actor); `asideAnswer`: the answer a copy of the agent gave. Neither is part of the agent's own conversation or of any job (`jobId` is null). `managerInstruction`: instructions the Lab Manager wrote itself for a job the policy started. `delegatedInstruction`: instructions the Orchestrator wrote in a handoff, as given to the target agent; it carries `delegation`. Neither has an actor and neither is the owner's words."
+          enum: [humanMessage, managerInstruction, delegatedInstruction, assistantText, assistantThinking, toolCall, systemNote, asideQuestion, asideAnswer]
+          description: "`assistantThinking`: a summary of the agent's reasoning before its next text or tool call; show it apart from what the agent said. `asideQuestion`: a person's side question (it has an actor); `asideAnswer`: the answer a copy of the agent gave. Neither is part of the agent's own conversation or of any job (`jobId` is null). `managerInstruction`: instructions the Lab Manager wrote itself for a job the policy started. `delegatedInstruction`: instructions the Orchestrator wrote in a handoff, as given to the target agent; it carries `delegation`. Neither has an actor and neither is the owner's words."
         delegation:
           type: [object, "null"]
           description: On a `delegatedInstruction` only. Same as the job's `delegation`.
         createdAt: { $ref: "#/components/schemas/Timestamp" }
-        text: { type: string, description: "Capped at 32 KB. Assistant thinking is never included." }
+        text: { type: string, description: "Capped at 32 KB. On an `assistantThinking` item this is a summary of the reasoning, never the full reasoning." }
         truncated: { type: boolean, default: false }
         actor: { $ref: "#/components/schemas/Actor" }
         pending: { type: boolean, description: "On an `asideQuestion`: true until its answer, or the note that there was none, has been added." }

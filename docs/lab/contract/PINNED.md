@@ -4,14 +4,14 @@ The files in this directory are unmodified copies from the Lab Manager repositor
 
 | | |
 |---|---|
-| Spec version | 1.0.0-draft.24 |
-| Source commit | `c4bf07b` (branch `feat/m2-service-foundation` in the-lab) |
-| SHA-256 of `openapi.yaml` | `8f1d58cf736929b37612407947b33c3b50c11a1005f0dfafc359575f3adf418d` |
+| Spec version | 1.0.0-draft.25 |
+| Source commit | `e58c685` (branch `feat/m2-service-foundation` in the-lab) |
+| SHA-256 of `openapi.yaml` | `2c57b9b63414ebb53d33dbf462c258a816fdbb6a314fbb821015b56db61a1fa2` |
 | SHA-256 of `binding-vectors.json` | `810a758e1c1d47be04f80d70d55dcda0137e1f74d0e186ec7bcde950bd0605e7` |
 | Pinned on | 2026-10-11 |
 | Status | Agreed by both sessions. Additive over draft.8 to draft.11. |
 
-Previous pins: draft.23 at `2236a92`, draft.22 at `2f542ff`, draft.21 at `9004345`, draft.20 at `8566245`, draft.18 at `d31b733`, draft.17 at `3022502`, draft.16 at `7ca0439`, draft.15 at `9fa649d`, draft.14 at `9fd203a`, draft.13 at `7918f04`, draft.11 at `5ddfdf3`, draft.9 at `657f691`, draft.8 at `5108015`, draft.6 at `8b4dd31`, draft.3 at `8e63b7a62b26b275e6d8f5eb8a031e507a30cdc7`, draft.4 at `9b7d41f`, draft.5 at `a1b8f3b`. Draft.4 replaced the signed-authorization scheme (`lab-authz-v2`: bindings, expiry, nonce) and added `binding` and `bindingHash` to approvals and jobs. Draft.5 is non-breaking: it defines `keyId`, documents the reasons for a rejected signature, and states that both sides read the service token from a file. Draft.6 is non-breaking: an approval binding's `experimentId` is exactly the job's; experiment, budget and other approvals are never created by a draft manager and a client offers only `denied` for them; approving a budget request never changes a limit by itself. The test vectors are unchanged.
+Previous pins: draft.24 at `c4bf07b`, draft.23 at `2236a92`, draft.22 at `2f542ff`, draft.21 at `9004345`, draft.20 at `8566245`, draft.18 at `d31b733`, draft.17 at `3022502`, draft.16 at `7ca0439`, draft.15 at `9fa649d`, draft.14 at `9fd203a`, draft.13 at `7918f04`, draft.11 at `5ddfdf3`, draft.9 at `657f691`, draft.8 at `5108015`, draft.6 at `8b4dd31`, draft.3 at `8e63b7a62b26b275e6d8f5eb8a031e507a30cdc7`, draft.4 at `9b7d41f`, draft.5 at `a1b8f3b`. Draft.4 replaced the signed-authorization scheme (`lab-authz-v2`: bindings, expiry, nonce) and added `binding` and `bindingHash` to approvals and jobs. Draft.5 is non-breaking: it defines `keyId`, documents the reasons for a rejected signature, and states that both sides read the service token from a file. Draft.6 is non-breaking: an approval binding's `experimentId` is exactly the job's; experiment, budget and other approvals are never created by a draft manager and a client offers only `denied` for them; approving a budget request never changes a limit by itself. The test vectors are unchanged.
 
 Draft.8 is breaking for signing: the signed text is `lab-authz-v3`, the only signed actions are `approval.decision` and `budget.set` (a lab's spending limit, with the host policy hash in the binding), and no binding carries a dollar figure except the spending limit. Job retry and experiment conclusions are no longer signed. It adds tool input and output in transcripts, read-only workspace files, a three-block budget (runtime, spend, estimates) and policy, subscription and resource status in health. `Budget.limits`, `Budget.consumed` and `Job.usage.costUsd` are kept, deprecated, for one release.
 
@@ -48,3 +48,5 @@ Draft.22 is additive: delegation continues in rounds. When every task the Orches
 Draft.23 is additive: a `humanMessage` transcript item carries `unread` (sent into the running task, not yet taken up) beside `queued`, and `transcript.itemUpdated` fires when either changes.
 
 Draft.24 (`c4bf07b`) is additive: a side question. `POST /v1/agents/{agentId}/asides` asks about an agent's conversation; a copy of it with no tools answers and is discarded, and the agent never sees the question or the answer. New transcript item kinds `asideQuestion` (with `pending`) and `asideAnswer` (with `asideOf`); a `systemNote` with `asideOf` says there was no answer.
+
+Draft.25 (`e58c685`) is additive: transcript item kind `assistantThinking`, a summary of the agent's reasoning before the text or tool call that follows it, made by the model's provider and never the full reasoning. A task's default limits are now host settings (4 hours, cost estimate 40); `Job.limits` reports what applies.

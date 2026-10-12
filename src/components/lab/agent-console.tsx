@@ -205,6 +205,27 @@ function TranscriptEntry({ item, role, now }: { item: LabTranscriptItem; role: s
     );
   }
 
+  // The agent's reasoning, as summarised by the model's provider. Not something it said to anyone.
+  if (item.kind === "assistantThinking") {
+    const thought = item.text ?? "";
+    return (
+      <li className="lab-entry lab-entry-thinking">
+        <p className="flex items-baseline justify-between gap-3">
+          <span className="lab-eyebrow !text-[11px]">{role} thinking · a summary of its reasoning, not a reply</span>
+          {when}
+        </p>
+        {thought.length > 400 ? (
+          <details className="mt-1">
+            <summary className="cursor-pointer break-words">{thought.slice(0, 200).trimEnd()}… Show all</summary>
+            <p className="mt-2 whitespace-pre-wrap break-words">{thought}</p>
+          </details>
+        ) : (
+          <p className="mt-1 whitespace-pre-wrap break-words">{thought}</p>
+        )}
+      </li>
+    );
+  }
+
   // A side question and its answer sit apart: they are about the conversation, not in it.
   if (item.kind === "asideQuestion" || item.kind === "asideAnswer" || (item.kind === "systemNote" && item.asideOf)) {
     return (

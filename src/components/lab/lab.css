@@ -258,6 +258,16 @@
   border-left-color: var(--lab-warn);
   background: color-mix(in srgb, var(--lab-warn) 6%, transparent);
 }
+/* The agent's reasoning: dimmer than what it said. */
+.lab-entry-thinking {
+  background: transparent;
+  border-left-style: dotted;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  font-size: 13.5px;
+  font-style: italic;
+  color: var(--lab-dim);
+}
 /* A side question and its answer: beside the conversation, not in it. */
 .lab-entry-aside {
   margin-left: 20px;
