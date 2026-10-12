@@ -89,7 +89,13 @@ export function DeleteAgentFiles({
           </dd>
           <dt className="text-[var(--lab-dim)]">Size</dt>
           <dd className="lab-mono">
-            {bytes === undefined ? "measuring…" : bytes === null ? "could not be measured" : formatBytes(bytes)}
+            {bytes === undefined
+              ? "measuring…"
+              : bytes === null
+                ? "could not be measured"
+                : bytes === 0
+                  ? "No files on disk"
+                  : formatBytes(bytes)}
           </dd>
         </dl>
         <p id="lab-agent-files-text" className="text-[13.5px]">

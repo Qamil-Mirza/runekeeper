@@ -472,7 +472,11 @@ export function LabView({ onExit }: { onExit: () => void }) {
                         disabled={controlsDisabled}
                         onClose={() => setDeletingFilesOf(null)}
                         onDeleted={(freed) => {
-                          setFilesReceipt(`Deleted the files of ${agentName(deletingFiles)}: ${formatBytes(freed)} freed.`);
+                          setFilesReceipt(
+                            freed === 0
+                              ? `${agentName(deletingFiles)} had no files on disk; its saved conversations are cleared.`
+                              : `Deleted the files of ${agentName(deletingFiles)}: ${formatBytes(freed)} freed.`
+                          );
                           setDeletingFilesOf(null);
                           void lab.refreshSnapshot();
                         }}
