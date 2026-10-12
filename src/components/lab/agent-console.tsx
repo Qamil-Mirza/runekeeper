@@ -4,6 +4,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   MAX_ASIDE_LENGTH,
+  MAX_RETIRE_REASON_LENGTH,
   MAX_INSTRUCTION_LENGTH,
   type AgentAction,
   type LabAgent,
@@ -422,7 +423,7 @@ function TaskRow({
 /** Why the composer cannot take an instruction right now, or null when it can. */
 function composerBlock(agent: LabAgent, disabled: boolean, runtimeLeft: number | null): string | null {
   if (disabled) return "The Lab Manager is not answering.";
-  if (agent.retired) return "This agent is retired and takes no work. Restore it on the lab's page to write to it.";
+  if (agent.retired) return "This agent is retired and takes no work. Restore it to the team, above, to write to it.";
   if (agent.mode === "tmux") return "This agent is being driven at a terminal on the host.";
   switch (agent.state) {
     case "crashed":
@@ -448,6 +449,9 @@ export function AgentConsole({
   actionFailure,
   onAction,
   onClose,
+  onRetire,
+  onRestore,
+  onDeleteFiles,
   central = false,
   agents = [],
   onOpenAgent,
@@ -474,10 +478,19 @@ export function AgentConsole({
   actionFailure?: LabFailure;
   onAction: (action: AgentAction) => void;
   onClose: () => void;
+  /** Takes the agent out of the team; absent when that is not offered for it. */
+  onRetire?: (reason?: string) => void;
+  /** For a retired agent: brings it back into the team. */
+  onRestore?: () => void;
+  /** For a retired agent that still has files: asks to delete them. */
+  onDeleteFiles?: () => void;
 }) {
   const con = useAgentConsole(labId, agent, !disabled);
   const [draft, setDraft] = useState("");
   const [confirming, setConfirming] = useState<AgentAction | null>(null);
+  // null until the owner asks to retire; then the reason they may give.
+  const [retiring, setRetiring] = useState<string | null>(null);
+  const working = agent.state === "starting" || agent.state === "working" || agent.state === "waitingOnHuman";
   const [tab, setTab] = useState<"conversation" | "tasks">("conversation");
   const presentation = STATE_PRESENTATION[agent.state];
   // The agent's name; called `role` here from when a lab had one agent per role.
@@ -492,6 +505,7 @@ export function AgentConsole({
   useEffect(() => {
     setDelivered(null);
     setDraft(initialDraft ?? "");
+    setRetiring(null);
     setMode("message");
     setTab("conversation");
   }, [agent.id, initialDraft]);
@@ -652,16 +666,77 @@ export function AgentConsole({
               Cancel
             </LabButton>
           )}
+          {onRetire && retiring === null && (
+            <LabButton
+              variant="quiet"
+              disabled={disabled || pendingAction !== undefined || working}
+              title={working ? "An agent cannot be retired while it works" : undefined}
+              onClick={() => setRetiring("")}
+            >
+              Retire…
+            </LabButton>
+          )}
         </div>
       </header>
+
+      {onRetire && retiring !== null && (
+        <div className="flex flex-col gap-2 p-3 border-b border-[var(--lab-line)]">
+          <p className="text-[13px] text-[var(--lab-dim)]">
+            Retiring takes {role} out of the team: it is stopped and given no more work. Nothing is deleted, and you
+            can restore it.
+          </p>
+          <label htmlFor="lab-retire-reason" className="lab-eyebrow !text-[10.5px]">
+            Reason (optional)
+          </label>
+          <input
+            id="lab-retire-reason"
+            className="lab-input"
+            maxLength={MAX_RETIRE_REASON_LENGTH}
+            value={retiring}
+            onChange={(e) => setRetiring(e.target.value)}
+          />
+          <div className="flex flex-wrap gap-2">
+            <LabButton
+              variant="danger"
+              disabled={disabled || pendingAction !== undefined || working}
+              onClick={() => {
+                onRetire(retiring);
+                setRetiring(null);
+              }}
+            >
+              Retire {role}
+            </LabButton>
+            <LabButton variant="quiet" onClick={() => setRetiring(null)}>
+              Cancel
+            </LabButton>
+          </div>
+        </div>
+      )}
 
       {(actionFailure || agent.blockedBy || agent.lastError || agent.retired) && (
         <div className="flex flex-col gap-2 p-3 border-b border-[var(--lab-line)]">
           {agent.retired && (
             <Strip tone="off">
-              {retiredLine(agent, lead)}. It takes no work; its conversation stays readable and a side question still
-              works.
+              {retiredLine(agent, lead)?.replace(/[.\s]+$/, "")}. It takes no work; its conversation stays readable and a side question still
+              works.{" "}
+              {agent.retired.filesDeletedAt
+                ? `Its files were deleted ${formatAgo(agent.retired.filesDeletedAt, now)}.`
+                : "Its files are kept."}
             </Strip>
+          )}
+          {agent.retired && (onRestore || onDeleteFiles) && (
+            <div className="flex flex-wrap gap-2">
+              {onRestore && (
+                <LabButton onClick={onRestore} disabled={disabled || pendingAction !== undefined}>
+                  {pendingAction === "restore" ? "Restoring…" : "Restore to the team"}
+                </LabButton>
+              )}
+              {onDeleteFiles && (
+                <LabButton variant="danger" onClick={onDeleteFiles} disabled={disabled || pendingAction !== undefined}>
+                  Delete files…
+                </LabButton>
+              )}
+            </div>
           )}
           {actionFailure && (
             <Strip tone="bad" role="alert">

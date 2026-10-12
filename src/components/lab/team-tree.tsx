@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 import type { LabAgent, LabJob } from "@/lib/lab/types";
 import { AgentAvatar } from "./agent-avatar";
-import { ROLE_LABELS, STATE_PRESENTATION, agentName, jobSummary, modelLine } from "./agent-card";
+import { BLOCKED_REASONS, ROLE_LABELS, STATE_PRESENTATION, agentName, doingNow, jobSummary, modelLine } from "./agent-card";
 import { StatusLight } from "./lab-ui";
 
 const GROUPS: { role: LabAgent["role"]; label: string }[] = [
@@ -54,7 +54,29 @@ function Node({
             </>
           )}
         </span>
-        {task && <span className="mt-0.5 block truncate text-[12px] text-[var(--lab-accent)]">↳ {jobSummary(task, 60)}</span>}
+        {task ? (
+          <span className="mt-0.5 block truncate text-[12px] text-[var(--lab-accent)]">↳ {jobSummary(task, 60)}</span>
+        ) : (
+          !agent.retired &&
+          agent.state === "working" && (
+            <span className="mt-0.5 block truncate text-[12px] text-[var(--lab-dim)]">{doingNow(agent)}</span>
+          )
+        )}
+        {!agent.retired && agent.pendingApprovalCount > 0 && (
+          <span className="mt-0.5 block truncate text-[12px] text-[var(--lab-bad)]">
+            {agent.pendingApprovalCount} approval{agent.pendingApprovalCount === 1 ? "" : "s"} waiting
+          </span>
+        )}
+        {!agent.retired && agent.blockedBy && (
+          <span className="mt-0.5 block truncate text-[12px] text-[var(--lab-warn)]">
+            {BLOCKED_REASONS[agent.blockedBy.reason] ?? "Held"}
+          </span>
+        )}
+        {!agent.retired && agent.state === "crashed" && agent.lastError && (
+          <span className="mt-0.5 block truncate text-[12px] text-[var(--lab-bad)]" title={agent.lastError.message}>
+            {agent.lastError.message}
+          </span>
+        )}
       </span>
     </button>
   );

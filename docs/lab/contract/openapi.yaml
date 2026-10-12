@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Lab Manager API
-  version: 1.0.0-draft.31
+  version: 1.0.0-draft.32
   summary: Contract between Runekeeper (client) and the Lab Manager (server).
   description: |
     Status: DRAFT under joint review. Implemented by the Lab Manager, which
@@ -23,6 +23,11 @@ info:
     - PATCH is naturally idempotent and takes no key.
     - Research endpoints (tag `research`) are implemented but new: they
       have not yet been used by a client and may still change before 1.0.
+
+    What changed in draft.32 (additive)
+    - `Health.models.roles`: the model of an advisor, executor or
+      reviewer that was given none of its own, set on the host.
+      `Agent.model.requested` already reflects it.
 
     What changed in draft.31 (additive)
     - An agent can be retired: taken out of the lab's team. It is
@@ -2360,6 +2365,7 @@ components:
           properties:
             oracle: { type: [string, "null"], description: "The Orchestrator's model." }
             default: { type: [string, "null"], description: "The model of an agent that was given none. Null leaves the choice to Claude Code." }
+            roles: { type: object, additionalProperties: { type: [string, "null"] }, description: "The model of an advisor, executor or reviewer that was given none of its own. Null leaves the choice to Claude Code." }
             allowed: { type: array, items: { type: string }, description: "What the Orchestrator may choose from for an agent it adds." }
         limits:
           type: object

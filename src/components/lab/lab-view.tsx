@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { AgentCard, RetiredAgentCard, agentName, formatAgo, leadName } from "./agent-card";
+import { agentName, formatAgo } from "./agent-card";
 import { DeleteAgentFiles } from "./delete-agent-files";
 import { TeamTree } from "./team-tree";
 import { formatBytes } from "./storage-page";
@@ -360,6 +360,24 @@ export function LabView({ onExit }: { onExit: () => void }) {
                 )}
                 </div>
 
+                {deletingFiles && (
+                  <DeleteAgentFiles
+                    agent={deletingFiles}
+                    labName={snapshot.lab.name}
+                    disabled={controlsDisabled}
+                    onClose={() => setDeletingFilesOf(null)}
+                    onDeleted={(freed) => {
+                      setFilesReceipt(
+                        freed === 0
+                          ? `${agentName(deletingFiles)} had no files on disk; its saved conversations are cleared.`
+                          : `Deleted the files of ${agentName(deletingFiles)}: ${formatBytes(freed)} freed.`
+                      );
+                      setDeletingFilesOf(null);
+                      void lab.refreshSnapshot();
+                    }}
+                  />
+                )}
+
                 {!openAgent && view === "chat" && orchestrator ? (
                   <AgentConsole
                     central
@@ -391,6 +409,15 @@ export function LabView({ onExit }: { onExit: () => void }) {
                     actionFailure={lab.actionFailures[openAgent.id]}
                     onAction={(action) => void lab.agentAction(openAgent.id, action)}
                     onClose={() => setOpenAgentId(null)}
+                    onRetire={
+                      canRetire && !openAgent.retired && openAgent.role !== "orchestrator"
+                        ? (reason) => void lab.retireAgent(openAgent.id, reason)
+                        : undefined
+                    }
+                    onRestore={openAgent.retired ? () => void lab.restoreAgent(openAgent.id) : undefined}
+                    onDeleteFiles={
+                      openAgent.retired && !openAgent.retired.filesDeletedAt ? () => setDeletingFilesOf(openAgent.id) : undefined
+                    }
                   />
                 ) : (
                   <>
@@ -407,81 +434,18 @@ export function LabView({ onExit }: { onExit: () => void }) {
                       onOpenAgent={openAgentWith}
                     />
                     <div className="lab-panel p-4 flex flex-col gap-3 min-w-0">
-                      <p className="lab-eyebrow">Team</p>
+                      <p className="lab-eyebrow">
+                        Team · {team.length}
+                        {maxAgents ? ` of ${maxAgents}` : ""}
+                        {retiredAgents.length > 0 && ` · ${retiredAgents.length} retired`}
+                      </p>
+                      {filesReceipt && (
+                        <Strip tone="ok" role="status">
+                          {filesReceipt}
+                        </Strip>
+                      )}
                       <TeamTree agents={snapshot.agents} jobs={lab.labJobs} onOpenAgent={openAgentWith} />
                     </div>
-                    <p className="lab-eyebrow">
-                      Agents · {team.length}
-                      {maxAgents ? ` of ${maxAgents}` : ""}
-                    </p>
-                    <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
-                      {team.map((agent) => (
-                        <AgentCard
-                          key={agent.id}
-                          agent={agent}
-                          job={lab.labJobs?.find((j) => j.agentId === agent.id && (j.status === "running" || j.status === "awaitingApproval" || j.status === "cancelling"))}
-                          lastItem={lab.activity[agent.id]}
-                          now={now}
-                          disabled={controlsDisabled}
-                          pendingAction={lab.pending[agent.id]}
-                          failure={lab.actionFailures[agent.id]}
-                          systemNote={lab.systemNotes[agent.id]}
-                          onAction={(action) => void lab.agentAction(agent.id, action)}
-                          onOpen={() => openAgentWith(agent.id)}
-                          onRetire={
-                            canRetire && agent.role !== "orchestrator"
-                              ? (reason) => void lab.retireAgent(agent.id, reason)
-                              : undefined
-                          }
-                        />
-                      ))}
-                    </div>
-
-                    {retiredAgents.length > 0 && (
-                      <>
-                        <p className="lab-eyebrow">
-                          Retired · {retiredAgents.length} · not part of the team, take no work
-                        </p>
-                        {filesReceipt && (
-                          <Strip tone="ok" role="status">
-                            {filesReceipt}
-                          </Strip>
-                        )}
-                        <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
-                          {retiredAgents.map((agent) => (
-                            <RetiredAgentCard
-                              key={agent.id}
-                              agent={agent}
-                              lead={leadName(snapshot.agents)}
-                              now={now}
-                              disabled={controlsDisabled}
-                              pendingAction={lab.pending[agent.id]}
-                              failure={lab.actionFailures[agent.id]}
-                              onOpen={() => openAgentWith(agent.id)}
-                              onRestore={() => void lab.restoreAgent(agent.id)}
-                              onDeleteFiles={() => setDeletingFilesOf(agent.id)}
-                            />
-                          ))}
-                        </div>
-                      </>
-                    )}
-                    {deletingFiles && (
-                      <DeleteAgentFiles
-                        agent={deletingFiles}
-                        labName={snapshot.lab.name}
-                        disabled={controlsDisabled}
-                        onClose={() => setDeletingFilesOf(null)}
-                        onDeleted={(freed) => {
-                          setFilesReceipt(
-                            freed === 0
-                              ? `${agentName(deletingFiles)} had no files on disk; its saved conversations are cleared.`
-                              : `Deleted the files of ${agentName(deletingFiles)}: ${formatBytes(freed)} freed.`
-                          );
-                          setDeletingFilesOf(null);
-                          void lab.refreshSnapshot();
-                        }}
-                      />
-                    )}
                   </>
                 )}
               </section>
