@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import * as labApi from "@/lib/lab/client";
 import { LabApiError } from "@/lib/lab/client";
 import type { LabAgent, LabGitOp } from "@/lib/lab/types";
-import { agentName, formatAgo } from "./agent-card";
+import { agentName, formatAgo, leadName } from "./agent-card";
 import { Strip, type LabTone } from "./lab-ui";
 
 const POLL_MS = 10_000;
@@ -18,7 +18,11 @@ const STATUS: Record<LabGitOp["status"], { label: string; tone: LabTone }> = {
   failed: { label: "Failed", tone: "bad" },
 };
 
-function describe(op: LabGitOp): string {
+function describe(op: LabGitOp, lead: string): string {
+  // Nothing reaches GitHub for a hand-in: the lead agent squashes it into the lab's branch.
+  if (op.kind === "handIn") {
+    return op.status === "done" ? `Handed in to ${lead}` : op.status === "failed" ? `Hand-in to ${lead}` : `Handing in to ${lead}`;
+  }
   const number = op.number !== null ? ` #${op.number}` : "";
   if (op.kind === "push") {
     return op.status === "done" ? "Pushed a branch" : op.status === "failed" ? "Branch push" : "Pushing a branch";
@@ -41,12 +45,15 @@ function githubUrl(url: string | null): string | null {
 export function GitPanel({
   labId,
   repo,
+  workBranch,
   agents,
   now,
   onOpenAgent,
 }: {
   labId: string;
   repo: string;
+  /** The one branch the lab publishes, kept by its lead agent; absent where agents publish their own. */
+  workBranch?: string | null;
   agents: LabAgent[];
   now: number;
   onOpenAgent: (agentId: string) => void;
@@ -112,8 +119,16 @@ export function GitPanel({
         </a>
         {defaultBranch && <span className="text-[var(--lab-dim)]"> · default branch {defaultBranch}</span>}
       </p>
+      {workBranch && (
+        <p className="text-[13.5px] break-all">
+          <span className="text-[var(--lab-dim)]">Lab branch </span>
+          <span className="lab-mono">{workBranch}</span>
+        </p>
+      )}
       <p className="text-[12.5px] text-[var(--lab-dim)]">
-        Agents push branches and open pull requests under your identity. Only you merge, on GitHub.
+        {workBranch
+          ? `The other agents hand their branches in to ${leadName(agents)}, which squashes them into the lab branch and alone publishes it and its one pull request, under your identity. Only you merge, on GitHub.`
+          : "Agents push branches and open pull requests under your identity. Only you merge, on GitHub."}
       </p>
 
       {ops === null && !failure && <p className="text-[13.5px] text-[var(--lab-dim)]">Loading…</p>}
@@ -135,7 +150,7 @@ export function GitPanel({
                     <span className="lab-eyebrow !text-[10.5px] lab-tone-text">{status.label}</span>
                   </p>
                   <p className="text-[13.5px] font-medium break-words">
-                    {describe(op)}
+                    {describe(op, leadName(agents))}
                     {op.title && <span className="font-normal">: {op.title}</span>}
                   </p>
                   <p className="lab-mono text-[12px] text-[var(--lab-dim)] break-all">

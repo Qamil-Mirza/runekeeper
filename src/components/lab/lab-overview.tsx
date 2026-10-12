@@ -381,7 +381,7 @@ export function LabOverview({
 
       {snapshot.lab.repo && (
         <Tile title="Code" note="GitHub">
-          <GitPanel labId={snapshot.lab.id} repo={snapshot.lab.repo} agents={snapshot.agents} now={now} onOpenAgent={onOpenAgent} />
+          <GitPanel labId={snapshot.lab.id} repo={snapshot.lab.repo} workBranch={snapshot.lab.workBranch} agents={snapshot.agents} now={now} onOpenAgent={onOpenAgent} />
         </Tile>
       )}
 

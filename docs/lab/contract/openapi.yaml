@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Lab Manager API
-  version: 1.0.0-draft.28
+  version: 1.0.0-draft.29
   summary: Contract between Runekeeper (client) and the Lab Manager (server).
   description: |
     Status: DRAFT under joint review. Implemented by the Lab Manager, which
@@ -23,6 +23,16 @@ info:
     - PATCH is naturally idempotent and takes no key.
     - Research endpoints (tag `research`) are implemented but new: they
       have not yet been used by a client and may still change before 1.0.
+
+    What changed in draft.29 (a change of behaviour)
+    - One branch and one pull request for a lab. Where the Orchestrator
+      hands out the work (delegation on) and the lab has a repository,
+      only the Orchestrator publishes, and only `Lab.workBranch`. A
+      `git.push` record from another agent is not published: its branch
+      is handed in to the Orchestrator (`GitOp.kind` `handIn`), which
+      squashes it into the lab's branch. A `git.pr` record from another
+      agent, and a push by the Orchestrator of any other branch, are
+      refused.
 
     What changed in draft.28 (a change of behaviour)
     - A rental of compute now waits for the owner's approval. A request
@@ -2577,7 +2587,7 @@ components:
         labId: { type: string }
         agentId: { type: string }
         jobId: { type: [string, "null"] }
-        kind: { type: string, enum: [push, pullRequest] }
+        kind: { type: string, enum: [push, pullRequest, handIn], description: "`handIn`: an agent's branch given to the Orchestrator to squash into the lab's branch. Nothing reaches the code host; `commit` may be set, `url` is null." }
         repo: { type: string }
         branch: { type: string }
         status: { type: string, enum: [requested, done, failed] }
@@ -2719,6 +2729,7 @@ components:
             approvalPolicy: { $ref: "#/components/schemas/ApprovalPolicy" }
             brief: { type: [string, "null"], description: "The owner's own description of the lab. Given to every agent of the lab as the owner's words." }
             repo: { type: [string, "null"], description: "The GitHub repository the lab was started from (owner/name), cloned for each agent. Set at creation only." }
+            workBranch: { type: [string, "null"], description: "The one branch the lab publishes and opens its one pull request from, kept by the Orchestrator. Null when the lab has no repository or delegation is off (agents then publish their own branches)." }
             objective: { type: [string, "null"], description: "Decided by the Orchestrator from the brief; the owner may override it." }
             objectiveSetBy: { type: [string, "null"], enum: [owner, orchestrator, null] }
             objectiveSetAt: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }

@@ -1721,8 +1721,11 @@ export interface components {
             labId: string;
             agentId: string;
             jobId: string | null;
-            /** @enum {string} */
-            kind: "push" | "pullRequest";
+            /**
+             * @description `handIn`: an agent's branch given to the Orchestrator to squash into the lab's branch. Nothing reaches the code host; `commit` may be set, `url` is null.
+             * @enum {string}
+             */
+            kind: "push" | "pullRequest" | "handIn";
             repo: string;
             branch: string;
             /** @enum {string} */
@@ -1894,6 +1897,8 @@ export interface components {
             brief: string | null;
             /** @description The GitHub repository the lab was started from (owner/name), cloned for each agent. Set at creation only. */
             repo: string | null;
+            /** @description The one branch the lab publishes and opens its one pull request from, kept by the Orchestrator. Null when the lab has no repository or delegation is off (agents then publish their own branches). */
+            workBranch?: string | null;
             /** @description Decided by the Orchestrator from the brief; the owner may override it. */
             objective: string | null;
             /** @enum {string|null} */
