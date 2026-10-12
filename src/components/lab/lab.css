@@ -866,3 +866,54 @@
   font-style: normal;
   color: var(--lab-faint);
 }
+
+/* ─── Storage: file tree ───────────────────────────────────────────────── */
+.lab-file-tree {
+  max-height: 32rem;
+  overflow: auto;
+  padding: 6px 8px;
+  border: 1px solid var(--lab-line);
+  background: var(--lab-bg);
+}
+.lab-file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid color-mix(in srgb, var(--lab-line) 60%, transparent);
+}
+.lab-file-row:hover {
+  background: color-mix(in srgb, var(--lab-raised) 60%, transparent);
+}
+.lab-file-toggle {
+  flex: none;
+  width: 22px;
+  height: 26px;
+  color: var(--lab-dim);
+  text-align: center;
+}
+button.lab-file-toggle:hover {
+  color: var(--lab-text);
+}
+button.lab-file-toggle:focus-visible {
+  outline: 2px solid var(--lab-accent);
+  outline-offset: 1px;
+}
+.lab-file-bar {
+  flex: none;
+  width: 72px;
+  height: 4px;
+  background: var(--lab-line);
+}
+.lab-file-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--lab-accent);
+}
+@media (max-width: 560px) {
+  .lab-file-bar {
+    display: none;
+  }
+}

@@ -626,7 +626,19 @@ export interface paths {
         get: operations["listAgentFiles"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete one file or directory of the agent's workspace. It is gone for good.
+         * @description For the lab's owner, to free space. There is no trash and no undo:
+         *     ask before sending it. Only a path inside the agent's workspace;
+         *     a link is removed as a link, never what it points to. The workspace
+         *     itself cannot be deleted this way (400): deleting the lab does that.
+         *     409 `agent_busy` while the agent is starting, working or waiting on
+         *     a person. 404 when the path is not there. Emits `files.deleted` and
+         *     leaves a `systemNote` in the agent's transcript. The agent is not
+         *     told in its conversation: if it relied on what was deleted, say so
+         *     in a message.
+         */
+        delete: operations["deleteAgentFile"];
         options?: never;
         head?: never;
         patch?: never;
@@ -641,6 +653,76 @@ export interface paths {
         };
         /** Read the first 256 KB of one regular file in the agent's workspace. */
         get: operations["readAgentFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agentId}/files/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One directory of the agent's workspace with what each entry holds on disk, largest first.
+         * @description For deciding what to delete. A directory is counted with everything
+         *     below it; sizes are space used on disk. Links are never followed.
+         *     At most 500 entries. It walks the files, so a large tree can take
+         *     some seconds.
+         */
+        get: operations["getAgentFileUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{agentId}/files/clear-temp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Empty the temp folders the agent's commands use.
+         * @description Each agent's processes have temp folders of their own, outside its
+         *     workspace, which nothing else empties. 409 `agent_busy` while the
+         *     agent is starting, working or waiting on a person. Emits
+         *     `files.deleted` with `temp: true`.
+         */
+        post: operations["clearAgentTemp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where the disk space is, by lab and agent, and the manager's own.
+         * @description Measured when asked (it walks the files) and kept for about 20
+         *     seconds. Archived labs are included. A size is null when it could
+         *     not be measured (the worker is not reachable). Database copies left
+         *     by deployments are reported here but are removed on the host, not
+         *     through the API.
+         */
+        get: operations["getStorage"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2363,7 +2445,7 @@ export interface components {
             truncated: false;
         };
         /** @enum {string} */
-        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.deleted" | "network.hostTrusted" | "network.hostBlocked" | "compute.run" | "git.op" | "compute.cancelRequested" | "lab.statusChanged" | "agent.stateChanged" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged" | "agent.activity";
+        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.deleted" | "files.deleted" | "network.hostTrusted" | "network.hostBlocked" | "compute.run" | "git.op" | "compute.cancelRequested" | "lab.statusChanged" | "agent.stateChanged" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged" | "agent.activity";
         ManagerStartedData: {
             serviceVersion: string;
             interruptedJobs: {
@@ -3362,6 +3444,38 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    deleteAgentFile: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        agentId: string;
+                        path: string;
+                        removed: boolean;
+                        freedBytes: number;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     readAgentFile: {
         parameters: {
             query: {
@@ -3390,6 +3504,121 @@ export interface operations {
                         content: string | null;
                         truncated: boolean;
                         binary: boolean;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getAgentFileUsage: {
+        parameters: {
+            query?: {
+                path?: string;
+            };
+            header?: never;
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The directory's entries with their sizes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        agentId: string;
+                        path: string;
+                        /** @description Everything in this directory. */
+                        totalBytes: number;
+                        entries: {
+                            name: string;
+                            /** @enum {string} */
+                            type: "file" | "directory" | "other";
+                            bytes: number;
+                        }[];
+                        truncated: boolean;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    clearAgentTemp: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                agentId: components["parameters"]["AgentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Emptied. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        agentId: string;
+                        freedBytes: number;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getStorage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sizes in bytes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        measuredAt: components["schemas"]["Timestamp"];
+                        /** @description Free space per storage area, as in Health. */
+                        freeBytes: {
+                            [key: string]: number | null;
+                        };
+                        labs: {
+                            labId: string;
+                            name: string;
+                            archived: boolean;
+                            totalBytes: number;
+                            agents: {
+                                agentId: string;
+                                role: string;
+                                state: components["schemas"]["AgentState"];
+                                workspaceBytes: number | null;
+                                tempBytes: number | null;
+                            }[];
+                        }[];
+                        manager: {
+                            databaseBytes: number;
+                            /** @description Copies of the database left by deployments. Null when the folder cannot be read. */
+                            backups: {
+                                count: number;
+                                bytes: number;
+                                oldest: string | null;
+                                newest: string | null;
+                            } | null;
+                        };
                     };
                 };
             };

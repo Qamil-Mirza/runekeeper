@@ -176,8 +176,8 @@ export function LabRail({
 }: {
   codeHost?: LabHealth["codeHost"];
   /** Which host-wide page is open instead of a lab, if any. */
-  page: "lab" | "needsYou" | "sites";
-  onPage: (page: "needsYou" | "sites") => void;
+  page: "lab" | "needsYou" | "sites" | "storage";
+  onPage: (page: "needsYou" | "sites" | "storage") => void;
   /** How many things, in every lab, wait for the owner. */
   needsYou: number;
   showSites: boolean;
@@ -217,6 +217,14 @@ export function LabRail({
             <span className="text-[14.5px] font-medium">Sites reached</span>
           </button>
         )}
+        <button
+          role="tab"
+          aria-selected={page === "storage"}
+          onClick={() => onPage("storage")}
+          className="lab-rail-item flex-1 lg:flex-none"
+        >
+          <span className="text-[14.5px] font-medium">Storage</span>
+        </button>
       </div>
 
       <p className="lab-eyebrow px-3 sm:px-5 lg:px-4 pt-3 pb-2">
