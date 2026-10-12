@@ -15,6 +15,7 @@ import {
   getJob,
   listJobs,
   sendAgentMessage,
+  getArtifact,
   resolveEscalation,
   listComputeApprovals,
   getComputeRun,
@@ -213,6 +214,17 @@ describe("over a unix socket", () => {
     );
     assert.equal(seen[2].body, "");
     assert.equal(seen[2].headers["idempotency-key"], KEY);
+  });
+
+  it("reads a stored document by hash and refuses anything that is not a hash", async () => {
+    const { config, seen } = await onUnixSocket((_s, res) => json(res, 200, {}));
+    const hash = "ab".repeat(32);
+    await getArtifact(config, ACTOR, "lab_1", hash);
+    assert.deepEqual(seen.map((s) => `${s.method} ${s.url}`), [`GET /v1/labs/lab_1/artifacts/${hash}`]);
+    for (const bad of ["", "abc", "../jobs", `${hash}/x`, hash.toUpperCase()]) {
+      await assert.rejects(getArtifact(config, ACTOR, "lab_1", bad), /Invalid hash/);
+    }
+    assert.equal(seen.length, 1);
   });
 
   it("resolves an escalation with a note, or with an empty body", async () => {

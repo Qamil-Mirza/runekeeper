@@ -20,6 +20,8 @@ import {
   type LabGitOps,
   type LabJobPage,
   type LabAsideReceipt,
+  type LabArtifact,
+  ARTIFACT_HASH_PATTERN,
   type LabEscalation,
   type LabComputeApprovals,
   type LabFileDeletion,
@@ -541,6 +543,14 @@ export async function decideComputeRun(
     actor,
     idempotencyKey,
   });
+}
+
+/** One stored document of a lab, whole, by its content hash. */
+export async function getArtifact(config: LabConfig, actor: LabActor, labId: string, hash: string): Promise<LabArtifact> {
+  if (!ARTIFACT_HASH_PATTERN.test(hash)) {
+    throw new LabManagerError(400, "validation_failed", "Invalid hash", false);
+  }
+  return call<LabArtifact>(config, { method: "GET", path: `/v1/labs/${assertId(labId)}/artifacts/${hash}`, actor });
 }
 
 /**

@@ -8,6 +8,7 @@ import type {
   LabErrorBody,
   LabJob,
   LabAsideReceipt,
+  LabArtifact,
   LabEscalation,
   ComputeDecisionConfirmation,
   LabComputeApprovals,
@@ -127,6 +128,11 @@ export function decideComputeRun(confirmation: ComputeDecisionConfirmation) {
     `/api/lab/compute/runs/${encodeURIComponent(confirmation.runId)}/${confirmation.decision}`,
     { confirmation }
   );
+}
+
+/** The body of a record, by the hash the record carries. */
+export function fetchArtifact(labId: string, hash: string) {
+  return labFetch<LabArtifact>(`/api/lab/labs/${encodeURIComponent(labId)}/artifacts/${encodeURIComponent(hash)}`);
 }
 
 /** Clears an escalation from what waits for the owner. The note is kept on the record only. */
