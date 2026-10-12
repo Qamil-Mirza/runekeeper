@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Lab Manager API
-  version: 1.0.0-draft.22
+  version: 1.0.0-draft.23
   summary: Contract between Runekeeper (client) and the Lab Manager (server).
   description: |
     Status: DRAFT under joint review. Implemented by the Lab Manager, which
@@ -23,6 +23,13 @@ info:
     - PATCH is naturally idempotent and takes no key.
     - Research endpoints (tag `research`) are implemented but new: they
       have not yet been used by a client and may still change before 1.0.
+
+    What changed in draft.23 (additive)
+    - A person's message says whether the agent has it yet:
+      `TranscriptItem.unread` is true while a message sent into a running
+      task has not been taken up, and `transcript.itemUpdated` is now
+      sent when `queued` or `unread` changes, so a client can show
+      "waiting" on the message and clear it without polling.
 
     What changed in draft.22 (additive)
     - Delegation no longer ends after one round. When every task the
@@ -2502,7 +2509,8 @@ components:
         text: { type: string, description: "Capped at 32 KB. Assistant thinking is never included." }
         truncated: { type: boolean, default: false }
         actor: { $ref: "#/components/schemas/Actor" }
-        queued: { type: boolean, description: "On a `humanMessage`: true while it waits for the agent to be free." }
+        queued: { type: boolean, description: "On a `humanMessage`: true while it waits for the agent to be free. `transcript.itemUpdated` is sent when this changes." }
+        unread: { type: boolean, description: "On a `humanMessage`: true while it has been sent into the task the agent is doing and the agent has not yet taken it up, which it does at its next step. If the task ends first it becomes `queued` instead. `transcript.itemUpdated` is sent when this changes." }
         tool:
           type: object
           required: [name, summary, status]

@@ -1829,8 +1829,10 @@ export interface components {
             /** @default false */
             truncated: boolean;
             actor?: components["schemas"]["Actor"];
-            /** @description On a `humanMessage`: true while it waits for the agent to be free. */
+            /** @description On a `humanMessage`: true while it waits for the agent to be free. `transcript.itemUpdated` is sent when this changes. */
             queued?: boolean;
+            /** @description On a `humanMessage`: true while it has been sent into the task the agent is doing and the agent has not yet taken it up, which it does at its next step. If the task ends first it becomes `queued` instead. `transcript.itemUpdated` is sent when this changes. */
+            unread?: boolean;
             tool?: {
                 name: string;
                 /** @description One line. */

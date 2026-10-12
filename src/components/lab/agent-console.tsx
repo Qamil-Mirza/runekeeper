@@ -235,10 +235,17 @@ function TranscriptEntry({ item, role, now }: { item: LabTranscriptItem; role: s
       <p className="flex items-baseline justify-between gap-3">
         <span className="lab-eyebrow !text-[11px]">
           {mine ? "You" : role}
-          {mine && item.queued && <span className="text-[var(--lab-warn)]"> · waiting for the {role} to be free</span>}
         </span>
         {when}
       </p>
+      {mine && (item.queued || item.unread) && (
+        <p className="mt-1 flex flex-wrap items-center gap-2 text-[12.5px] text-[var(--lab-warn)]" role="status">
+          <Chip tone="warn">{item.queued ? "Queued" : "Not seen yet"}</Chip>
+          {item.queued
+            ? `The ${role} has not seen this yet. It becomes its next turn when it is free.`
+            : `The ${role} has not seen this yet. It takes it at its next step, which can be a while if a command is running.`}
+        </p>
+      )}
       <p className="mt-1 whitespace-pre-wrap break-words">{item.text}</p>
       {item.truncated && <p className="mt-1 text-[12.5px] text-[var(--lab-warn)]">Shortened by the Lab Manager (32 KB limit).</p>}
     </li>
