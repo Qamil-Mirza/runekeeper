@@ -726,3 +726,143 @@
   background: var(--lab-panel);
   border: 2px solid var(--tone);
 }
+
+/* ─── Formatted text written by agents ─────────────────────────────────── */
+.lab-md {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+.lab-md > * + *,
+.lab-md blockquote > * + *,
+.lab-md li > * + * {
+  margin-top: 0.6em;
+}
+.lab-md-h {
+  font-weight: 600;
+  color: var(--lab-text);
+  line-height: 1.3;
+}
+.lab-md > .lab-md-h:not(:first-child) {
+  margin-top: 1em;
+}
+.lab-md-h1 {
+  font-size: 1.2em;
+}
+.lab-md-h2 {
+  font-size: 1.1em;
+}
+.lab-md-h3,
+.lab-md-h4 {
+  font-size: 1em;
+}
+.lab-md-h4 {
+  color: var(--lab-dim);
+}
+.lab-md strong {
+  font-weight: 600;
+  color: var(--lab-text);
+}
+.lab-md ul,
+.lab-md ol {
+  padding-left: 1.4em;
+}
+.lab-md ul {
+  list-style: disc;
+}
+.lab-md ol {
+  list-style: decimal;
+}
+.lab-md li + li {
+  margin-top: 0.25em;
+}
+.lab-md li > ul,
+.lab-md li > ol {
+  margin-top: 0.25em;
+}
+.lab-md blockquote {
+  padding-left: 10px;
+  border-left: 2px solid var(--lab-line-strong);
+  color: var(--lab-dim);
+}
+.lab-md hr {
+  border: 0;
+  border-top: 1px solid var(--lab-line-strong);
+}
+.lab-md code {
+  font-family: var(--font-lab-mono), ui-monospace, monospace;
+  font-size: 0.9em;
+  font-style: normal;
+}
+.lab-md :not(pre) > code {
+  padding: 1px 5px;
+  border: 1px solid var(--lab-line);
+  border-radius: 4px;
+  background: var(--lab-bg);
+}
+.lab-md-code {
+  position: relative;
+  border: 1px solid var(--lab-line);
+  background: var(--lab-bg);
+}
+.lab-md-code pre {
+  max-height: 24rem;
+  overflow: auto;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-wrap: normal;
+  color: var(--lab-text);
+}
+.lab-md-lang {
+  display: block;
+  padding: 3px 10px;
+  border-bottom: 1px solid var(--lab-line);
+  font-family: var(--font-lab-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-style: normal;
+  color: var(--lab-faint);
+}
+.lab-md-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.lab-md-table:focus-visible {
+  outline: 2px solid var(--lab-accent);
+  outline-offset: 2px;
+}
+.lab-md table {
+  border-collapse: collapse;
+  font-size: 0.93em;
+  font-style: normal;
+}
+.lab-md th,
+.lab-md td {
+  padding: 4px 10px;
+  border: 1px solid var(--lab-line-strong);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: normal;
+  font-variant-numeric: tabular-nums;
+}
+.lab-md th {
+  font-weight: 600;
+  color: var(--lab-text);
+  background: color-mix(in srgb, var(--lab-raised) 70%, transparent);
+  white-space: nowrap;
+}
+.lab-md a {
+  color: var(--lab-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.lab-md a:focus-visible {
+  outline: 2px solid var(--lab-accent);
+  outline-offset: 2px;
+}
+.lab-md-host {
+  font-size: 0.88em;
+  font-style: normal;
+  color: var(--lab-faint);
+}
