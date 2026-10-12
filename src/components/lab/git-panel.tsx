@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import * as labApi from "@/lib/lab/client";
 import { LabApiError } from "@/lib/lab/client";
 import type { LabAgent, LabGitOp } from "@/lib/lab/types";
-import { ROLE_LABELS, formatAgo } from "./agent-card";
+import { agentName, formatAgo } from "./agent-card";
 import { Strip, type LabTone } from "./lab-ui";
 
 const POLL_MS = 10_000;
@@ -96,7 +96,7 @@ export function GitPanel({
 
   const roleOf = (agentId: string) => {
     const agent = agents.find((a) => a.id === agentId);
-    return agent ? ROLE_LABELS[agent.role] : "Agent";
+    return agent ? agentName(agent) : "Agent";
   };
 
   return (

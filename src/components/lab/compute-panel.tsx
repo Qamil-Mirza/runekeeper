@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import * as labApi from "@/lib/lab/client";
 import { LabApiError } from "@/lib/lab/client";
 import type { LabAgent, LabComputeBudget, LabComputeRun, LabHealth, LabJob } from "@/lib/lab/types";
-import { ROLE_LABELS, formatAgo } from "./agent-card";
+import { agentName, formatAgo } from "./agent-card";
 import { cn } from "@/lib/utils";
 import { Chip, LabButton, Strip, type LabTone } from "./lab-ui";
 
@@ -177,7 +177,7 @@ export function ComputePanel({
   const b = liveBudget ?? budget;
   const roleOf = (agentId: string) => {
     const agent = agents.find((a) => a.id === agentId);
-    return agent ? ROLE_LABELS[agent.role] : "Agent";
+    return agent ? agentName(agent) : "Agent";
   };
   const taskOf = (jobId: string | null) => {
     const job = jobId ? jobs?.find((j) => j.id === jobId) : undefined;

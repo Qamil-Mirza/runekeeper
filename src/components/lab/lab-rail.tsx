@@ -108,7 +108,7 @@ function CreateLab({
             <p className={cn("text-[12.5px]", tooLong ? "text-[var(--lab-bad)]" : "text-[var(--lab-dim)]")}>
               {tooLong
                 ? `Too long by ${brief.length - MAX_BRIEF_LENGTH} characters.`
-                : "Every agent in the lab is given this as your words. The Orchestrator decides the lab's objective and goals from it. You can change it later."}
+                : "Every agent in the lab is given this as your words. The lab's lead agent decides its objective and goals from it. You can change it later."}
             </p>
             {codeHost?.available && (
               <>

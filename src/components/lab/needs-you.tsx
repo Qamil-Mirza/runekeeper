@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as labApi from "@/lib/lab/client";
 import type { LabSnapshot, LabSummary } from "@/lib/lab/types";
 import { AgentAvatar } from "./agent-avatar";
-import { ROLE_LABELS, formatAgo } from "./agent-card";
+import { agentName, formatAgo } from "./agent-card";
 import { Chip, LabButton, Strip } from "./lab-ui";
 
 const POLL_MS = 10_000;
@@ -88,7 +88,8 @@ export function NeedsYou({
         snap,
         at: (e as { createdAt?: string }).createdAt ?? "",
         escalation: e,
-        agent: snap.agents.find((a) => a.role === e.role) ?? agentOf(jobAgent(e.jobId)),
+        // Several agents can share a role, so the task says which one it was.
+        agent: agentOf(jobAgent(e.jobId)) ?? snap.agents.find((a) => a.role === e.role),
       })),
       ...snap.jobsNeedingReconciliation.map((j) => ({ kind: "interrupted" as const, snap, at: j.createdAt, job: j, agent: agentOf(j.agentId) })),
     ];
@@ -117,7 +118,7 @@ export function NeedsYou({
       <ul className="flex flex-col gap-3">
         {entries.map((entry) => {
           const { snap, agent } = entry;
-          const role = agent ? ROLE_LABELS[agent.role] : "Agent";
+          const role = agent ? agentName(agent) : "Agent";
           const id = entry.kind === "approval" ? entry.approval.id : entry.kind === "escalation" ? entry.escalation.id : entry.job.id;
           return (
             <li key={`${entry.kind}-${id}`} className="lab-card lab-tone-bad p-4 flex gap-3 min-w-0">

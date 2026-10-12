@@ -1334,10 +1334,21 @@ export interface components {
                     inUse: boolean;
                 };
             };
+            /** @description What agents run on, as set on the host. */
+            models?: {
+                /** @description The Orchestrator's model. */
+                oracle: string | null;
+                /** @description The model of an agent that was given none. Null leaves the choice to Claude Code. */
+                default: string | null;
+                /** @description What the Orchestrator may choose from for an agent it adds. */
+                allowed: string[];
+            };
             /** @description Host settings a client may want to show. Not settable through the API. */
             limits?: {
-                /** @description How many handoffs of one owner message are dispatched; further ones are refused with `over_cap`. */
+                /** @description How many handoffs of one turn of the Orchestrator are dispatched; further ones are refused with `over_cap`. */
                 delegationsPerMessage?: number;
+                /** @description How many agents a lab may hold, the Orchestrator included. */
+                maxAgentsPerLab?: number;
                 /** @description The only internet hosts a sandboxed shell command can reach. Empty: commands have no network. This does not limit the agent's own WebSearch and WebFetch tools. */
                 shellAllowedDomains?: string[];
             };
@@ -1427,6 +1438,8 @@ export interface components {
                 networkTofu?: components["schemas"]["Capability"];
                 /** @description Manual mode, set on the host. When allowed, the Orchestrator's handoffs recorded in reply to the owner are started as tasks by the manager. Host-wide; there is no per-lab switch. */
                 delegation?: components["schemas"]["Capability"];
+                /** @description Manual mode, set on the host, on top of `delegation` (reason `needs_delegation` without it). When allowed, a new lab starts with the Orchestrator alone, which adds the other agents by `agent.spawn` records, names them and chooses their models. */
+                spawn?: components["schemas"]["Capability"];
                 /** @description Deprecated; same as shell.executor. */
                 executorShell: components["schemas"]["Capability"];
                 unattendedExecution: components["schemas"]["Capability"];
@@ -1889,6 +1902,18 @@ export interface components {
         /** @enum {string} */
         AgentMode: "managed" | "tmux";
         Agent: {
+            /** @description What the agent is called. Unique within its lab, ignoring case. */
+            name: string;
+            model: {
+                /** @description The model its tasks ask Claude Code for. Null leaves the choice to Claude Code. */
+                requested: string | null;
+                /** @description The model Claude Code last reported running for this agent. Null until it has run a task. */
+                actual: string | null;
+            };
+            /** @description On an agent the Orchestrator added: what it is for, in the Orchestrator's words. Text written by an agent. */
+            directive: string | null;
+            /** @description On an agent the Orchestrator added: the Orchestrator's turn that added it. */
+            spawnedByJobId: string | null;
             /** @description Why no new task is dispatched to this agent. */
             blockedBy: {
                 /** @enum {string} */
@@ -2030,6 +2055,8 @@ export interface components {
             /** @description One entry per handoff this job recorded that the manager dispatched or refused, oldest first. Empty unless delegation is enabled and this job was a message from the owner to the Orchestrator or a `followUp` turn of it. */
             delegations?: {
                 handoffId: string;
+                /** @description The name of the agent it went to, or was meant for. Null on a delegation from before draft.27. */
+                toAgent: string | null;
                 toRole: components["schemas"]["AgentRole"];
                 title: string;
                 /** @enum {string} */
@@ -2445,7 +2472,7 @@ export interface components {
             truncated: false;
         };
         /** @enum {string} */
-        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.deleted" | "files.deleted" | "network.hostTrusted" | "network.hostBlocked" | "compute.run" | "git.op" | "compute.cancelRequested" | "lab.statusChanged" | "agent.stateChanged" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged" | "agent.activity";
+        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.deleted" | "files.deleted" | "network.hostTrusted" | "network.hostBlocked" | "compute.run" | "git.op" | "compute.cancelRequested" | "lab.statusChanged" | "agent.stateChanged" | "agent.created" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged" | "agent.activity";
         ManagerStartedData: {
             serviceVersion: string;
             interruptedJobs: {

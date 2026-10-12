@@ -4,14 +4,14 @@ The files in this directory are unmodified copies from the Lab Manager repositor
 
 | | |
 |---|---|
-| Spec version | 1.0.0-draft.26 |
-| Source commit | `feba36b` (branch `feat/m2-service-foundation` in the-lab) |
-| SHA-256 of `openapi.yaml` | `73c629662732bcec2656c95adbe9322d88b3615b44ffc12497a5a71860e9ab78` |
+| Spec version | 1.0.0-draft.27 |
+| Source commit | `8483ee0` (branch `feat/m2-service-foundation` in the-lab) |
+| SHA-256 of `openapi.yaml` | `a2f00afe8ab37ee16c26afe4b2fc76cea66c6ff8030d4b07a5a05e323a63b901` |
 | SHA-256 of `binding-vectors.json` | `810a758e1c1d47be04f80d70d55dcda0137e1f74d0e186ec7bcde950bd0605e7` |
 | Pinned on | 2026-10-11 |
 | Status | Agreed by both sessions. Additive over draft.8 to draft.11. |
 
-Previous pins: draft.25 at `e58c685`, draft.24 at `c4bf07b`, draft.23 at `2236a92`, draft.22 at `2f542ff`, draft.21 at `9004345`, draft.20 at `8566245`, draft.18 at `d31b733`, draft.17 at `3022502`, draft.16 at `7ca0439`, draft.15 at `9fa649d`, draft.14 at `9fd203a`, draft.13 at `7918f04`, draft.11 at `5ddfdf3`, draft.9 at `657f691`, draft.8 at `5108015`, draft.6 at `8b4dd31`, draft.3 at `8e63b7a62b26b275e6d8f5eb8a031e507a30cdc7`, draft.4 at `9b7d41f`, draft.5 at `a1b8f3b`. Draft.4 replaced the signed-authorization scheme (`lab-authz-v2`: bindings, expiry, nonce) and added `binding` and `bindingHash` to approvals and jobs. Draft.5 is non-breaking: it defines `keyId`, documents the reasons for a rejected signature, and states that both sides read the service token from a file. Draft.6 is non-breaking: an approval binding's `experimentId` is exactly the job's; experiment, budget and other approvals are never created by a draft manager and a client offers only `denied` for them; approving a budget request never changes a limit by itself. The test vectors are unchanged.
+Previous pins: draft.26 at `feba36b`, draft.25 at `e58c685`, draft.24 at `c4bf07b`, draft.23 at `2236a92`, draft.22 at `2f542ff`, draft.21 at `9004345`, draft.20 at `8566245`, draft.18 at `d31b733`, draft.17 at `3022502`, draft.16 at `7ca0439`, draft.15 at `9fa649d`, draft.14 at `9fd203a`, draft.13 at `7918f04`, draft.11 at `5ddfdf3`, draft.9 at `657f691`, draft.8 at `5108015`, draft.6 at `8b4dd31`, draft.3 at `8e63b7a62b26b275e6d8f5eb8a031e507a30cdc7`, draft.4 at `9b7d41f`, draft.5 at `a1b8f3b`. Draft.4 replaced the signed-authorization scheme (`lab-authz-v2`: bindings, expiry, nonce) and added `binding` and `bindingHash` to approvals and jobs. Draft.5 is non-breaking: it defines `keyId`, documents the reasons for a rejected signature, and states that both sides read the service token from a file. Draft.6 is non-breaking: an approval binding's `experimentId` is exactly the job's; experiment, budget and other approvals are never created by a draft manager and a client offers only `denied` for them; approving a budget request never changes a limit by itself. The test vectors are unchanged.
 
 Draft.8 is breaking for signing: the signed text is `lab-authz-v3`, the only signed actions are `approval.decision` and `budget.set` (a lab's spending limit, with the host policy hash in the binding), and no binding carries a dollar figure except the spending limit. Job retry and experiment conclusions are no longer signed. It adds tool input and output in transcripts, read-only workspace files, a three-block budget (runtime, spend, estimates) and policy, subscription and resource status in health. `Budget.limits`, `Budget.consumed` and `Job.usage.costUsd` are kept, deprecated, for one release.
 
@@ -52,3 +52,5 @@ Draft.24 (`c4bf07b`) is additive: a side question. `POST /v1/agents/{agentId}/as
 Draft.25 (`e58c685`) is additive: transcript item kind `assistantThinking`, a summary of the agent's reasoning before the text or tool call that follows it, made by the model's provider and never the full reasoning. A task's default limits are now host settings (4 hours, cost estimate 40); `Job.limits` reports what applies.
 
 Draft.26 (`feba36b`) is additive: cleaning up. `GET /v1/storage` says where the disk space is by lab and agent; `GET /v1/agents/{agentId}/files/usage` lists one directory of an agent's working directory with sizes; `DELETE /v1/agents/{agentId}/files?path=` deletes a file or directory there for good and `POST /v1/agents/{agentId}/files/clear-temp` empties its temp folders, both refused with `agent_busy` while the agent is starting, working or waiting on a person.
+
+Draft.27 (`8483ee0`): a lab no longer has exactly one agent per role, so agents are found by id and shown by `Agent.name` ("Oracle" for the Orchestrator, whose role string is unchanged). `Agent.model` gives the model its tasks ask for and the one Claude Code last reported; `Agent.directive` and `Agent.spawnedByJobId` are set on an agent the Orchestrator added. A delegation carries `toAgent`; new refusal reason `no_such_agent`. `Health.models`, `Health.limits.maxAgentsPerLab`, `Health.capabilities.spawn`.

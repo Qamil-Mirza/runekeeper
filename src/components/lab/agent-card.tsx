@@ -20,6 +20,53 @@ export const ROLE_LABELS: Record<LabAgent["role"], string> = {
   orchestrator: "Orchestrator",
 };
 
+/** What an agent is called. A Lab Manager older than draft.27 gives no name, so the role stands in. */
+export function agentName(agent: Pick<LabAgent, "role"> & { name?: string }): string {
+  return agent.name || ROLE_LABELS[agent.role];
+}
+
+/** The name of the lab's lead agent, which the others' work comes from. */
+export function leadName(agents: readonly LabAgent[] | undefined): string {
+  const lead = agents?.find((a) => a.role === "orchestrator");
+  return lead ? agentName(lead) : ROLE_LABELS.orchestrator;
+}
+
+// "claude-sonnet-5-5" and a dated "claude-sonnet-5-5-20260101" are the same model.
+const sameModel = (a: string, b: string) => a === b || a.startsWith(b) || b.startsWith(a);
+
+/**
+ * What an agent runs on. `actual` is what Claude Code reported for its last
+ * task; before that only what its tasks will ask for is known.
+ */
+export function modelLine(model: LabAgent["model"] | undefined): { text: string; note?: string; mismatch?: boolean } | null {
+  if (!model) return null;
+  const { requested, actual } = model;
+  if (actual) {
+    return requested && !sameModel(requested, actual)
+      ? { text: actual, note: `asked for ${requested}`, mismatch: true }
+      : { text: actual };
+  }
+  return requested
+    ? { text: requested, note: "asked for; not confirmed until it runs a task" }
+    : { text: "Claude Code's default", note: "not confirmed until it runs a task" };
+}
+
+export function ModelTag({ model }: { model: LabAgent["model"] | undefined }) {
+  const line = modelLine(model);
+  if (!line) return null;
+  return (
+    <span className="min-w-0 break-words">
+      <span className={cn("lab-mono text-[12.5px]", line.mismatch && "text-[var(--lab-warn)]")}>{line.text}</span>
+      {line.note && (
+        <span className={cn("text-[12.5px]", line.mismatch ? "text-[var(--lab-warn)]" : "text-[var(--lab-faint)]")}>
+          {" "}
+          · {line.note}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export const STATE_PRESENTATION: Record<LabAgentState, { label: string; tone: LabTone; pulse?: boolean }> = {
   notProvisioned: { label: "Not provisioned", tone: "off" },
   starting: { label: "Starting", tone: "warn", pulse: true },
@@ -149,13 +196,14 @@ export function AgentCard({
   return (
     <article
       className={cn("lab-card p-4 flex flex-col gap-3 min-w-0", toneClass(presentation.tone))}
-      aria-label={`${ROLE_LABELS[agent.role]} agent`}
+      aria-label={`${agentName(agent)} agent`}
     >
       <header className="flex items-center gap-3">
         <AgentAvatar role={agent.role} state={agent.state} size={56} />
         <div className="min-w-0 mr-auto">
-          <h4 className="lab-eyebrow !text-[var(--lab-text)]">{ROLE_LABELS[agent.role]}</h4>
+          <h4 className="lab-eyebrow !text-[var(--lab-text)] break-words">{agentName(agent)}</h4>
           <p className="lab-eyebrow mt-1 !text-[11px] !text-[var(--lab-faint)]">
+            {agentName(agent) !== ROLE_LABELS[agent.role] && `${ROLE_LABELS[agent.role]} · `}
             {agent.mode === "tmux" ? "tmux · driven at a terminal" : "managed"}
           </p>
         </div>
@@ -166,6 +214,22 @@ export function AgentCard({
       </header>
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[13.5px] border-t border-[var(--lab-line)] pt-3">
+        {agent.model && (
+          <>
+            <dt className="text-[var(--lab-dim)]">Model</dt>
+            <dd>
+              <ModelTag model={agent.model} />
+            </dd>
+          </>
+        )}
+        {agent.directive && (
+          <>
+            <dt className="text-[var(--lab-dim)]">Role</dt>
+            <dd className="line-clamp-3 break-words" title={agent.directive}>
+              {agent.directive}
+            </dd>
+          </>
+        )}
         <dt className="text-[var(--lab-dim)]">Goal</dt>
         <dd className="line-clamp-2 break-words">
           {job ? firstLine(job.kind === "task" ? job.title : job.instructions) : (agent.currentJob?.title ?? "—")}

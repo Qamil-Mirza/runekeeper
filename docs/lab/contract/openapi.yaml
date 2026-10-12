@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Lab Manager API
-  version: 1.0.0-draft.26
+  version: 1.0.0-draft.27
   summary: Contract between Runekeeper (client) and the Lab Manager (server).
   description: |
     Status: DRAFT under joint review. Implemented by the Lab Manager, which
@@ -23,6 +23,30 @@ info:
     - PATCH is naturally idempotent and takes no key.
     - Research endpoints (tag `research`) are implemented but new: they
       have not yet been used by a client and may still change before 1.0.
+
+    What changed in draft.27 (additive, but see the first point)
+    - A lab no longer has exactly one agent per role. It may hold several
+      agents of a role, and with the host switch `spawn`
+      (`Health.capabilities.spawn`) a new lab starts with the
+      Orchestrator alone, which adds the others. Go by agent id, never
+      by role, and show `Agent.name`.
+    - `Agent.name`: what it is called. "Oracle" for the Orchestrator
+      (its `role` stays `orchestrator`), the name the Orchestrator gave
+      an agent it added, otherwise the role capitalised.
+    - `Agent.model`: `requested` is what its tasks ask Claude Code for
+      (null leaves the choice to Claude Code) and `actual` is what
+      Claude Code last reported running for it (null until it has run).
+      Show `actual` when set. `Health.models` gives the Orchestrator's
+      model, the default and the list it may choose from.
+    - `Agent.directive` and `Agent.spawnedByJobId` on an agent the
+      Orchestrator added. New event `agent.created`.
+    - Records: `agent.spawn` (Orchestrator only) and an optional
+      `toAgent` on a handoff, naming one agent. A delegation carries
+      `toAgent`; new refusal reason `no_such_agent`.
+      `Health.limits.maxAgentsPerLab`.
+    - With delegation on, the Advisor is told to hand experiment
+      protocols back to the Orchestrator instead of filing proposals
+      that wait for a person's approval.
 
     What changed in draft.26 (additive)
     - Cleaning up: `GET /v1/agents/{agentId}/files/usage` gives one
@@ -2126,11 +2150,20 @@ components:
               properties:
                 status: { type: [string, "null"] }
                 inUse: { type: boolean }
+        models:
+          type: object
+          description: What agents run on, as set on the host.
+          required: [oracle, default, allowed]
+          properties:
+            oracle: { type: [string, "null"], description: "The Orchestrator's model." }
+            default: { type: [string, "null"], description: "The model of an agent that was given none. Null leaves the choice to Claude Code." }
+            allowed: { type: array, items: { type: string }, description: "What the Orchestrator may choose from for an agent it adds." }
         limits:
           type: object
           description: Host settings a client may want to show. Not settable through the API.
           properties:
-            delegationsPerMessage: { type: integer, description: "How many handoffs of one owner message are dispatched; further ones are refused with `over_cap`." }
+            delegationsPerMessage: { type: integer, description: "How many handoffs of one turn of the Orchestrator are dispatched; further ones are refused with `over_cap`." }
+            maxAgentsPerLab: { type: integer, description: "How many agents a lab may hold, the Orchestrator included." }
             shellAllowedDomains: { type: array, items: { type: string }, description: "The only internet hosts a sandboxed shell command can reach. Empty: commands have no network. This does not limit the agent's own WebSearch and WebFetch tools." }
         shellVerification:
           type: object
@@ -2225,6 +2258,9 @@ components:
             delegation:
               $ref: "#/components/schemas/Capability"
               description: Manual mode, set on the host. When allowed, the Orchestrator's handoffs recorded in reply to the owner are started as tasks by the manager. Host-wide; there is no per-lab switch.
+            spawn:
+              $ref: "#/components/schemas/Capability"
+              description: "Manual mode, set on the host, on top of `delegation` (reason `needs_delegation` without it). When allowed, a new lab starts with the Orchestrator alone, which adds the other agents by `agent.spawn` records, names them and chooses their models."
             executorShell: { $ref: "#/components/schemas/Capability", description: "Deprecated; same as shell.executor." }
             unattendedExecution: { $ref: "#/components/schemas/Capability" }
             tmuxMode: { $ref: "#/components/schemas/Capability" }
@@ -2677,8 +2713,17 @@ components:
     AgentMode: { type: string, enum: [managed, tmux] }
     Agent:
       type: object
-      required: [id, labId, role, state, mode, sessionId, hasTmux, tmuxAttachHint, currentJob, currentActivity, blockedBy, pendingApprovalCount, queuedMessages, lastActivityAt, lastError]
+      required: [id, labId, role, name, model, directive, spawnedByJobId, state, mode, sessionId, hasTmux, tmuxAttachHint, currentJob, currentActivity, blockedBy, pendingApprovalCount, queuedMessages, lastActivityAt, lastError]
       properties:
+        name: { type: string, description: "What the agent is called. Unique within its lab, ignoring case." }
+        model:
+          type: object
+          required: [requested, actual]
+          properties:
+            requested: { type: [string, "null"], description: "The model its tasks ask Claude Code for. Null leaves the choice to Claude Code." }
+            actual: { type: [string, "null"], description: "The model Claude Code last reported running for this agent. Null until it has run a task." }
+        directive: { type: [string, "null"], description: "On an agent the Orchestrator added: what it is for, in the Orchestrator's words. Text written by an agent." }
+        spawnedByJobId: { type: [string, "null"], description: "On an agent the Orchestrator added: the Orchestrator's turn that added it." }
         blockedBy:
           type: [object, "null"]
           description: Why no new task is dispatched to this agent.
@@ -2821,9 +2866,10 @@ components:
           description: One entry per handoff this job recorded that the manager dispatched or refused, oldest first. Empty unless delegation is enabled and this job was a message from the owner to the Orchestrator or a `followUp` turn of it.
           items:
             type: object
-            required: [handoffId, toRole, title, status, reason, jobId, jobStatus, result, body]
+            required: [handoffId, toRole, toAgent, title, status, reason, jobId, jobStatus, result, body]
             properties:
               handoffId: { type: string }
+              toAgent: { type: [string, "null"], description: "The name of the agent it went to, or was meant for. Null on a delegation from before draft.27." }
               toRole: { $ref: "#/components/schemas/AgentRole" }
               title: { type: string }
               status: { type: string, enum: [dispatched, refused] }
@@ -3311,6 +3357,7 @@ components:
         - compute.cancelRequested
         - lab.statusChanged
         - agent.stateChanged
+        - agent.created
         - transcript.itemAdded
         - transcript.itemUpdated
         - job.created
