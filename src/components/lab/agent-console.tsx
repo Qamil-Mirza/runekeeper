@@ -427,6 +427,7 @@ function composerBlock(agent: LabAgent, disabled: boolean, runtimeLeft: number |
 
 export function AgentConsole({
   labId,
+  labName,
   agent,
   now,
   disabled,
@@ -449,6 +450,8 @@ export function AgentConsole({
   /** Text to start the composer with, shown for review and never sent by itself. */
   initialDraft?: string;
   labId: string;
+  /** Shown in the header on a phone, where the lab's own header is out of view. */
+  labName?: string;
   agent: LabAgent;
   now: number;
   /** True when the Lab Manager is unreachable or the snapshot is stale. */
@@ -596,7 +599,10 @@ export function AgentConsole({
           <span aria-hidden="true">←</span>
           <span className="hidden sm:inline">Agents</span>
         </LabButton>
-        <h4 className="text-[18px] font-semibold tracking-tight">{central ? "Central chat" : role}</h4>
+        <h4 className="min-w-0 text-[18px] font-semibold tracking-tight">
+          {central ? "Central chat" : role}
+          {labName && <span className="lab-eyebrow !text-[10.5px] block truncate lg:hidden">{labName}</span>}
+        </h4>
         {central && <span className="lab-eyebrow !text-[11px] hidden md:inline">the Orchestrator hands work to the right agent</span>}
         <span className="flex items-center gap-2 lab-tone-text text-[13.5px] font-medium" role="status">
           <StatusLight tone={presentation.tone} pulse={presentation.pulse} />
@@ -738,7 +744,7 @@ export function AgentConsole({
                   {m === "message" ? "Message" : "Side question"}
                 </button>
               ))}
-              <span className="min-w-0 text-[12.5px] text-[var(--lab-dim)]">
+              <span className="hidden sm:inline min-w-0 text-[12.5px] text-[var(--lab-dim)]">
                 {aside
                   ? `Only asks. The ${role} never sees it and its work carries on.`
                   : `Steers the ${role}'s work. Start with /btw to only ask.`}

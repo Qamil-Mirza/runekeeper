@@ -113,6 +113,9 @@ export function LabView({ onExit }: { onExit: () => void }) {
   const orchestrator = snapshot?.agents.find((a) => a.role === "orchestrator") ?? null;
   const centralChat = status?.health?.capabilities.delegation?.allowed === true && orchestrator !== null;
   const view = centralChat ? (viewChoice ?? "chat") : "agents";
+  // On a phone an open conversation takes the whole screen: the rail, the
+  // lab's header and its notices step aside until the reader goes back.
+  const focused = page === "lab" && snapshot !== null && snapshot !== undefined && (openAgent !== null || (view === "chat" && orchestrator !== null));
 
   return (
     <div
@@ -153,9 +156,15 @@ export function LabView({ onExit }: { onExit: () => void }) {
             onPage={setPage}
             needsYou={needsYouCount(lab.labs)}
             showSites={showSites}
+            className={focused ? "max-lg:hidden" : undefined}
           />
 
-          <main className="lab-scroll flex-1 min-w-0 min-h-0 overflow-y-auto px-3 sm:px-5 py-5 flex flex-col">
+          <main
+            className={cn(
+              "lab-scroll flex-1 min-w-0 min-h-0 overflow-y-auto px-3 sm:px-5 py-5 flex flex-col",
+              focused && "max-lg:p-0 max-lg:overflow-hidden"
+            )}
+          >
             {page === "needsYou" && (
               <NeedsYou
                 labs={lab.labs}
@@ -191,9 +200,14 @@ export function LabView({ onExit }: { onExit: () => void }) {
 
             {page === "lab" && snapshot && (
               <section
-                className={cn("flex flex-col gap-4 w-full max-w-[1400px]", (openAgent || view === "chat") && "flex-1 min-h-[34rem]")}
+                className={cn(
+                  "flex flex-col gap-4 w-full max-w-[1400px]",
+                  (openAgent || view === "chat") && "flex-1 min-h-[34rem]",
+                  focused && "max-lg:min-h-0 max-lg:gap-0"
+                )}
                 aria-label={`Lab ${snapshot.lab.name}`}
               >
+                <div className={cn("contents", focused && "max-lg:hidden")}>
                 <header className="lab-panel p-4 flex flex-col gap-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -305,11 +319,13 @@ export function LabView({ onExit }: { onExit: () => void }) {
                     ))}
                   </div>
                 )}
+                </div>
 
                 {!openAgent && view === "chat" && orchestrator ? (
                   <AgentConsole
                     central
                     labId={snapshot.lab.id}
+                    labName={snapshot.lab.name}
                     agent={orchestrator}
                     agents={snapshot.agents}
                     now={now}
@@ -324,6 +340,7 @@ export function LabView({ onExit }: { onExit: () => void }) {
                 ) : openAgent ? (
                   <AgentConsole
                     labId={snapshot.lab.id}
+                    labName={snapshot.lab.name}
                     agent={openAgent}
                     agents={snapshot.agents}
                     onOpenAgent={openAgentWith}

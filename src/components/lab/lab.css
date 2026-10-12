@@ -917,3 +917,20 @@ button.lab-file-toggle:focus-visible {
     display: none;
   }
 }
+
+/* ─── Phone ────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Below 16px a phone browser zooms the page when a field is focused. */
+  .lab-input {
+    font-size: 16px;
+  }
+  .lab-textarea {
+    min-height: 56px;
+  }
+  .lab-entry {
+    padding: 8px 10px;
+  }
+  .lab-entry-aside {
+    margin-left: 8px;
+  }
+}

@@ -173,7 +173,9 @@ export function LabRail({
   needsYou,
   showSites,
   codeHost,
+  className,
 }: {
+  className?: string;
   codeHost?: LabHealth["codeHost"];
   /** Which host-wide page is open instead of a lab, if any. */
   page: "lab" | "needsYou" | "sites" | "storage";
@@ -192,7 +194,10 @@ export function LabRail({
 }) {
   return (
     <aside
-      className="shrink-0 lg:w-64 border-b lg:border-b-0 lg:border-r border-[var(--lab-line)] flex flex-col min-h-0"
+      className={cn(
+        "shrink-0 lg:w-64 border-b lg:border-b-0 lg:border-r border-[var(--lab-line)] flex flex-col min-h-0",
+        className
+      )}
       aria-label="Labs"
     >
       <div className="flex lg:flex-col border-b border-[var(--lab-line)]" role="tablist" aria-label="Across all labs">
