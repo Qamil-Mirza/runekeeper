@@ -20,6 +20,7 @@ import {
   type LabGitOps,
   type LabJobPage,
   type LabAsideReceipt,
+  type LabEscalation,
   type LabComputeApprovals,
   type LabFileDeletion,
   type LabFileUsage,
@@ -539,6 +540,26 @@ export async function decideComputeRun(
     path: `/v1/compute/runs/${assertId(runId)}/${decision === "approve" ? "approve" : "deny"}`,
     actor,
     idempotencyKey,
+  });
+}
+
+/**
+ * Marks an escalation as seen by the owner. It only clears it from what
+ * waits: nothing is approved or resumed, and the note reaches no agent.
+ */
+export async function resolveEscalation(
+  config: LabConfig,
+  actor: LabActor,
+  idempotencyKey: string,
+  escalationId: string,
+  note?: string
+): Promise<LabEscalation> {
+  return call<LabEscalation>(config, {
+    method: "POST",
+    path: `/v1/escalations/${assertId(escalationId)}/resolve`,
+    actor,
+    idempotencyKey,
+    body: note === undefined ? {} : { note },
   });
 }
 

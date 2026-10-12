@@ -8,6 +8,7 @@ import type {
   LabErrorBody,
   LabJob,
   LabAsideReceipt,
+  LabEscalation,
   ComputeDecisionConfirmation,
   LabComputeApprovals,
   LabFileDeletion,
@@ -125,6 +126,14 @@ export function decideComputeRun(confirmation: ComputeDecisionConfirmation) {
   return mutate<LabComputeRun>(
     `/api/lab/compute/runs/${encodeURIComponent(confirmation.runId)}/${confirmation.decision}`,
     { confirmation }
+  );
+}
+
+/** Clears an escalation from what waits for the owner. The note is kept on the record only. */
+export function resolveEscalation(escalationId: string, note?: string) {
+  return mutate<LabEscalation>(
+    `/api/lab/escalations/${encodeURIComponent(escalationId)}/resolve`,
+    note?.trim() ? { note } : {}
   );
 }
 

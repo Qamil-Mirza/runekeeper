@@ -15,6 +15,7 @@ import {
   getJob,
   listJobs,
   sendAgentMessage,
+  resolveEscalation,
   listComputeApprovals,
   getComputeRun,
   decideComputeRun,
@@ -212,6 +213,18 @@ describe("over a unix socket", () => {
     );
     assert.equal(seen[2].body, "");
     assert.equal(seen[2].headers["idempotency-key"], KEY);
+  });
+
+  it("resolves an escalation with a note, or with an empty body", async () => {
+    const { config, seen } = await onUnixSocket((_s, res) => json(res, 200, {}));
+    await resolveEscalation(config, ACTOR, KEY, "esc_1", "Seen, thanks");
+    await resolveEscalation(config, ACTOR, KEY, "esc_1");
+    assert.deepEqual(seen.map((s) => `${s.method} ${s.url}`), [
+      "POST /v1/escalations/esc_1/resolve",
+      "POST /v1/escalations/esc_1/resolve",
+    ]);
+    assert.deepEqual(JSON.parse(seen[0].body), { note: "Seen, thanks" });
+    assert.deepEqual(JSON.parse(seen[1].body), {});
   });
 
   it("maps storage and file cleanup to the contract's paths, with the path encoded", async () => {

@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as labApi from "@/lib/lab/client";
+import { LabApiError } from "@/lib/lab/client";
+import { MAX_ESCALATION_NOTE_LENGTH } from "@/lib/lab/types";
 import type { LabSnapshot, LabSummary, LabComputeApproval } from "@/lib/lab/types";
 import { AgentAvatar } from "./agent-avatar";
 import { ComputeApprovals } from "./compute-approvals";
-import { agentName, formatAgo } from "./agent-card";
+import { agentName, formatAgo, leadName } from "./agent-card";
 import { Chip, LabButton, Strip } from "./lab-ui";
 
 const POLL_MS = 10_000;
@@ -55,8 +57,45 @@ export function NeedsYou({
   /** The selected lab's snapshot, which is fresher than a refetch. */
   current: LabSnapshot | null;
   now: number;
-  onOpen: (labId: string, agentId?: string) => void;
+  /** `draft` is put in that agent's composer for the owner to read and send. */
+  onOpen: (labId: string, agentId?: string, draft?: string) => void;
 }) {
+  // Escalations the owner resolved here, hidden at once; the next snapshot no longer lists them.
+  const [resolved, setResolved] = useState<Record<string, true>>({});
+  const [resolving, setResolving] = useState<{ id: string; note: string } | null>(null);
+  const [confirmAll, setConfirmAll] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [resolveFailure, setResolveFailure] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
+
+  const resolve = async (ids: string[], note?: string) => {
+    if (busy || ids.length === 0) return;
+    setBusy(true);
+    setResolveFailure(null);
+    const done: Record<string, true> = {};
+    let failed: string | null = null;
+    for (const id of ids) {
+      try {
+        await labApi.resolveEscalation(id, note);
+        done[id] = true;
+      } catch (err) {
+        // Already resolved elsewhere is the outcome that was wanted.
+        if (err instanceof LabApiError && err.code === "conflict") done[id] = true;
+        else {
+          failed = err instanceof LabApiError ? err.message : "Unexpected error";
+          break;
+        }
+      }
+    }
+    setResolved((r) => ({ ...r, ...done }));
+    setResolveFailure(failed);
+    setBusy(false);
+    if (!failed) {
+      setResolving(null);
+      setConfirmAll(false);
+    }
+    setReload((n) => n + 1);
+  };
   const [snapshots, setSnapshots] = useState<Record<string, LabSnapshot>>({});
   const [failed, setFailed] = useState(0);
   const waiting = useMemo(
@@ -84,7 +123,7 @@ export function NeedsYou({
       cancelled = true;
       clearInterval(timer);
     };
-  }, [key]);
+  }, [key, reload]);
 
   const all = { ...snapshots, ...(current ? { [current.lab.id]: current } : {}) };
   const entries = Object.values(all).flatMap((snap) => {
@@ -104,7 +143,9 @@ export function NeedsYou({
       ...snap.jobsNeedingReconciliation.map((j) => ({ kind: "interrupted" as const, snap, at: j.createdAt, job: j, agent: agentOf(j.agentId) })),
     ];
   });
-  entries.sort((a, b) => (a.at < b.at ? 1 : -1));
+  const shownEntries = entries.filter((e) => e.kind !== "escalation" || !resolved[e.escalation.id]);
+  shownEntries.sort((a, b) => (a.at < b.at ? 1 : -1));
+  const openEscalationIds = shownEntries.flatMap((e) => (e.kind === "escalation" ? [e.escalation.id] : []));
   const loading = waiting.some((id) => !all[id]) && failed === 0;
 
   return (
@@ -112,7 +153,8 @@ export function NeedsYou({
       <header className="lab-panel p-4">
         <h3 className="text-[25px] font-semibold leading-tight tracking-tight">Needs you</h3>
         <p className="mt-2 text-[13.5px] text-[var(--lab-dim)]">
-          What agents in any lab are waiting on you for. A GPU rental is approved or denied here. Runekeeper cannot
+          What agents in any lab are waiting on you for. A GPU rental is approved or denied here, and an escalation is resolved
+          here once you have seen it. Runekeeper cannot
           approve a tool request; open the agent to cancel the task or answer it. On a tool request, a cost figure is
           the agent's own estimate, never a charge.
         </p>
@@ -133,10 +175,37 @@ export function NeedsYou({
         onOpen={onOpen}
       />
       {loading && <p className="lab-eyebrow py-6 text-center">Loading…</p>}
-      {!loading && entries.length === 0 && computeApprovals.length === 0 && <p className="lab-eyebrow py-10 text-center">Nothing is waiting on you</p>}
+      {!loading && shownEntries.length === 0 && computeApprovals.length === 0 && <p className="lab-eyebrow py-10 text-center">Nothing is waiting on you</p>}
+
+      {resolveFailure && (
+        <Strip tone="bad" role="alert">
+          Not resolved: {resolveFailure}
+        </Strip>
+      )}
+      {openEscalationIds.length > 1 && (
+        <div className="flex flex-wrap items-center gap-2 text-[13px]">
+          {confirmAll ? (
+            <>
+              <span className="text-[var(--lab-dim)]">
+                Clear all {openEscalationIds.length} escalations from this list? Nothing is sent to any agent.
+              </span>
+              <LabButton variant="danger" disabled={disabled || busy} onClick={() => void resolve(openEscalationIds)}>
+                {busy ? "Resolving…" : `Yes, resolve all ${openEscalationIds.length}`}
+              </LabButton>
+              <LabButton variant="quiet" disabled={busy} onClick={() => setConfirmAll(false)}>
+                Cancel
+              </LabButton>
+            </>
+          ) : (
+            <LabButton disabled={disabled} onClick={() => setConfirmAll(true)}>
+              Resolve all {openEscalationIds.length} escalations…
+            </LabButton>
+          )}
+        </div>
+      )}
 
       <ul className="flex flex-col gap-3">
-        {entries.map((entry) => {
+        {shownEntries.map((entry) => {
           const { snap, agent } = entry;
           const role = agent ? agentName(agent) : "Agent";
           const id = entry.kind === "approval" ? entry.approval.id : entry.kind === "escalation" ? entry.escalation.id : entry.job.id;
@@ -227,11 +296,70 @@ export function NeedsYou({
                   {entry.kind === "approval" && ` · lapses ${new Date(entry.approval.expiresAt).toLocaleString()}`}
                 </p>
 
-                <div>
+                <div className="flex flex-wrap gap-2">
                   <LabButton variant="primary" onClick={() => onOpen(snap.lab.id, agent?.id)}>
                     {agent ? `Open the ${role}` : "Open the lab"}
                   </LabButton>
+                  {entry.kind === "escalation" &&
+                    (() => {
+                      const lead = snap.agents.find((a) => a.role === "orchestrator");
+                      const record = entry.escalation as { title?: string };
+                      const subject = record.title || ESCALATION_REASONS[entry.escalation.reason] || entry.escalation.reason;
+                      return (
+                        <>
+                          {lead && (
+                            <LabButton
+                              onClick={() => onOpen(snap.lab.id, lead.id, `About the escalation "${subject}":\n\n`)}
+                            >
+                              Reply to {leadName(snap.agents)}
+                            </LabButton>
+                          )}
+                          <LabButton
+                            disabled={disabled}
+                            onClick={() => {
+                              setResolveFailure(null);
+                              setResolving({ id: entry.escalation.id, note: "" });
+                            }}
+                          >
+                            Resolve…
+                          </LabButton>
+                        </>
+                      );
+                    })()}
                 </div>
+
+                {entry.kind === "escalation" && resolving?.id === entry.escalation.id && (
+                  <div className="flex flex-col gap-2 border-t border-[var(--lab-line)] pt-3">
+                    <p className="text-[13px] text-[var(--lab-dim)]">
+                      Resolving only clears this from the list. It approves nothing and tells no agent anything; to
+                      answer it, reply to {leadName(snap.agents)} instead.
+                    </p>
+                    <label htmlFor={`lab-resolve-${entry.escalation.id}`} className="lab-eyebrow !text-[10.5px]">
+                      Note for the record (optional, not sent to any agent)
+                    </label>
+                    <textarea
+                      id={`lab-resolve-${entry.escalation.id}`}
+                      className="lab-input lab-textarea"
+                      rows={2}
+                      maxLength={MAX_ESCALATION_NOTE_LENGTH}
+                      value={resolving.note}
+                      disabled={busy}
+                      onChange={(e) => setResolving({ id: entry.escalation.id, note: e.target.value })}
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <LabButton
+                        variant="primary"
+                        disabled={disabled || busy}
+                        onClick={() => void resolve([entry.escalation.id], resolving.note)}
+                      >
+                        {busy ? "Resolving…" : "Mark as resolved"}
+                      </LabButton>
+                      <LabButton variant="quiet" disabled={busy} onClick={() => setResolving(null)}>
+                        Cancel
+                      </LabButton>
+                    </div>
+                  </div>
+                )}
               </div>
             </li>
           );

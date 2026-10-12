@@ -118,6 +118,9 @@ export interface LabJobPage {
 /** Longest instruction the Lab Manager accepts. */
 export const MAX_INSTRUCTION_LENGTH = 20_000;
 /** The owner's description of a lab, given to every agent of it. */
+/** Longest note the Lab Manager keeps with a resolved escalation. */
+export const MAX_ESCALATION_NOTE_LENGTH = 2_000;
+export type LabEscalation = Schemas["Escalation"];
 /** Longest side question the Lab Manager accepts. */
 export const MAX_ASIDE_LENGTH = 4_000;
 export const MAX_BRIEF_LENGTH = 16_000;

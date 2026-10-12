@@ -49,7 +49,7 @@ export function LabView({ onExit }: { onExit: () => void }) {
   // A page about every lab, shown instead of the selected lab.
   const [page, setPage] = useState<"lab" | "needsYou" | "sites" | "storage">("lab");
   // An agent to open once its lab has loaded, when coming from another page.
-  const [wanted, setWanted] = useState<{ labId: string; agentId: string } | null>(null);
+  const [wanted, setWanted] = useState<{ labId: string; agentId: string; draft?: string } | null>(null);
   const [warp, setWarp] = useState<"in" | "out" | null>("in");
   const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -121,9 +121,9 @@ export function LabView({ onExit }: { onExit: () => void }) {
   const runtimeLeft = runtime ? runtime.limitWallClockMinutes - runtime.usedWallClockMinutes : null;
   useEffect(() => {
     if (!wanted || snapshot?.lab.id !== wanted.labId) return;
-    setOpenAgentId(wanted.agentId);
+    openAgentWith(wanted.agentId, wanted.draft);
     setWanted(null);
-  }, [wanted, snapshot?.lab.id]);
+  }, [wanted, snapshot?.lab.id, openAgentWith]);
 
   const capabilities = status?.health?.capabilities;
   // Offered when the host has the shell switched on, even while it is withheld.
@@ -196,10 +196,10 @@ export function LabView({ onExit }: { onExit: () => void }) {
                 provider={PROVIDER_NAMES[status?.health?.spend?.provider ?? ""] ?? status?.health?.spend?.provider ?? "provider"}
                 disabled={!lab.connected}
                 onComputeDecided={loadComputeApprovals}
-                onOpen={(labId, agentId) => {
+                onOpen={(labId, agentId, draft) => {
                   setPage("lab");
                   if (labId !== lab.selectedLabId) lab.selectLab(labId);
-                  if (agentId) setWanted({ labId, agentId });
+                  if (agentId) setWanted({ labId, agentId, draft });
                 }}
               />
             )}
