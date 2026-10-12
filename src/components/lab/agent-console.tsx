@@ -21,6 +21,7 @@ import {
   formatAgo,
   needsConfirm,
 } from "./agent-card";
+import { LabMarkdown } from "./lab-markdown";
 import { Chip, LabButton, StatusLight, Strip, toneClass, type LabTone } from "./lab-ui";
 import { CANCELLABLE, useAgentConsole } from "./use-agent-console";
 import type { LabFailure } from "./use-lab";
@@ -121,11 +122,11 @@ function DelegationCard({
       {delegation.status === "refused" && typeof delegation.body === "string" && (
         <details>
           <summary className="lab-eyebrow !text-[11px] cursor-pointer">What the Orchestrator wanted to ask</summary>
-          <AgentWritten label="Written by the Orchestrator" text={delegation.body} truncated={delegation.body.length >= 8000} />
+          <AgentWritten label="Written by the Orchestrator" text={delegation.body} truncated={delegation.body.length >= 8000} formatted />
         </details>
       )}
       {typeof delegation.result === "string" && delegation.result.length > 0 && (
-        <AgentWritten label={`Result · written by the ${role}`} text={delegation.result} truncated={delegation.result.length >= 2000} />
+        <AgentWritten label={`Result · written by the ${role}`} text={delegation.result} truncated={delegation.result.length >= 2000} formatted />
       )}
       {(onOpen || onResend) && (
         <div className="flex flex-wrap gap-2">
@@ -151,14 +152,25 @@ function formatDuration(seconds: number): string {
   return `${minutes}m ${Math.round(seconds - minutes * 60)}s`;
 }
 
-function AgentWritten({ label, text, truncated }: { label: string; text: string; truncated?: boolean }) {
+function AgentWritten({
+  label,
+  text,
+  truncated,
+  formatted,
+}: {
+  label: string;
+  text: string;
+  truncated?: boolean;
+  /** Prose from an agent, shown with its formatting; tool input and output stay as written. */
+  formatted?: boolean;
+}) {
   return (
     <div className="mt-2">
       <p className="lab-eyebrow !text-[11px]">
         {label}
         {truncated && " · shortened"}
       </p>
-      <pre className="lab-pre mt-1">{text}</pre>
+      {formatted ? <LabMarkdown text={text} className="mt-1 text-[13.5px]" /> : <pre className="lab-pre mt-1">{text}</pre>}
     </div>
   );
 }
@@ -200,7 +212,7 @@ function TranscriptEntry({ item, role, now }: { item: LabTranscriptItem; role: s
           <span className="lab-eyebrow !text-[11px]">Delegated by the Orchestrator · not written by you</span>
           {when}
         </p>
-        <p className="mt-1 whitespace-pre-wrap break-words">{item.text}</p>
+        <LabMarkdown text={item.text ?? ""} className="mt-1" />
       </li>
     );
   }
@@ -217,10 +229,10 @@ function TranscriptEntry({ item, role, now }: { item: LabTranscriptItem; role: s
         {thought.length > 400 ? (
           <details className="mt-1">
             <summary className="cursor-pointer break-words">{thought.slice(0, 200).trimEnd()}… Show all</summary>
-            <p className="mt-2 whitespace-pre-wrap break-words">{thought}</p>
+            <LabMarkdown text={thought} className="mt-2" />
           </details>
         ) : (
-          <p className="mt-1 whitespace-pre-wrap break-words">{thought}</p>
+          <LabMarkdown text={thought} className="mt-1" />
         )}
       </li>
     );
@@ -240,7 +252,11 @@ function TranscriptEntry({ item, role, now }: { item: LabTranscriptItem; role: s
           </span>
           {when}
         </p>
-        <p className="mt-1 whitespace-pre-wrap break-words">{item.text}</p>
+        {item.kind === "asideAnswer" ? (
+          <LabMarkdown text={item.text ?? ""} className="mt-1" />
+        ) : (
+          <p className="mt-1 whitespace-pre-wrap break-words">{item.text}</p>
+        )}
         {item.kind === "asideQuestion" && item.pending && (
           <p className="mt-1 flex items-center gap-2 text-[12.5px] text-[var(--lab-dim)]" role="status">
             <StatusLight tone="accent" pulse />
@@ -268,10 +284,10 @@ function TranscriptEntry({ item, role, now }: { item: LabTranscriptItem; role: s
               The Lab Manager gave the {role} its next instructions ({Math.ceil((item.text?.length ?? 0) / 1000)}k
               characters). Show them
             </summary>
-            <p className="mt-2 whitespace-pre-wrap break-words">{item.text}</p>
+            <LabMarkdown text={item.text ?? ""} className="mt-2" />
           </details>
         ) : (
-          <p className="mt-1 whitespace-pre-wrap break-words text-[13.5px] text-[var(--lab-dim)]">{item.text}</p>
+          <LabMarkdown text={item.text ?? ""} className="mt-1 text-[13.5px] text-[var(--lab-dim)]" />
         )}
       </li>
     );
@@ -294,7 +310,12 @@ function TranscriptEntry({ item, role, now }: { item: LabTranscriptItem; role: s
             : `The ${role} has not seen this yet. It takes it at its next step, which can be a while if a command is running.`}
         </p>
       )}
-      <p className="mt-1 whitespace-pre-wrap break-words">{item.text}</p>
+      {mine ? (
+        // The owner's own typing is shown exactly as typed.
+        <p className="mt-1 whitespace-pre-wrap break-words">{item.text}</p>
+      ) : (
+        <LabMarkdown text={item.text ?? ""} className="mt-1" />
+      )}
       {item.truncated && <p className="mt-1 text-[12.5px] text-[var(--lab-warn)]">Shortened by the Lab Manager (32 KB limit).</p>}
     </li>
   );
