@@ -19,6 +19,7 @@ import {
   cancelComputeRun,
   deleteLab,
   listComputeRuns,
+  listGitOps,
   listNetworkHosts,
   setNetworkHost,
   updateLab,
@@ -238,6 +239,14 @@ describe("over a unix socket", () => {
       ["GET /v1/network/hosts", "POST /v1/network/hosts/pypi.org/block", "POST /v1/network/hosts/files.pythonhosted.org/trust"]
     );
     assert.equal(seen[1].headers["idempotency-key"], KEY);
+  });
+
+  it("lists what a lab's agents pushed", async () => {
+    const { config, seen } = await onUnixSocket((_s, res) => json(res, 200, { repo: "o/n", defaultBranch: "main", items: [] }));
+    const page = await listGitOps(config, ACTOR, "lab_1");
+    assert.equal(page.repo, "o/n");
+    await assert.rejects(listGitOps(config, ACTOR, "lab_1/../x"), { code: "validation_failed" });
+    assert.deepEqual(seen.map((s) => `${s.method} ${s.url}`), ["GET /v1/labs/lab_1/git/ops"]);
   });
 
   it("lists a lab's compute runs and cancels one", async () => {

@@ -227,6 +227,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/labs/{labId}/git/ops": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the lab's agents asked the code host to do, newest first, with the lab's repository. */
+        get: operations["listGitOps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/labs/{labId}/compute/runs": {
         parameters: {
             query?: never;
@@ -1145,6 +1162,15 @@ export interface components {
                 runtimeCapMinutes: number;
                 checkpointEvery: number | null;
             };
+            /** @description The code host (GitHub), reached through the broker with the owner's credential. Agents never hold it. */
+            codeHost: {
+                /** @description Labs can be started from a repository and agents' branches published. */
+                available: boolean;
+                /** @description `no_broker_configured`, `broker_unavailable` or `no_code_host_credential`. */
+                reason: string | null;
+                /** @description The owner set the name and address agents' commits carry. */
+                identitySet: boolean;
+            };
             spend: {
                 /**
                  * @description `active`: the compute broker answers and the account's balance is known, so compute runs can start within each lab's limit. `none`: no run is started.
@@ -1490,6 +1516,33 @@ export interface components {
         LabStatus: "stopped" | "starting" | "running" | "paused" | "degraded";
         /** @enum {string} */
         CycleStage: "idle" | "question" | "hypothesis" | "design" | "protocolRegistered" | "awaitingApproval" | "execution" | "review" | "findings" | "stateUpdate" | "decision" | "escalated";
+        /** @description One request an agent made to the code host, carried out by the broker with the owner's credential. Titles and branch names are agent-written. */
+        GitOp: {
+            id: string;
+            labId: string;
+            agentId: string;
+            jobId: string | null;
+            /** @enum {string} */
+            kind: "push" | "pullRequest";
+            repo: string;
+            branch: string;
+            /** @enum {string} */
+            status: "requested" | "done" | "failed";
+            /** @description The pull request's title, for `pullRequest`. */
+            title: string | null;
+            error: string | null;
+            /** @description What the branch pointed at when it was pushed. */
+            commit: string | null;
+            /** @description The pull request's page. */
+            url: string | null;
+            number: number | null;
+            /** @description True when the pull request was opened by this request, false when an open one was edited. */
+            created: boolean | null;
+            /** Format: date-time */
+            requestedAt: string;
+            /** Format: date-time */
+            endedAt: string | null;
+        };
         /**
          * @description Rented compute for one lab. Every figure except `providerBilledUsd`
          *     is the Lab Manager's own count: hourly price times time by its own
@@ -1628,6 +1681,8 @@ export interface components {
             approvalPolicy: components["schemas"]["ApprovalPolicy"];
             /** @description The owner's own description of the lab. Given to every agent of the lab as the owner's words. */
             brief: string | null;
+            /** @description The GitHub repository the lab was started from (owner/name), cloned for each agent. Set at creation only. */
+            repo: string | null;
             /** @description Decided by the Orchestrator from the brief; the owner may override it. */
             objective: string | null;
             /** @enum {string|null} */
@@ -2258,7 +2313,7 @@ export interface components {
             truncated: false;
         };
         /** @enum {string} */
-        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.deleted" | "network.hostTrusted" | "network.hostBlocked" | "compute.run" | "compute.cancelRequested" | "lab.statusChanged" | "agent.stateChanged" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged" | "agent.activity";
+        EventType: "manager.started" | "lab.created" | "lab.updated" | "lab.deleted" | "network.hostTrusted" | "network.hostBlocked" | "compute.run" | "git.op" | "compute.cancelRequested" | "lab.statusChanged" | "agent.stateChanged" | "transcript.itemAdded" | "transcript.itemUpdated" | "job.created" | "job.statusChanged" | "job.reconciled" | "job.updated" | "approval.requested" | "approval.resolved" | "question.created" | "question.updated" | "result.recorded" | "review.recorded" | "experiment.updated" | "finding.recorded" | "decision.recorded" | "handoff.recorded" | "handoff.dispatched" | "escalation.recorded" | "escalation.resolved" | "checkpoint.recorded" | "policy.decided" | "budget.updated" | "budget.thresholdCrossed" | "manager.healthChanged" | "agent.modeChanged" | "agent.activity";
         ManagerStartedData: {
             serviceVersion: string;
             interruptedJobs: {
@@ -2404,6 +2459,8 @@ export interface operations {
                     name: string;
                     /** @description The owner's description of the lab: what to investigate, methods, links. */
                     brief?: string;
+                    /** @description Start the lab from this GitHub repository: owner/name or its address. 400 when the owner has not allowed it on the host or the code host is not set up (see Health.codeHost). */
+                    repo?: string;
                     objective?: string;
                 };
             };
@@ -2693,6 +2750,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Lab"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listGitOps: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                labId: components["parameters"]["LabId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The requests. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description owner/name, or null when the lab was not started from a repository. */
+                        repo: string | null;
+                        /** @description Known once an agent's clone was made. Never pushed to. */
+                        defaultBranch: string | null;
+                        items: components["schemas"]["GitOp"][];
+                    };
                 };
             };
             default: components["responses"]["Error"];

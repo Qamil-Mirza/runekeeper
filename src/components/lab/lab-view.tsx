@@ -143,10 +143,11 @@ export function LabView({ onExit }: { onExit: () => void }) {
               setPage("lab");
               if (labId !== lab.selectedLabId) lab.selectLab(labId);
             }}
-            onCreate={(name, brief) => {
+            onCreate={(name, brief, repo) => {
               setPage("lab");
-              return lab.createLab(name, brief);
+              return lab.createLab(name, brief, repo);
             }}
+            codeHost={status?.health?.codeHost}
             page={page}
             onPage={setPage}
             needsYou={needsYouCount(lab.labs)}
@@ -210,6 +211,7 @@ export function LabView({ onExit }: { onExit: () => void }) {
                         />
                       </div>
                       <p className="lab-eyebrow mt-2">
+                        {snapshot.lab.repo && `${snapshot.lab.repo} · `}
                         stage {snapshot.lab.cycleStage}
                         {lab.snapshotAt &&
                           ` · updated ${formatAgo(new Date(lab.snapshotAt).toISOString(), now)}`}

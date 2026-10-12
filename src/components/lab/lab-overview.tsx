@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { MAX_BRIEF_LENGTH, type LabHealth, type LabJob, type LabSnapshot } from "@/lib/lab/types";
 import { ROLE_LABELS, formatAgo } from "./agent-card";
 import { ComputePanel } from "./compute-panel";
+import { GitPanel } from "./git-panel";
 import { Chip, LabButton, Strip, toneClass, type LabTone } from "./lab-ui";
 import type { LabFailure } from "./use-lab";
 
@@ -372,6 +373,12 @@ export function LabOverview({
           <Brief lab={snapshot.lab} disabled={disabled} pending={goalsPending} onSave={onSaveBrief} />
         )}
       </Tile>
+
+      {snapshot.lab.repo && (
+        <Tile title="Code" note="GitHub" className="md:col-span-2 xl:col-span-3">
+          <GitPanel labId={snapshot.lab.id} repo={snapshot.lab.repo} agents={snapshot.agents} now={now} onOpenAgent={onOpenAgent} />
+        </Tile>
+      )}
 
       <Tile title="Work queue" note={stage !== "idle" ? `phase · ${stage}` : undefined}>
         {open === null && <p className="text-[13.5px] text-[var(--lab-dim)]">Loading…</p>}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { MAX_BRIEF_LENGTH, type LabStatus, type LabSummary } from "@/lib/lab/types";
+import { MAX_BRIEF_LENGTH, REPO_PATTERN, type LabHealth, type LabStatus, type LabSummary } from "@/lib/lab/types";
 import { LabButton, StatusLight, Strip, type LabTone } from "./lab-ui";
 import type { LabFailure } from "./use-lab";
 
@@ -14,7 +14,14 @@ export const LAB_STATUS_TONE: Record<LabStatus, LabTone> = {
   degraded: "bad",
 };
 
+const CODE_HOST_REASONS: Record<string, string> = {
+  no_broker_configured: "GitHub is not connected to the Lab on the host",
+  broker_unavailable: "the broker that reaches GitHub is not answering",
+  no_code_host_credential: "no GitHub credential is set on the host",
+};
+
 function CreateLab({
+  codeHost,
   disabled,
   pending,
   failure,
@@ -23,11 +30,16 @@ function CreateLab({
   disabled: boolean;
   pending: boolean;
   failure?: LabFailure;
-  onCreate: (name: string, brief?: string) => Promise<boolean>;
+  onCreate: (name: string, brief?: string, repo?: string) => Promise<boolean>;
+  /** Undefined from a Lab Manager that cannot start a lab from a repository. */
+  codeHost?: LabHealth["codeHost"];
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [brief, setBrief] = useState("");
+  const [repo, setRepo] = useState("");
+  const repoText = codeHost?.available ? repo.trim() : "";
+  const badRepo = repoText !== "" && !REPO_PATTERN.test(repoText);
   const trimmed = name.trim();
   const tooLong = brief.length > MAX_BRIEF_LENGTH;
 
@@ -55,9 +67,10 @@ function CreateLab({
             aria-labelledby="lab-create-title"
             onSubmit={(e) => {
               e.preventDefault();
-              if (!trimmed || tooLong || pending) return;
-              void onCreate(trimmed, brief.trim() || undefined).then((created) => {
+              if (!trimmed || tooLong || badRepo || pending) return;
+              void onCreate(trimmed, brief.trim() || undefined, repoText || undefined).then((created) => {
                 if (!created) return;
+                setRepo("");
                 setName("");
                 setBrief("");
                 setOpen(false);
@@ -97,6 +110,35 @@ function CreateLab({
                 ? `Too long by ${brief.length - MAX_BRIEF_LENGTH} characters.`
                 : "Every agent in the lab is given this as your words. The Orchestrator decides the lab's objective and goals from it. You can change it later."}
             </p>
+            {codeHost?.available && (
+              <>
+                <label htmlFor="lab-repo" className="lab-eyebrow">
+                  GitHub repository · optional
+                </label>
+                <input
+                  id="lab-repo"
+                  className="lab-input lab-mono"
+                  placeholder="owner/name"
+                  maxLength={200}
+                  value={repo}
+                  onChange={(e) => setRepo(e.target.value)}
+                  disabled={disabled || pending}
+                />
+                <p className={cn("text-[12.5px]", badRepo ? "text-[var(--lab-bad)]" : "text-[var(--lab-dim)]")}>
+                  {badRepo
+                    ? "Write it as owner/name, or paste its https://github.com address."
+                    : `The lab starts from this repository. Agents push branches and open pull requests under your identity; only you merge, on GitHub. It must be one you allowed on the host, and cannot be changed later.${
+                        codeHost.identitySet ? "" : " The name and address for agents' commits are not set on the host yet."
+                      }`}
+                </p>
+              </>
+            )}
+            {codeHost && !codeHost.available && (
+              <p className="text-[12.5px] text-[var(--lab-dim)]">
+                A lab cannot start from a GitHub repository yet:{" "}
+                {(codeHost.reason && CODE_HOST_REASONS[codeHost.reason]) ?? codeHost.reason ?? "not available"}.
+              </p>
+            )}
             {failure && (
               <Strip tone="bad" role="alert">
                 {failure.message}
@@ -106,7 +148,7 @@ function CreateLab({
               <LabButton onClick={() => setOpen(false)} disabled={pending}>
                 Cancel
               </LabButton>
-              <LabButton type="submit" variant="primary" disabled={disabled || pending || !trimmed || tooLong}>
+              <LabButton type="submit" variant="primary" disabled={disabled || pending || !trimmed || tooLong || badRepo}>
                 {pending ? "Creating…" : "Create lab"}
               </LabButton>
             </div>
@@ -130,7 +172,9 @@ export function LabRail({
   onPage,
   needsYou,
   showSites,
+  codeHost,
 }: {
+  codeHost?: LabHealth["codeHost"];
   /** Which host-wide page is open instead of a lab, if any. */
   page: "lab" | "needsYou" | "sites";
   onPage: (page: "needsYou" | "sites") => void;
@@ -144,7 +188,7 @@ export function LabRail({
   createPending: boolean;
   createFailure?: LabFailure;
   onSelect: (labId: string) => void;
-  onCreate: (name: string, brief?: string) => Promise<boolean>;
+  onCreate: (name: string, brief?: string, repo?: string) => Promise<boolean>;
 }) {
   return (
     <aside
@@ -228,6 +272,7 @@ export function LabRail({
 
       <div className="p-3 sm:px-5 lg:p-4 lg:mt-auto lg:border-t border-[var(--lab-line)]">
         <CreateLab
+          codeHost={codeHost}
           disabled={!connected}
           pending={createPending}
           failure={createFailure}

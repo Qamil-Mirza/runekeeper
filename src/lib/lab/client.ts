@@ -7,6 +7,7 @@ import type {
   LabConnectionStatus,
   LabErrorBody,
   LabJob,
+  LabGitOps,
   LabJobPage,
   LabMessageReceipt,
   LabSnapshot,
@@ -86,12 +87,16 @@ export async function fetchLabs(): Promise<LabSummary[]> {
   return (await labFetch<{ items: LabSummary[] }>("/api/lab/labs")).items;
 }
 
-export function createLab(input: { name: string; brief?: string }) {
+export function createLab(input: { name: string; brief?: string; repo?: string }) {
   return mutate<LabSnapshot>("/api/lab/labs", input);
 }
 
 export function fetchLabSnapshot(labId: string) {
   return labFetch<LabSnapshot>(`/api/lab/labs/${encodeURIComponent(labId)}`);
+}
+
+export function fetchGitOps(labId: string) {
+  return labFetch<LabGitOps>(`/api/lab/labs/${encodeURIComponent(labId)}/git/ops`);
 }
 
 export function fetchComputeRuns(labId: string) {

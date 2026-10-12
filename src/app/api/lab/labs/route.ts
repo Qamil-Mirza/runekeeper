@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { labError, readJsonObject, withLabOwner } from "@/lib/lab/route";
 import { LabManagerError, createLab, listLabs } from "@/lib/lab/manager";
-import { MAX_BRIEF_LENGTH } from "@/lib/lab/types";
+import { MAX_BRIEF_LENGTH, REPO_PATTERN } from "@/lib/lab/types";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +27,13 @@ export function POST(req: Request) {
     if (brief.length > MAX_BRIEF_LENGTH) {
       return labError(400, "validation_failed", `The description must be at most ${MAX_BRIEF_LENGTH} characters`);
     }
+    const repo = typeof body?.repo === "string" ? body.repo.trim() : "";
+    if (repo && (repo.length > 200 || !REPO_PATTERN.test(repo))) {
+      return labError(400, "validation_failed", "The repository must be owner/name or its https://github.com address");
+    }
     try {
       const snapshot = await createLab(config, actor, idempotencyKey, {
+        ...(repo ? { repo } : {}),
         name,
         ...(objective ? { objective } : {}),
         ...(brief ? { brief } : {}),
@@ -36,7 +41,7 @@ export function POST(req: Request) {
       return NextResponse.json(snapshot, { status: 201 });
     } catch (err) {
       // A Lab Manager from before lab descriptions refuses the unknown field.
-      if (brief && err instanceof LabManagerError && err.code === "validation_failed") {
+      if (brief && !repo && err instanceof LabManagerError && err.code === "validation_failed") {
         return labError(
           400,
           "validation_failed",

@@ -222,10 +222,10 @@ export function useLab() {
   );
 
   const createLab = useCallback(
-    async (name: string, brief?: string) => {
+    async (name: string, brief?: string, repo?: string) => {
       let done = false;
       await runAction("create", "Creating", async () => {
-        const created = await labApi.createLab({ name, ...(brief ? { brief } : {}) });
+        const created = await labApi.createLab({ name, ...(brief ? { brief } : {}), ...(repo ? { repo } : {}) });
         setSelectedLabId(created.lab.id);
         setSnapshot(created);
         setSnapshotAt(Date.now());
