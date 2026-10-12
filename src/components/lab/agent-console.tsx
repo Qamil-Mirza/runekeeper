@@ -734,7 +734,7 @@ export function AgentConsole({
             {agent.state === "working" && (
               <p className="lab-eyebrow mt-3 flex items-center gap-2 lab-tone-accent">
                 <StatusLight tone="accent" pulse />
-                {role} is working. Output appears as each message completes.
+                {role} is working
               </p>
             )}
             {agent.state === "waitingOnHuman" && (
