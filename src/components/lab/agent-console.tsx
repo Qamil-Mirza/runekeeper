@@ -231,7 +231,7 @@ function TranscriptEntry({ item, role, lead, now }: { item: LabTranscriptItem; r
     return (
       <li className="lab-entry lab-entry-thinking">
         <p className="flex items-baseline justify-between gap-3">
-          <span className="lab-eyebrow !text-[11px]">{role} thinking · a summary of its reasoning, not a reply</span>
+          <span className="lab-eyebrow !text-[11px]">{role} thinking</span>
           {when}
         </p>
         {thought.length > 400 ? (
