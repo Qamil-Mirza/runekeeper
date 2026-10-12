@@ -1791,7 +1791,7 @@ export interface components {
                 /** @enum {string} */
                 kind: "task" | "message";
                 /** @enum {string} */
-                origin: "human" | "policy" | "delegated";
+                origin: "human" | "policy" | "delegated" | "followUp";
                 startedAt: components["schemas"]["Timestamp"];
             } | null;
             /** @description What the running job is doing now, in one line the Lab Manager derives from its latest transcript item: a tool call and its summary, writing, or reading its instructions. Null when nothing runs. The summary of a command is the agent's own text. */
@@ -1885,17 +1885,22 @@ export interface components {
         };
         Job: {
             /**
-             * @description Who started the job: a person, the host policy, or the Orchestrator by delegation (see `delegation`). Treat as an open string.
+             * @description Who started the job: a person, the host policy, the Orchestrator by delegation (see `delegation`), or the Lab Manager because the tasks the Orchestrator delegated had ended (see `followUp`). Treat as an open string.
              * @enum {string}
              */
-            origin: "human" | "policy" | "delegated";
+            origin: "human" | "policy" | "delegated" | "followUp";
+            /** @description Set when `origin` is `followUp`. The Orchestrator's turn whose delegated tasks ended, and which round of the work this is, counted from 1 after the owner's message. */
+            followUp?: {
+                ofJobId: string;
+                round: number;
+            } | null;
             /** @description Set when `origin` is `delegated`. The Orchestrator task and handoff this job came from. */
             delegation?: {
                 byJobId: string;
                 byAgentId: string;
                 handoffId: string;
             } | null;
-            /** @description One entry per handoff this job recorded that the manager dispatched or refused, oldest first. Empty unless delegation is enabled and this job was a message from the owner to the Orchestrator. */
+            /** @description One entry per handoff this job recorded that the manager dispatched or refused, oldest first. Empty unless delegation is enabled and this job was a message from the owner to the Orchestrator or a `followUp` turn of it. */
             delegations?: {
                 handoffId: string;
                 toRole: components["schemas"]["AgentRole"];
@@ -1921,7 +1926,7 @@ export interface components {
              */
             stateNote?: string | null;
             /** @enum {string|null} */
-            purpose: "plan" | "execute" | "review" | "checkpoint" | null;
+            purpose: "plan" | "execute" | "review" | "checkpoint" | "followUp" | null;
             /** @description Exactly what the agent was asked to do. For kind `message`, the message text. Always complete on `GET /v1/jobs/{id}`; capped at 2 KB elsewhere (compare `instructionsHash`). */
             instructions: string;
             /** @description sha256 hex of the UTF-8 bytes of the complete instructions. */

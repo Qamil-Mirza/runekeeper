@@ -213,7 +213,18 @@ function TranscriptEntry({ item, role, now }: { item: LabTranscriptItem; role: s
           </span>
           {when}
         </p>
-        <p className="mt-1 whitespace-pre-wrap break-words text-[13.5px] text-[var(--lab-dim)]">{item.text}</p>
+        {item.kind === "managerInstruction" && (item.text?.length ?? 0) > 600 ? (
+          // What the manager hands an agent between rounds is long; it opens on request.
+          <details className="mt-1 text-[13.5px] text-[var(--lab-dim)]">
+            <summary className="cursor-pointer">
+              The Lab Manager gave the {role} its next instructions ({Math.ceil((item.text?.length ?? 0) / 1000)}k
+              characters). Show them
+            </summary>
+            <p className="mt-2 whitespace-pre-wrap break-words">{item.text}</p>
+          </details>
+        ) : (
+          <p className="mt-1 whitespace-pre-wrap break-words text-[13.5px] text-[var(--lab-dim)]">{item.text}</p>
+        )}
       </li>
     );
   }
@@ -269,6 +280,8 @@ function TaskRow({
         {job.usage.turns > 0 && ` · ${job.usage.turns} turn${job.usage.turns === 1 ? "" : "s"}`}
         {job.origin === "delegated" && " · delegated by the Orchestrator"}
         {job.origin === "policy" && " · started by host policy"}
+        {job.origin === "followUp" &&
+          ` · round ${job.followUp?.round ?? "?"}, started by the Lab Manager with the delegated results`}
       </p>
       {job.error && (
         <p className="lab-strip lab-tone-bad text-[13px]">
