@@ -1474,6 +1474,10 @@ export interface components {
                 oracle: string | null;
                 /** @description The model of an agent that was given none. Null leaves the choice to Claude Code. */
                 default: string | null;
+                /** @description The model of an advisor, executor or reviewer that was given none of its own. Null leaves the choice to Claude Code. */
+                roles?: {
+                    [key: string]: string | null;
+                };
                 /** @description What the Orchestrator may choose from for an agent it adds. */
                 allowed: string[];
             };
