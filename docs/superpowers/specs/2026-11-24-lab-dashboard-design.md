@@ -134,9 +134,11 @@ the secrets directory) are the owner's to clean up; out of scope here.
 - Agent routes refuse requests that arrived through the public HTTPS proxy
   (owner wants agent traffic on the host only). The public origin is
   Tailscale Funnel in front of `127.0.0.1:3000`; to the container both kinds
-  of traffic come from the same address, so the signal is forwarding headers
-  (`X-Forwarded-For` / `X-Forwarded-Host` / any `Tailscale-*`): agent routes
-  reject any request carrying them. The token is required regardless.
+  of traffic come from the same address, so the signal is forwarding headers.
+  Next.js adds `X-Forwarded-For/-Host/-Proto` to every request itself, so the
+  rule only counts what it would not add: a `Forwarded` header, any
+  `Tailscale-*` header, `X-Forwarded-Proto` other than `http`, or an
+  `X-Forwarded-Host` that is not loopback. `X-Forwarded-For` is ignored. The token is required regardless.
   *(Builder-check call)* This can only be confirmed behind the real Funnel,
   so the plan ends with an owner-run check after deploy: one `curl` to an
   agent route through the public URL must be refused.
