@@ -12,7 +12,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "test:lab": "npx tsx --test src/lib/lab/*.test.ts"
+    "test:lab": "npx tsx --test src/lib/lab/*.test.ts tools/lab/*.test.mjs"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.1",
