@@ -41,6 +41,8 @@ export interface PodRow {
   eta: string | null;
   staleMinutes: number | null;
   endedAt: string | null;
+  /** Why the run ended, as its agent reported; null while running or for an unassigned pod. */
+  endNote: string | null;
 }
 
 export interface ExperimentRow {

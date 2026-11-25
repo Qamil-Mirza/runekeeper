@@ -76,6 +76,7 @@ export function buildOverview({ runs, snapshot, runpodState, now }: BuildOvervie
           ? Math.floor(sinceProgress / 60_000)
           : null,
       endedAt: iso(r.endedAt),
+      endNote: r.endNote,
     };
   };
 
@@ -133,6 +134,7 @@ export function buildOverview({ runs, snapshot, runpodState, now }: BuildOvervie
         eta: null,
         staleMinutes: null,
         endedAt: null,
+        endNote: null,
       }));
       rows.unshift({
         id: UNASSIGNED_ID,

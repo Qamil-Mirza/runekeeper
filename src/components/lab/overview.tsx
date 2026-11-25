@@ -165,6 +165,7 @@ function PodRows({ pod: p, now, open, onToggle }: { pod: PodRow; now: Date; open
           <td colSpan={4}>
             <span className="lab-mono">pod {p.podId}</span>
             {p.endedAt && <span> · ended {clock(p.endedAt, now)}</span>}
+            {p.endNote && <span className="lab-end-note"> · {p.endNote}</span>}
           </td>
         </tr>
       )}

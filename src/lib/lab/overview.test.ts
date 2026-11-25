@@ -50,7 +50,7 @@ function e9Runs(): OverviewRun[] {
       capUsd: 15, progressPct: 62, eta: HELD_OUT_ETA, progressAt: at("2026-11-24T21:50:00Z"),
       startedAt: at("2026-11-24T19:00:00Z") }),
     run({ experimentId: "E9", experimentTitle: "probe transfer", stage: "llama-gemma", status: "failed", podId: "pl",
-      startedAt: at("2026-11-24T14:00:00Z"), endedAt: at("2026-11-24T16:00:00Z") }),
+      startedAt: at("2026-11-24T14:00:00Z"), endedAt: at("2026-11-24T16:00:00Z"), endNote: "OOM at step 1200" }),
   ];
 }
 
@@ -103,6 +103,11 @@ test("E9: stage summary, ETA, progress and per-run cost", () => {
   const devA = e9.pods.find((p) => p.stage === "dev-a")!;
   assert.equal(devA.status, "done");
   assert.ok(close(devA.cost, 3.0));
+  assert.equal(devA.endNote, null);
+  // Why a run ended reaches its row.
+  const failed = e9.pods.find((p) => p.stage === "llama-gemma")!;
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.endNote, "OOM at step 1200");
 
   assert.ok(close(e9.cost, 3.0 + 4.0 + 1.8 + 0), `E9 cost ${e9.cost}`);
 });
@@ -132,6 +137,7 @@ test("a pod no run claims appears first under Unassigned pods with its cost", ()
   assert.equal(stray.stage, "stray");
   assert.equal(stray.runId, null);
   assert.equal(stray.capUsd, null);
+  assert.equal(stray.endNote, null);
   assert.ok(close(stray.cost, 2.0), `stray cost ${stray.cost}`); // $1 billed + 1 h accruing
   assert.ok(close(first.cost, 2.0));
 });

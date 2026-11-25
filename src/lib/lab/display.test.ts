@@ -32,6 +32,7 @@ const pod = (over: Partial<PodRow> = {}): PodRow => ({
   eta: null,
   staleMinutes: null,
   endedAt: null,
+  endNote: null,
   ...over,
 });
 
