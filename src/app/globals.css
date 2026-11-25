@@ -38,9 +38,10 @@
   --color-inverse-on-surface: #2c1810;
 
   /* ── Typography Scale ── */
-  --font-display: "Newsreader", serif;
-  --font-body: "Newsreader", serif;
-  --font-label: "Work Sans", sans-serif;
+  /* The two variables are set on <html> by the bundled fonts in layout.tsx. */
+  --font-display: var(--font-newsreader), "Newsreader", serif;
+  --font-body: var(--font-newsreader), "Newsreader", serif;
+  --font-label: var(--font-work-sans), "Work Sans", sans-serif;
 
   --text-display-lg: 3.5rem;
   --text-headline-lg: 2rem;

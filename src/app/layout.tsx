@@ -1,21 +1,23 @@
 import type { Metadata } from "next";
-import { Newsreader, Work_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import { SessionProvider } from "next-auth/react";
 import "./globals.css";
 
-const newsreader = Newsreader({
-  subsets: ["latin"],
-  variable: "--font-display",
+// Bundled files (src/fonts), so the build fetches nothing.
+const newsreader = localFont({
+  src: [
+    { path: "../fonts/newsreader-latin.woff2", weight: "200 800", style: "normal" },
+    { path: "../fonts/newsreader-italic-latin.woff2", weight: "200 800", style: "italic" },
+  ],
+  variable: "--font-newsreader",
   display: "swap",
-  weight: ["300", "400", "500", "600", "700"],
-  style: ["normal", "italic"],
 });
 
-const workSans = Work_Sans({
-  subsets: ["latin"],
-  variable: "--font-label",
+const workSans = localFont({
+  src: "../fonts/work-sans-latin.woff2",
+  variable: "--font-work-sans",
   display: "swap",
-  weight: ["400", "500", "600"],
+  weight: "100 900",
 });
 
 export const metadata: Metadata = {
