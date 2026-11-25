@@ -4,13 +4,7 @@ set -euo pipefail
 ENV_FILE=".env.production"
 COMPOSE_FILE="docker-compose.prod.yml"
 
-# The Lab is opt-in: its override is applied only when the env file sets
-# LAB_SOCK_GID. Without that line this script behaves exactly as before.
 COMPOSE_FILES=(-f "$COMPOSE_FILE")
-if grep -qE '^LAB_SOCK_GID=[0-9]+$' "$ENV_FILE"; then
-  COMPOSE_FILES+=(-f docker-compose.lab.yml)
-  echo "==> Lab override enabled (docker-compose.lab.yml)"
-fi
 
 echo "==> Pulling latest code..."
 git pull origin main
