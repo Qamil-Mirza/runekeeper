@@ -4,6 +4,8 @@ import { useState } from "react";
 import type { ProtocolCard, ReportCard } from "@/lib/lab/types";
 import { usePolled } from "./use-lab";
 import { Overview } from "./overview";
+import { ProtocolsBoard } from "./protocols-board";
+import { ReportsBoard } from "./reports-board";
 import "./lab.css";
 
 type TabId = "overview" | "protocols" | "reports";
@@ -44,6 +46,7 @@ export function LabView() {
     }
   };
 
+  // One poll per board, shared by the tab counts and the boards themselves.
   const protocols = usePolled<{ cards: ProtocolCard[] }>("/api/lab/protocols", BOARD_POLL_MS);
   const reports = usePolled<{ cards: ReportCard[] }>("/api/lab/reports", BOARD_POLL_MS);
   const counts: Record<TabId, { n: number; tone: string } | null> = {
@@ -85,7 +88,8 @@ export function LabView() {
 
         <div id="lab-panel" role="tabpanel" aria-labelledby={`lab-tab-${tab}`}>
           {tab === "overview" && <Overview />}
-          {tab !== "overview" && <p className="lab-line">Coming next.</p>}
+          {tab === "protocols" && <ProtocolsBoard {...protocols} />}
+          {tab === "reports" && <ReportsBoard {...reports} />}
         </div>
       </div>
     </div>

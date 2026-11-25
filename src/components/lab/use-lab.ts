@@ -37,14 +37,18 @@ export function useLabAccess(): boolean | undefined {
   return access;
 }
 
+/** A polled resource: the last good data, the last error, and a way to poll now. */
+export interface Polled<T> {
+  data: T | null;
+  error: string | null;
+  refresh(): void;
+}
+
 /**
  * GETs `url` now and every `ms`. Pauses while the browser tab is hidden and
  * refreshes as soon as it is visible again. A failed poll keeps the last data.
  */
-export function usePolled<T>(
-  url: string,
-  ms: number,
-): { data: T | null; error: string | null; refresh(): void } {
+export function usePolled<T>(url: string, ms: number): Polled<T> {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Only the newest request may write state; bumped on unmount too.
@@ -91,6 +95,29 @@ export function usePolled<T>(
 
   const refresh = useCallback(() => void load(), [load]);
   return { data, error, refresh };
+}
+
+/** The current time, ticking every `ms` so relative times stay right between polls. */
+export function useNow(ms: number): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), ms);
+    return () => clearInterval(timer);
+  }, [ms]);
+  return now;
+}
+
+/** GETs JSON once. Throws a `LabRequestError` carrying the API's message. */
+export async function getJson<T>(url: string): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(url, { cache: "no-store" });
+  } catch {
+    throw new LabRequestError("Runekeeper didn't answer", 0);
+  }
+  const json: unknown = await res.json().catch(() => null);
+  if (!res.ok) throw new LabRequestError(messageOf(json, res.status), res.status);
+  return json as T;
 }
 
 /** POSTs JSON. Throws a `LabRequestError` carrying the API's message. */

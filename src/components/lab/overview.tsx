@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useState } from "react";
 import type { ExperimentRow, OverviewDTO, PodRow } from "@/lib/lab/types";
 import {
   capMoney,
@@ -15,19 +15,9 @@ import {
   staleText,
   type Figure,
 } from "@/lib/lab/display";
-import { usePolled } from "./use-lab";
+import { useNow, usePolled } from "./use-lab";
 
 const POLL_MS = 30_000;
-
-/** The current time, ticking so "in 1h 40m" and "overdue" stay right between polls. */
-function useNow(ms: number): Date {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), ms);
-    return () => clearInterval(timer);
-  }, [ms]);
-  return now;
-}
 
 export function Overview() {
   const { data, error } = usePolled<OverviewDTO>("/api/lab/overview", POLL_MS);

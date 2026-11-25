@@ -218,6 +218,398 @@
   font-size: 12px;
 }
 
+/* ── Boards ───────────────────────────────────────────────────── */
+
+.lab-root .lab-board-note {
+  font-size: 12.5px;
+  margin: -8px 0 14px;
+}
+.lab-root .lab-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.lab-root .lab-col { min-width: 0; }
+.lab-root .lab-col-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--lab-dim);
+}
+.lab-root .lab-col-n { color: var(--lab-faint); }
+.lab-root .lab-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.lab-root .lab-col-empty {
+  margin: 0;
+  padding: 2px 0;
+  font-size: 12px;
+  color: var(--lab-faint);
+}
+
+.lab-root .lab-card {
+  display: block;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 11px 12px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--lab-panel);
+  border: 1px solid var(--lab-line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.lab-root .lab-card:hover { border-color: var(--lab-line-strong); }
+.lab-root .lab-card-hot { border-color: rgb(255 180 84 / 40%); }
+.lab-root .lab-card-hot:hover { border-color: rgb(255 180 84 / 70%); }
+.lab-root .lab-card-t {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.lab-root .lab-version {
+  margin-left: 6px;
+  font-weight: 400;
+}
+.lab-root .lab-card-s,
+.lab-root .lab-card-q {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.lab-root .lab-card-s {
+  margin-top: 4px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--lab-text-2);
+}
+.lab-root .lab-card-q {
+  margin-top: 6px;
+  padding-left: 8px;
+  border-left: 2px solid var(--lab-line-strong);
+  font-size: 12px;
+  font-style: italic;
+  color: var(--lab-dim);
+}
+.lab-root .lab-card-m {
+  display: block;
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--lab-dim);
+}
+
+/* ── Document modal ───────────────────────────────────────────── */
+
+/* Portalled to <body>, so it carries .lab-root for the palette. */
+.lab-root.lab-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  height: auto;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 55%);
+}
+.lab-root .lab-modal {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 1200px;
+  height: 100%;
+  background: var(--lab-bg);
+  border: 1px solid var(--lab-line-strong);
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 50%);
+  overflow: hidden;
+}
+.lab-root .lab-modal:focus { outline: none; }
+.lab-root .lab-modal-head {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--lab-line);
+}
+.lab-root .lab-modal-heading { min-width: 0; flex: 1; }
+.lab-root .lab-modal-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.lab-root .lab-modal-meta {
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--lab-dim);
+}
+.lab-root .lab-modal-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin: -6px -8px 0 0;
+  border-radius: 6px;
+  font-size: 15px;
+  color: var(--lab-dim);
+  cursor: pointer;
+}
+.lab-root .lab-modal-close:hover { color: var(--lab-text); background: var(--lab-raised); }
+.lab-root .lab-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 20px 20px;
+}
+.lab-root .lab-modal-fill {
+  display: flex;
+  padding: 0;
+  overflow: hidden;
+}
+.lab-root .lab-modal-foot {
+  flex: none;
+  max-height: 50%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 20px 16px;
+  border-top: 1px solid var(--lab-line);
+}
+
+/* The report itself. White behind it, so a page without a background stays readable. */
+.lab-root .lab-frame {
+  display: block;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff;
+}
+
+.lab-root .lab-revises {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  color: var(--lab-dim);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.lab-root .lab-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.lab-root .lab-btn {
+  flex: none;
+  padding: 7px 16px;
+  font-size: 13px;
+  color: var(--lab-text);
+  border: 1px solid var(--lab-line-strong);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.lab-root .lab-btn:hover:not(:disabled) { background: var(--lab-raised); }
+.lab-root .lab-btn:disabled { opacity: 0.4; cursor: default; }
+.lab-root .lab-btn-ok { color: var(--lab-ok); border-color: var(--lab-ok); }
+.lab-root .lab-btn-bad { color: var(--lab-bad); border-color: var(--lab-bad); }
+.lab-root .lab-action-msg {
+  min-width: 0;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--lab-warn);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lab-root .lab-verdict {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.lab-root .lab-verdict-note {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--lab-text-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.lab-root .lab-verdict + .lab-action-msg,
+.lab-root .lab-verdict-note + .lab-action-msg { margin-top: 8px; }
+
+.lab-root .lab-replies {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+}
+.lab-root .lab-reply {
+  padding-left: 10px;
+  border-left: 2px solid var(--lab-line-strong);
+}
+.lab-root .lab-reply + .lab-reply { margin-top: 10px; }
+.lab-root .lab-reply-body {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--lab-text-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.lab-root .lab-reply-at {
+  font-size: 11.5px;
+  color: var(--lab-dim);
+}
+
+/* ── Note box ─────────────────────────────────────────────────── */
+
+.lab-root .lab-notebox-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12.5px;
+  color: var(--lab-dim);
+}
+.lab-root .lab-notebox-field { position: relative; }
+.lab-root .lab-notebox-input {
+  display: block;
+  width: 100%;
+  min-height: 74px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--lab-text);
+  background: var(--lab-panel);
+  border: 1px solid var(--lab-line-strong);
+  border-radius: 8px;
+  resize: vertical;
+}
+.lab-root .lab-notebox-input:focus-visible {
+  outline: none;
+  border-color: var(--lab-accent);
+}
+.lab-root .lab-notebox-count {
+  margin-top: 4px;
+  font-size: 11.5px;
+  text-align: right;
+  color: var(--lab-dim);
+}
+
+/* ── Protocol markdown ────────────────────────────────────────── */
+
+.lab-root .lab-md {
+  max-width: 76ch;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--lab-text-2);
+  overflow-wrap: anywhere;
+}
+.lab-root .lab-md > :first-child { margin-top: 0; }
+.lab-root .lab-md h1,
+.lab-root .lab-md h2,
+.lab-root .lab-md h3,
+.lab-root .lab-md h4,
+.lab-root .lab-md h5,
+.lab-root .lab-md h6 {
+  margin: 18px 0 6px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--lab-text);
+}
+.lab-root .lab-md h1 { font-size: 18px; }
+.lab-root .lab-md h2 { font-size: 16px; }
+.lab-root .lab-md h3,
+.lab-root .lab-md h4,
+.lab-root .lab-md h5,
+.lab-root .lab-md h6 { font-size: 14px; }
+.lab-root .lab-md p,
+.lab-root .lab-md ul,
+.lab-root .lab-md ol,
+.lab-root .lab-md pre,
+.lab-root .lab-md blockquote,
+.lab-root .lab-md table { margin: 0 0 12px; }
+.lab-root .lab-md ul,
+.lab-root .lab-md ol { padding-left: 22px; }
+.lab-root .lab-md ul { list-style: disc; }
+.lab-root .lab-md ol { list-style: decimal; }
+.lab-root .lab-md li + li { margin-top: 3px; }
+.lab-root .lab-md li > ul,
+.lab-root .lab-md li > ol { margin: 3px 0 0; }
+.lab-root .lab-md a { color: var(--lab-accent); text-decoration: underline; }
+.lab-root .lab-md strong { color: var(--lab-text); font-weight: 600; }
+.lab-root .lab-md code {
+  padding: 1px 4px;
+  font-family: var(--lab-mono);
+  font-size: 12.5px;
+  background: var(--lab-raised);
+  border-radius: 4px;
+}
+.lab-root .lab-md pre {
+  padding: 10px 12px;
+  overflow-x: auto;
+  background: var(--lab-panel);
+  border: 1px solid var(--lab-line);
+  border-radius: 6px;
+}
+.lab-root .lab-md pre code { padding: 0; background: none; }
+.lab-root .lab-md blockquote {
+  padding-left: 12px;
+  border-left: 2px solid var(--lab-line-strong);
+  color: var(--lab-dim);
+}
+.lab-root .lab-md hr {
+  margin: 16px 0;
+  border: 0;
+  border-top: 1px solid var(--lab-line);
+}
+.lab-root .lab-md table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.lab-root .lab-md th,
+.lab-root .lab-md td {
+  padding: 5px 10px;
+  border: 1px solid var(--lab-line);
+  text-align: left;
+}
+.lab-root .lab-md th { color: var(--lab-text); font-weight: 500; }
+.lab-root .lab-md input[type="checkbox"] { margin-right: 6px; }
+
+/* ── Below 768 px: columns stack, the modal fills the screen ──── */
+
+@media (max-width: 767px) {
+  .lab-root .lab-board { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .lab-root.lab-layer { padding: 0; }
+  .lab-root .lab-modal {
+    max-width: none;
+    border: 0;
+    border-radius: 0;
+  }
+  .lab-root .lab-modal-head { padding: 14px 16px 10px; }
+  .lab-root .lab-modal-body { padding: 14px 16px 18px; }
+  .lab-root .lab-modal-fill { padding: 0; }
+  .lab-root .lab-modal-foot { padding: 12px 16px 14px; }
+}
+
 /* ── Narrow screens ───────────────────────────────────────────── */
 
 @media (max-width: 639px) {
