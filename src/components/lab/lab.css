@@ -64,6 +64,30 @@
   border-radius: 2px;
 }
 
+/* ── Page head ────────────────────────────────────────────────── */
+
+.lab-root .lab-head {
+  padding-top: 8px;
+  margin-bottom: 22px;
+}
+.lab-root .lab-back {
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--lab-dim);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.lab-root .lab-back:hover { color: var(--lab-text); }
+.lab-root .lab-h1 {
+  margin: 10px 0 0;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
 /* ── Tabs ─────────────────────────────────────────────────────── */
 
 .lab-root .lab-tabs {

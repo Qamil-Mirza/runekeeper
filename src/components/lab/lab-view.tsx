@@ -33,8 +33,8 @@ function savedTab(): TabId {
   }
 }
 
-export function LabView() {
-  // Only mounted on the client, after the owner check, so storage is readable here.
+export function LabView({ onBack }: { onBack(): void }) {
+  // Only rendered in the browser (LabPage waits for mount), so storage is readable here.
   const [tab, setTab] = useState<TabId>(savedTab);
 
   const choose = (next: TabId) => {
@@ -58,6 +58,12 @@ export function LabView() {
   return (
     <div className="lab-root">
       <div className="lab-page">
+        <header className="lab-head">
+          <button type="button" className="lab-back" onClick={onBack}>
+            <span aria-hidden="true">←</span> Runekeeper
+          </button>
+          <h1 className="lab-h1">The Lab</h1>
+        </header>
         <div className="lab-tabs" role="tablist" aria-label="Lab">
           {TABS.map((t) => {
             const c = counts[t.id];

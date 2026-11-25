@@ -22,7 +22,7 @@ export default auth((req) => {
   // Allow auth API routes and external webhooks through (they use their own secret-based auth)
   if (isAuthApi || isWebhook || isGogginsAudio || isLabAgent) return;
 
-  // Protect planner and non-auth API routes
+  // Protect planner, the Lab page and non-auth API routes
   if (!isAuth) {
     if (isApi) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -35,5 +35,5 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/planner/:path*", "/api/:path*"],
+  matcher: ["/planner/:path*", "/lab", "/api/:path*"],
 };
