@@ -39,21 +39,40 @@ test("agentRoleFor refuses a token configured for both roles", () => {
   assert.equal(agentRoleFor(new Headers({ authorization: "Bearer t1" }), both), null);
 });
 
-test("cameThroughProxy spots forwarding headers, any case", () => {
-  for (const name of [
-    "x-forwarded-for",
-    "x-forwarded-host",
-    "x-forwarded-proto",
-    "forwarded",
-    "tailscale-user-login",
-    "tailscale-funnel-request",
-  ]) {
-    assert.equal(cameThroughProxy(new Headers({ [name]: "1" })), true, name);
-    assert.equal(cameThroughProxy(new Headers({ [name.toUpperCase()]: "1" })), true, name.toUpperCase());
+// What Next.js adds to a plain local request on its own.
+const NEXT_LOCAL_DEFAULTS = {
+  "x-forwarded-for": "127.0.0.1",
+  "x-forwarded-proto": "http",
+  "x-forwarded-host": "127.0.0.1:3000",
+};
+
+test("cameThroughProxy spots what a public proxy adds", () => {
+  const proxied: Record<string, string>[] = [
+    { forwarded: "for=203.0.113.7;proto=https" },
+    { "Tailscale-Funnel-Request": "?1" },
+    { "tailscale-user-login": "someone" },
+    { "x-forwarded-proto": "https" },
+    { "x-forwarded-host": "something.example.ts.net" },
+    { "x-forwarded-host": "example.com:443" },
+    { ...NEXT_LOCAL_DEFAULTS, "x-forwarded-proto": "https" },
+  ];
+  for (const h of proxied) {
+    assert.equal(cameThroughProxy(new Headers(h)), true, JSON.stringify(h));
   }
-  assert.equal(cameThroughProxy(new Headers({ "Tailscale-Anything": "x" })), true);
-  assert.equal(cameThroughProxy(new Headers()), false);
-  assert.equal(cameThroughProxy(new Headers({ host: "127.0.0.1:3000", authorization: "Bearer t1" })), false);
+});
+
+test("cameThroughProxy ignores what Next.js adds to local requests", () => {
+  const local: Record<string, string>[] = [
+    {},
+    { host: "127.0.0.1:3000", authorization: "Bearer t1" },
+    NEXT_LOCAL_DEFAULTS,
+    { "x-forwarded-host": "localhost:3000" },
+    { "x-forwarded-host": "[::1]:3000" },
+    { "x-forwarded-for": "172.17.0.1" },
+  ];
+  for (const h of local) {
+    assert.equal(cameThroughProxy(new Headers(h)), false, JSON.stringify(h));
+  }
 });
 
 function agentReq(token: string | null, extra: Record<string, string> = {}) {
@@ -84,9 +103,19 @@ test("withAgent is 404 when no token hash is configured", async () => {
 });
 
 test("withAgent refuses a valid token that came through a proxy", async () => {
-  const res = await withAgent(agentReq("t1", { "x-forwarded-for": "203.0.113.7" }), ["advisor"], ok, { env });
+  const res = await withAgent(agentReq("t1", { "x-forwarded-proto": "https" }), ["advisor"], ok, { env });
   assert.equal(res.status, 403);
   assert.equal(await errorCode(res), "proxied");
+});
+
+test("withAgent passes a valid local request that carries Next.js defaults", async () => {
+  let called = false;
+  const res = await withAgent(agentReq("t1", NEXT_LOCAL_DEFAULTS), ["advisor"], async () => {
+    called = true;
+    return ok();
+  }, { env });
+  assert.equal(res.status, 200);
+  assert.equal(called, true);
 });
 
 test("withAgent is 401 on a bad or missing token", async () => {

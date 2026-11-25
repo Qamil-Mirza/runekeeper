@@ -19,18 +19,41 @@ export function agentRoleFor(headers: Headers, s: LabSettings): AgentRole | null
   return matches.length === 1 ? matches[0] : null;
 }
 
-const FORWARDING_HEADERS = new Set([
-  "x-forwarded-for",
-  "x-forwarded-host",
-  "x-forwarded-proto",
-  "forwarded",
-]);
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 
-/** True when the request carries headers a reverse proxy adds. */
+/** Hostname of a Host-style value: strips the port, unwraps `[::1]`. */
+function hostnameOf(value: string): string {
+  const v = value.trim().toLowerCase();
+  if (v.startsWith("[")) {
+    const end = v.indexOf("]");
+    return end === -1 ? v : v.slice(1, end);
+  }
+  // One colon means host:port; more means a bare IPv6 address.
+  const parts = v.split(":");
+  return parts.length === 2 ? parts[0] : v;
+}
+
+/**
+ * True when the request came through a reverse proxy (the public HTTPS
+ * origin). Next.js itself fills in x-forwarded-for/-host/-proto on every
+ * request (local: proto "http", host = the Host header), so only signals it
+ * never adds count: a `forwarded` header, any `tailscale-*` header, a proto
+ * other than plain http, or a forwarded host that is not loopback.
+ * x-forwarded-for is ignored: Next sets it and Docker makes local traffic
+ * non-loopback anyway.
+ */
 export function cameThroughProxy(headers: Headers): boolean {
   for (const name of headers.keys()) {
     const lower = name.toLowerCase();
-    if (FORWARDING_HEADERS.has(lower) || lower.startsWith("tailscale-")) return true;
+    if (lower === "forwarded" || lower.startsWith("tailscale-")) return true;
+  }
+
+  const proto = headers.get("x-forwarded-proto");
+  if (proto !== null && proto !== "http") return true;
+
+  const host = headers.get("x-forwarded-host");
+  if (host !== null && host.split(",").some((h) => !LOOPBACK_HOSTS.has(hostnameOf(h)))) {
+    return true;
   }
   return false;
 }
