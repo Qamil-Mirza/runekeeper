@@ -32,8 +32,8 @@ export interface PodRow {
   setupId: string | null;
   podId: string;
   capUsd: number | null;
-  // Billed plus accruing; 0 when RunPod is not connected or unavailable.
-  cost: number;
+  // Billed plus accruing; null (unknown) when RunPod is not connected or unavailable.
+  cost: number | null;
   status: PodRowStatus;
   progressPct: number | null;
   eta: string | null;
@@ -47,7 +47,8 @@ export interface ExperimentRow {
   summary: string;
   progressPct: number | null;
   eta: string | null;
-  cost: number;
+  // Sum of its pod rows; null (unknown) when RunPod is not connected or unavailable.
+  cost: number | null;
   expanded: boolean;
   pods: PodRow[];
 }

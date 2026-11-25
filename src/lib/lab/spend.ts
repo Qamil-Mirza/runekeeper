@@ -59,3 +59,31 @@ export function podCost(
   if (!isRunning(pod)) return { billed, accruing: 0 };
   return { billed, accruing: accrual(pod, lastEnd(own) ?? -Infinity, now) };
 }
+
+export interface RunWindow {
+  podId: string;
+  status: string;
+  startedAt: Date;
+  endedAt: Date | null;
+}
+
+// One run's cost on its pod: only the pod's billed hours that start at or
+// after the run's start (floored to the hour) and, for an ended run, before
+// its end. Several runs on one pod therefore split its cost. Accrual is
+// added only while the run is running and the pod is RUNNING.
+export function runCost(
+  run: RunWindow,
+  podHours: BillingBucket[],
+  pod: RunpodPod | undefined,
+  now: Date,
+): Spend {
+  const from = Math.floor(run.startedAt.getTime() / HOUR_MS) * HOUR_MS;
+  const until = run.endedAt?.getTime() ?? Infinity;
+  const own = podHours.filter((b) => {
+    const t = b.startTime.getTime();
+    return b.podId === run.podId && t >= from && t < until;
+  });
+  const billed = sum(own);
+  if (run.status !== "running" || !isRunning(pod)) return { billed, accruing: 0 };
+  return { billed, accruing: accrual(pod, Math.max(lastEnd(own) ?? from, from), now) };
+}

@@ -3,7 +3,7 @@
 
 import type { ExperimentRow, OverviewDTO, OverviewRun, PodRow, RunStatus } from "./types";
 import type { RunpodPod, RunpodSnapshot } from "./runpod";
-import { podCost, spentToday } from "./spend";
+import { podCost, runCost, spentToday, type Spend } from "./spend";
 import { formatIn } from "./time";
 
 const STALE_AFTER_MS = 20 * 60 * 1000;
@@ -17,6 +17,7 @@ export interface BuildOverviewInput {
   now: Date;
 }
 
+const total = (c: Spend) => c.billed + c.accruing;
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
 const runLabel = (r: OverviewRun) => `${r.experimentId} ${r.stage}`;
 // A pod that exists and may still bill: running, or stopped but keeping its disk.
@@ -48,11 +49,13 @@ export function buildOverview({ runs, snapshot, runpodState, now }: BuildOvervie
   const podsById = new Map((snap?.pods ?? []).map((p) => [p.id, p]));
   const nowMs = now.getTime();
 
-  const costOf = (podId: string): number => {
-    if (!snap) return 0;
-    const c = podCost(podId, snap.podHours, podsById.get(podId), now);
-    return c.billed + c.accruing;
+  // Money is unknown (null), not zero, without a RunPod snapshot.
+  const runCostOf = (r: OverviewRun): number | null => {
+    if (!snap) return null;
+    return total(runCost(r, snap.podHours, podsById.get(r.podId), now));
   };
+  const sumCosts = (pods: PodRow[]): number | null =>
+    snap ? pods.reduce((s, p) => s + (p.cost ?? 0), 0) : null;
 
   const runRow = (r: OverviewRun): PodRow => {
     const running = r.status === "running";
@@ -64,7 +67,7 @@ export function buildOverview({ runs, snapshot, runpodState, now }: BuildOvervie
       setupId: r.setupId,
       podId: r.podId,
       capUsd: r.capUsd,
-      cost: costOf(r.podId),
+      cost: runCostOf(r),
       status: running && snap && !podsById.has(r.podId) ? "pod_gone" : r.status,
       progressPct: r.progressPct,
       eta: iso(r.eta),
@@ -97,7 +100,7 @@ export function buildOverview({ runs, snapshot, runpodState, now }: BuildOvervie
       summary: stageSummary(ordered),
       progressPct: running.length === 1 ? running[0].progressPct : null,
       eta: iso(eta),
-      cost: pods.reduce((s, p) => s + p.cost, 0),
+      cost: sumCosts(pods),
       expanded: running.length > 0,
       pods,
       _running: running.length > 0,
@@ -124,7 +127,7 @@ export function buildOverview({ runs, snapshot, runpodState, now }: BuildOvervie
         setupId: null,
         podId: p.id,
         capUsd: null,
-        cost: costOf(p.id),
+        cost: total(podCost(p.id, snap.podHours, p, now)),
         status: "unassigned",
         progressPct: null,
         eta: null,
@@ -137,7 +140,7 @@ export function buildOverview({ runs, snapshot, runpodState, now }: BuildOvervie
         summary: stray.length === 1 ? "1 pod" : `${stray.length} pods`,
         progressPct: null,
         eta: null,
-        cost: pods.reduce((s, p) => s + p.cost, 0),
+        cost: sumCosts(pods),
         expanded: true,
         pods,
       });

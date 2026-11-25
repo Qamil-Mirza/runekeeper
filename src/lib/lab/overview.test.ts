@@ -38,7 +38,7 @@ const bucket = (podId: string, start: string, end: string, totalAmount: number):
   endTime: at(end),
   totalAmount,
 });
-const close = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+const close = (a: number | null, b: number) => a !== null && Math.abs(a - b) < 1e-9;
 
 function e9Runs(): OverviewRun[] {
   return [
@@ -217,4 +217,42 @@ test("experiments with a running run come first", () => {
   ];
   const dto = buildOverview({ runs, snapshot: null, runpodState: "not_connected", now: NOW });
   assert.deepEqual(dto.experiments.map((e) => e.id), ["E9", "E10"]);
+});
+
+test("two runs on one pod split its cost by their own time; the experiment is not double-counted", () => {
+  const now = at("2026-11-24T11:30:00Z");
+  const runs = [
+    run({ experimentId: "E9", stage: "dev-a", status: "done", podId: "pp",
+      startedAt: at("2026-11-24T08:00:00Z"), endedAt: at("2026-11-24T10:00:00Z") }),
+    run({ experimentId: "E9", stage: "dev-b", status: "running", podId: "pp",
+      startedAt: at("2026-11-24T10:00:00Z") }),
+  ];
+  const snap: RunpodSnapshot = {
+    pods: [pod("pp", "shared", "RUNNING", 0.5, "2026-11-24T08:00:00Z")],
+    accountHours: [],
+    podHours: [
+      bucket("pp", "2026-11-24T08:00:00Z", "2026-11-24T09:00:00Z", 1.0),
+      bucket("pp", "2026-11-24T09:00:00Z", "2026-11-24T10:00:00Z", 1.0),
+      bucket("pp", "2026-11-24T10:00:00Z", "2026-11-24T11:00:00Z", 0.5),
+    ],
+  };
+  const dto = buildOverview({ runs, snapshot: snap, runpodState: "ok", now });
+  const e9 = dto.experiments.find((e) => e.id === "E9")!;
+  const a = e9.pods.find((p) => p.stage === "dev-a")!;
+  const b = e9.pods.find((p) => p.stage === "dev-b")!;
+  assert.ok(close(a.cost, 2.0), `A ${a.cost}`);
+  // $0.50 billed + 30 min at $0.50/h since the last billed hour.
+  assert.ok(close(b.cost, 0.75), `B ${b.cost}`);
+  assert.ok(close(e9.cost, 2.75), `E9 ${e9.cost}`);
+  assert.ok(dto.experiments.every((e) => e.id !== "—"), "the shared pod is claimed, not unassigned");
+});
+
+test("without RunPod, money is unknown: costs are null, not zero", () => {
+  for (const runpodState of ["not_connected", "error"] as const) {
+    const dto = buildOverview({ runs: e9Runs(), snapshot: snapshot(), runpodState, now: NOW });
+    for (const e of dto.experiments) {
+      assert.equal(e.cost, null, `${runpodState}: experiment ${e.id}`);
+      for (const p of e.pods) assert.equal(p.cost, null, `${runpodState}: pod row ${p.stage}`);
+    }
+  }
 });
