@@ -57,9 +57,7 @@ function Figures({ dto, now }: { dto: OverviewDTO; now: Date }) {
         <div className="lab-stat" key={label}>
           <div className="lab-stat-k">{label}</div>
           <div className={f.quiet ? "lab-stat-v lab-stat-quiet" : "lab-stat-v lab-num"}>{f.value}</div>
-          <div className="lab-stat-s" title={f.sub || undefined}>
-            {f.sub || "\u00a0"}
-          </div>
+          <div className="lab-stat-s">{f.sub || "\u00a0"}</div>
         </div>
       ))}
     </div>

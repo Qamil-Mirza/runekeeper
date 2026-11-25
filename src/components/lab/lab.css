@@ -134,13 +134,13 @@
   line-height: calc(26px * 1.2);
   color: var(--lab-dim);
 }
+/* Wraps, never clips: the accrual note must be readable without hover. */
 .lab-root .lab-stat-s {
   font-size: 12px;
+  line-height: 1.4;
   color: var(--lab-dim);
   margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 /* ── Table ────────────────────────────────────────────────────── */
