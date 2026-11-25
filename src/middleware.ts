@@ -16,9 +16,11 @@ export default auth((req) => {
   // Twilio fetches this token-guarded audio URL while connecting a Goggins call.
   const isGogginsAudio =
     req.nextUrl.pathname === "/api/notifications/goggins/audio";
+  // Lab agents call these with a bearer token; the route checks it itself.
+  const isLabAgent = req.nextUrl.pathname.startsWith("/api/lab/agent/");
 
   // Allow auth API routes and external webhooks through (they use their own secret-based auth)
-  if (isAuthApi || isWebhook || isGogginsAudio) return;
+  if (isAuthApi || isWebhook || isGogginsAudio || isLabAgent) return;
 
   // Protect planner and non-auth API routes
   if (!isAuth) {
