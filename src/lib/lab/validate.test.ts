@@ -19,7 +19,7 @@ function msg(r: { ok: boolean; message?: string }) {
 }
 
 test("validateRunStart", () => {
-  assert.deepEqual(validateRunStart(start), { ok: true, value: start });
+  assert.deepEqual(validateRunStart(start), { ok: true, value: { ...start, experimentTitle: null } });
   assert.match(msg(validateRunStart({ ...start, stage: "Held Out" })), /stage/);
   assert.match(msg(validateRunStart({ ...start, experiment: "e9" })), /experiment/);
   assert.match(msg(validateRunStart({ ...start, capUsd: 0 })), /capUsd/);
@@ -50,10 +50,28 @@ test("validateRunEnd", () => {
 
 test("validateProtocolPost", () => {
   const ok = validateProtocolPost({ experiment: "E9", title: "T", bodyMd: "# hi" });
-  assert.deepEqual(ok, { ok: true, value: { experiment: "E9", title: "T", bodyMd: "# hi", revisesId: null } });
+  assert.deepEqual(ok, {
+    ok: true,
+    value: { experiment: "E9", title: "T", bodyMd: "# hi", revisesId: null, experimentTitle: null },
+  });
   assert.match(msg(validateProtocolPost({ experiment: "E9", title: "T", bodyMd: "x".repeat(512 * 1024 + 1) })), /512 KB/);
   assert.match(msg(validateProtocolPost({ experiment: "E9", title: "", bodyMd: "x" })), /title/);
   assert.match(msg(validateProtocolPost({ experiment: "E9", title: "x".repeat(201), bodyMd: "x" })), /title/);
+});
+
+test("an optional experiment title of at most 200 chars on run start and protocol post", () => {
+  const r = validateRunStart({ ...start, experimentTitle: "probe transfer" });
+  assert.ok(r.ok && r.value.experimentTitle === "probe transfer");
+  assert.ok(validateRunStart({ ...start, experimentTitle: null }).ok);
+  assert.ok(validateRunStart({ ...start, experimentTitle: "x".repeat(200) }).ok);
+  assert.match(msg(validateRunStart({ ...start, experimentTitle: "x".repeat(201) })), /experimentTitle/);
+  assert.match(msg(validateRunStart({ ...start, experimentTitle: 9 })), /experimentTitle/);
+  assert.match(msg(validateRunStart({ ...start, experimentTitle: "  " })), /experimentTitle/);
+
+  const proto = { experiment: "E9", title: "T", bodyMd: "# hi" };
+  const p = validateProtocolPost({ ...proto, experimentTitle: "probe transfer" });
+  assert.ok(p.ok && p.value.experimentTitle === "probe transfer");
+  assert.match(msg(validateProtocolPost({ ...proto, experimentTitle: "x".repeat(201) })), /experimentTitle/);
 });
 
 test("validateReportPost", () => {

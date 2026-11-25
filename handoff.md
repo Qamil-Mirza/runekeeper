@@ -17,7 +17,7 @@ AI-powered planning and scheduling system with voice interaction.
 ```
 src/
 ├── app/             # Next.js pages + API routes
-│   ├── api/         # REST endpoints (tasks, blocks, plan, chat, calendar, integrations)
+│   ├── api/         # REST endpoints (tasks, blocks, plan, chat, calendar, integrations, lab)
 │   └── planner/     # Main planning interface
 ├── components/      # UI modules (chat, oracle, schedule, inventory, home, integrations)
 ├── context/         # React context providers (planner state)
@@ -28,7 +28,9 @@ src/
     ├── voice/       # Gemini Live client, voice tools, prompts
     ├── pensive/     # Pensive API client + assignment sync
     ├── scheduler/   # Scheduling algorithm, conflict detection, free time calculation
+    ├── lab/         # The Lab: stores, agent auth, RunPod reads, overview and spend
     └── google/      # Calendar, Tasks, Gmail API clients
+tools/lab/           # The `lab` CLI (lab.mjs) and the agents' skill (SKILL.md)
 server.ts            # Custom server: HTTP + WS on ports 3000/3001
 ```
 
@@ -44,6 +46,7 @@ server.ts            # Custom server: HTTP + WS on ports 3000/3001
 | `chatMemories` | Persistent user context (identity, routines) |
 | `integrations` | Provider configs (Gmail, Canvas, Gradescope, Pensive) |
 | `processedEmails` | Gmail processing audit trail |
+| `lab_*` (5) | The Lab: `lab_experiments`, `lab_runs`, `lab_protocols`, `lab_reports`, `lab_report_replies` |
 
 ## Voice System
 
@@ -88,7 +91,7 @@ npm run db:migrate   # Apply migrations
 - Session memory system
 
 ### In Progress
-- The Lab is a read-only dashboard for the owner (Overview, Protocols and Reports boards) plus a token-gated agent API and the `lab` CLI. Agents post protocols and reports and track runs; the owner accepts, rejects or replies with typed or dictated notes. RunPod is only read. On branch `feat/lab-dashboard`, not merged or deployed.
+- The Lab is built: a read-only dashboard for the owner (Overview, Protocols and Reports boards) plus a token-gated agent API and the `lab` CLI. Agents post protocols and reports and track runs; the owner accepts, rejects or replies with typed or dictated notes. RunPod is only read. Pending, by the owner: apply the lab migrations (`npm run db:migrate`), set the Lab env vars below on the server, and install the CLI and skill for the agents (see `tools/lab/SKILL.md`). Until `LAB_OWNER_USER_IDS` and the token hashes are set, the Lab answers 404.
 - Code: `src/lib/lab/` (stores, auth, RunPod reads), `src/components/lab/` (UI), `src/app/api/lab/` (owner and agent routes), `tools/lab/lab.mjs` (CLI).
 - Env vars: `LAB_OWNER_USER_IDS`, `LAB_ADVISOR_TOKEN_SHA256`, `LAB_EXECUTOR_TOKEN_SHA256`, `RUNPOD_API_KEY`; CLI side `LAB_URL`, `LAB_TOKEN_FILE`. Tests: `npm run test:lab`.
 - Spec: `docs/superpowers/specs/2026-11-24-lab-dashboard-design.md` (gitignored; add with `git add -f`).

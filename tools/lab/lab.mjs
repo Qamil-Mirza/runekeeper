@@ -9,10 +9,10 @@ const AGENT = "/api/lab/agent";
 
 export const USAGE = `usage: lab <command>
 
-  lab protocol post <file.md> --experiment E10 --title "..." [--revises <id>]
+  lab protocol post <file.md> --experiment E10 --title "..." [--revises <id>] [--experiment-title "..."]
   lab report post <file.html> --experiment E9 --title "..." --summary "..."
   lab inbox [--all]
-  lab run start --experiment E9 --stage held-out --setup <setupId> --pod <podId> --cap <usd>
+  lab run start --experiment E9 --stage held-out --setup <setupId> --pod <podId> --cap <usd> [--experiment-title "..."]
   lab run progress <runId> <pct> [--eta 18:10]
   lab run list
   lab run end <runId> --status done|failed|stopped [--note "..."]
@@ -21,14 +21,26 @@ environment:
   LAB_URL         server address (default http://127.0.0.1:3000)
   LAB_TOKEN_FILE  file holding the token (default ~/.config/lab/token, mode 600)`;
 
+// The options each command takes; anything else is refused.
+const OPTIONS = {
+  "protocol post": ["experiment", "title", "revises", "experiment-title"],
+  "report post": ["experiment", "title", "summary"],
+  inbox: ["all"],
+  "run start": ["experiment", "stage", "setup", "pod", "cap", "experiment-title"],
+  "run progress": ["eta"],
+  "run list": [],
+  "run end": ["status", "note"],
+};
+
 // Split args into positionals and --flag values. --all is the only boolean flag.
-function splitArgs(args) {
+function splitArgs(args, allowed) {
   const positional = [];
   const flags = {};
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a.startsWith("--")) {
       const name = a.slice(2);
+      if (!allowed.includes(name)) return { error: `unknown option --${name}` };
       if (name === "all") {
         flags.all = true;
         continue;
@@ -58,13 +70,18 @@ export function parseCommand(argv) {
   const [a, b, ...rest] = argv;
   const key = a === "inbox" ? "inbox" : `${a} ${b}`;
   const args = a === "inbox" ? argv.slice(1) : rest;
-  const parsed = splitArgs(args);
+  if (!Object.hasOwn(OPTIONS, key)) return { error: `unknown command "${argv.join(" ")}". Try lab --help` };
+  const parsed = splitArgs(args, OPTIONS[key]);
   if (parsed.error) return { error: parsed.error };
   const { positional, flags } = parsed;
+  // Sent only when given; the server keeps the experiment's title otherwise.
+  const titled = (body) => (flags["experiment-title"] !== undefined ? { ...body, experimentTitle: flags["experiment-title"] } : body);
 
   switch (key) {
     case "protocol post": {
-      if (positional.length !== 1) return { error: "usage: lab protocol post <file.md> --experiment E10 --title \"...\" [--revises <id>]" };
+      if (positional.length !== 1) {
+        return { error: "usage: lab protocol post <file.md> --experiment E10 --title \"...\" [--revises <id>] [--experiment-title \"...\"]" };
+      }
       const miss = need(flags, ["experiment", "title"]);
       if (miss) return { error: miss };
       return {
@@ -72,7 +89,7 @@ export function parseCommand(argv) {
         method: "POST",
         path: `${AGENT}/protocols`,
         file: positional[0],
-        body: { experiment: flags.experiment, title: flags.title, revisesId: flags.revises ?? null },
+        body: titled({ experiment: flags.experiment, title: flags.title, revisesId: flags.revises ?? null }),
       };
     }
     case "report post": {
@@ -99,7 +116,7 @@ export function parseCommand(argv) {
         command: key,
         method: "POST",
         path: `${AGENT}/runs`,
-        body: { experiment: flags.experiment, stage: flags.stage, setupId: flags.setup, podId: flags.pod, capUsd: cap },
+        body: titled({ experiment: flags.experiment, stage: flags.stage, setupId: flags.setup, podId: flags.pod, capUsd: cap }),
       };
     }
     case "run progress": {

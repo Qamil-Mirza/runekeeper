@@ -32,12 +32,27 @@ function matching(o: Obj, key: string, re: RegExp, what: string): Field<string> 
 
 const experimentOf = (o: Obj) => matching(o, "experiment", EXPERIMENT_RE, "an experiment code like E9");
 
+// Optional: a title for the experiment, stored on it (null when not sent).
+function experimentTitleOf(o: Obj): Field<string | null> {
+  if (o.experimentTitle === undefined || o.experimentTitle === null) return { v: null };
+  return str(o, "experimentTitle", 200);
+}
+
 export function validateRunStart(
   body: unknown,
-): Valid<{ experiment: string; stage: string; setupId: string; podId: string; capUsd: number }> {
+): Valid<{
+  experiment: string;
+  experimentTitle: string | null;
+  stage: string;
+  setupId: string;
+  podId: string;
+  capUsd: number;
+}> {
   if (!isObj(body)) return fail("body must be a JSON object");
   const experiment = experimentOf(body);
   if ("err" in experiment) return fail(experiment.err);
+  const experimentTitle = experimentTitleOf(body);
+  if ("err" in experimentTitle) return fail(experimentTitle.err);
   const stage = matching(body, "stage", STAGE_RE, "lowercase letters, digits and dashes, up to 40 characters");
   if ("err" in stage) return fail(stage.err);
   const setupId = matching(body, "setupId", ID_RE, "1-100 characters of letters, digits, . _ -");
@@ -50,7 +65,14 @@ export function validateRunStart(
   }
   return {
     ok: true,
-    value: { experiment: experiment.v, stage: stage.v, setupId: setupId.v, podId: podId.v, capUsd: cap },
+    value: {
+      experiment: experiment.v,
+      experimentTitle: experimentTitle.v,
+      stage: stage.v,
+      setupId: setupId.v,
+      podId: podId.v,
+      capUsd: cap,
+    },
   };
 }
 
@@ -88,10 +110,18 @@ export function validateRunEnd(
 
 export function validateProtocolPost(
   body: unknown,
-): Valid<{ experiment: string; title: string; bodyMd: string; revisesId: string | null }> {
+): Valid<{
+  experiment: string;
+  experimentTitle: string | null;
+  title: string;
+  bodyMd: string;
+  revisesId: string | null;
+}> {
   if (!isObj(body)) return fail("body must be a JSON object");
   const experiment = experimentOf(body);
   if ("err" in experiment) return fail(experiment.err);
+  const experimentTitle = experimentTitleOf(body);
+  if ("err" in experimentTitle) return fail(experimentTitle.err);
   const title = str(body, "title", 200);
   if ("err" in title) return fail(title.err);
   const md = body.bodyMd;
@@ -104,7 +134,10 @@ export function validateProtocolPost(
     }
     revisesId = body.revisesId;
   }
-  return { ok: true, value: { experiment: experiment.v, title: title.v, bodyMd: md, revisesId } };
+  return {
+    ok: true,
+    value: { experiment: experiment.v, experimentTitle: experimentTitle.v, title: title.v, bodyMd: md, revisesId },
+  };
 }
 
 export function validateReportPost(

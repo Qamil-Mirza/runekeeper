@@ -83,3 +83,34 @@ test("formatResult successes", () => {
   assert.match(formatResult("run start", 201, { id: "r9" }).text, /r9/);
   assert.equal(formatResult("run list", 200, { runs: [] }).text, "no running runs");
 });
+
+test("--experiment-title is sent as experimentTitle on run start and protocol post", () => {
+  const r = parseCommand(["run", "start", "--experiment", "E9", "--experiment-title", "probe transfer", "--stage", "a",
+    "--setup", "s", "--pod", "p", "--cap", "5"]);
+  assert.equal(r.body.experimentTitle, "probe transfer");
+  const p = parseCommand(["protocol", "post", "p.md", "--experiment", "E9", "--title", "T", "--experiment-title", "probe transfer"]);
+  assert.equal(p.body.experimentTitle, "probe transfer");
+  assert.equal("experimentTitle" in parseCommand(["protocol", "post", "p.md", "--experiment", "E9", "--title", "T"]).body, false);
+});
+
+test("unknown options are rejected", () => {
+  assert.equal(parseCommand(["protocol", "post", "p.md", "--experiment", "E9", "--title", "T", "--revise", "x"]).error,
+    "unknown option --revise");
+  assert.equal(parseCommand(["inbox", "--x"]).error, "unknown option --x");
+  assert.equal(parseCommand(["run", "list", "--all"]).error, "unknown option --all");
+  assert.equal(parseCommand(["report", "post", "r.html", "--experiment", "E9", "--title", "T", "--summary", "S",
+    "--experiment-title", "x"]).error, "unknown option --experiment-title");
+});
+
+test("main exits 1 on an unknown option", async () => {
+  const { main } = await import("./lab.mjs");
+  const errors = [];
+  const orig = console.error;
+  console.error = (m) => errors.push(m);
+  try {
+    assert.equal(await main(["run", "list", "--x", "1"]), 1);
+  } finally {
+    console.error = orig;
+  }
+  assert.deepEqual(errors, ["lab: unknown option --x"]);
+});

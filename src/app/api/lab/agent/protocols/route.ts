@@ -3,7 +3,7 @@ import { labError, withAgent } from "@/lib/lab/route";
 import { readJson } from "@/lib/lab/json-body";
 import { validateProtocolPost } from "@/lib/lab/validate";
 import { planRevision, ProtocolRuleError } from "@/lib/lab/protocols";
-import { createProtocol, getProtocol } from "@/lib/lab/store";
+import { createProtocol, ensureExperiment, getProtocol } from "@/lib/lab/store";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +30,7 @@ export function POST(req: Request) {
     try {
       const plan = planRevision(revised);
       const created = await createProtocol(db, input, plan);
+      if (input.experimentTitle !== null) await ensureExperiment(db, input.experiment, input.experimentTitle);
       return Response.json({ id: created.id, version: created.version }, { status: 201 });
     } catch (err) {
       if (err instanceof ProtocolRuleError) {

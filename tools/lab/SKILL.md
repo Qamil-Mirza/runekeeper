@@ -6,13 +6,15 @@ description: Use when posting protocols, reports, or pod run status to the owner
 # Lab reporting
 
 The `lab` command talks to the owner's Lab dashboard. Every command prints one
-line, or `lab: <message>` and a non-zero exit on error. Read the message; it
-says what went wrong.
+line, or `lab: <message>` and a non-zero exit on error (an unknown option is an
+error too). Read the message; it says what went wrong.
 
 ## Advisor
 
 - Post every protocol before asking the owner anything about it:
   `lab protocol post <file.md> --experiment E10 --title "..."`
+- The first time an experiment is mentioned (protocol post or run start), pass
+  `--experiment-title "..."` so the dashboard shows `E10 · title`.
 - To revise a protocol, post again with
   `--revises <id from lab inbox or from the post>`: `lab inbox` prints each
   verdict's protocol id, and `lab protocol post` prints the new id.
@@ -24,7 +26,7 @@ says what went wrong.
 
 ## Executor
 
-- `lab run start --experiment E9 --stage held-out --setup <setupId> --pod <podId> --cap 15`
+- `lab run start --experiment E9 --stage held-out --setup <setupId> --pod <podId> --cap 15 [--experiment-title "..."]`
   the moment a pod is created. It prints the run id.
 - `lab run end <runId> --status done|failed|stopped [--note "..."]` when the
   pod is deleted or fails.

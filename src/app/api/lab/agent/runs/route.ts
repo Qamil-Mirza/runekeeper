@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { labError, withAgent } from "@/lib/lab/route";
 import { readJson } from "@/lib/lab/json-body";
 import { validateRunStart } from "@/lib/lab/validate";
-import { listRunningRuns, PodInUseError, startRun } from "@/lib/lab/store";
+import { ensureExperiment, listRunningRuns, PodInUseError, startRun } from "@/lib/lab/store";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +14,7 @@ export function POST(req: Request) {
     if (!v.ok) return labError(400, "invalid", v.message);
     try {
       const { id } = await startRun(db, v.value, role);
+      if (v.value.experimentTitle !== null) await ensureExperiment(db, v.value.experiment, v.value.experimentTitle);
       return Response.json({ id }, { status: 201 });
     } catch (err) {
       if (err instanceof PodInUseError) {

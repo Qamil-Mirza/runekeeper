@@ -65,7 +65,8 @@ export function buildOverview({ runs, snapshot, runpodState, now }: BuildOvervie
 
   const runRow = (r: OverviewRun): PodRow => {
     const running = r.status === "running";
-    const sinceProgress = r.progressAt ? nowMs - r.progressAt.getTime() : null;
+    // With no progress report yet, quiet time counts from the run's start.
+    const sinceProgress = nowMs - (r.progressAt ?? r.startedAt).getTime();
     return {
       kind: "run",
       runId: r.id,
@@ -78,7 +79,7 @@ export function buildOverview({ runs, snapshot, runpodState, now }: BuildOvervie
       progressPct: r.progressPct,
       eta: iso(r.eta),
       staleMinutes:
-        running && sinceProgress !== null && sinceProgress > STALE_AFTER_MS
+        running && sinceProgress > STALE_AFTER_MS
           ? Math.floor(sinceProgress / 60_000)
           : null,
       endedAt: iso(r.endedAt),

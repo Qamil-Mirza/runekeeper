@@ -203,6 +203,17 @@ test("progress 42 minutes old is stale", () => {
   assert.equal(dto.experiments[0].pods[0].staleMinutes, 42);
 });
 
+test("a running run with no progress report is stale from its start", () => {
+  const runs = [
+    run({ experimentId: "E9", stage: "quiet", status: "running", podId: "q1", startedAt: at("2026-11-24T21:15:00Z") }),
+    run({ experimentId: "E9", stage: "fresh", status: "running", podId: "q2", startedAt: at("2026-11-24T21:50:00Z") }),
+  ];
+  const dto = buildOverview({ runs, snapshot: null, runpodState: "not_connected", now: NOW });
+  const pods = dto.experiments[0].pods;
+  assert.equal(pods.find((p) => p.stage === "quiet")!.staleMinutes, 45);
+  assert.equal(pods.find((p) => p.stage === "fresh")!.staleMinutes, null);
+});
+
 test("no running runs: next is null; experiments are collapsed and ordered by recent activity", () => {
   const runs = [
     run({ experimentId: "E7", stage: "a", status: "done", podId: "o1",
