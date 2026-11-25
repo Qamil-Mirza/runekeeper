@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { ProtocolCard, ProtocolDetail } from "@/lib/lab/types";
-import { cardDate, fullDate, protocolColumns, revisesLine, titleOf } from "@/lib/lab/board-display";
+import { cardDate, cardQuote, fullDate, protocolColumns, revisesLine, titleOf } from "@/lib/lab/board-display";
 import { Board } from "./board";
 import { DocModal } from "./doc-modal";
 import { LabMarkdown } from "./lab-markdown";
@@ -11,6 +11,9 @@ import { getJson, LabRequestError, postJson, useNow, type Polled } from "./use-l
 
 export function ProtocolsBoard({ data, error, refresh }: Polled<{ cards: ProtocolCard[] }>) {
   const [open, setOpen] = useState<ProtocolCard | null>(null);
+  // Unsent notes by protocol id: closing the modal keeps them; a decision clears them.
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const setDraft = useCallback((id: string, text: string) => setDrafts((d) => ({ ...d, [id]: text })), []);
   const now = useNow(60_000);
 
   if (!data) {
@@ -37,7 +40,16 @@ export function ProtocolsBoard({ data, error, refresh }: Polled<{ cards: Protoco
         renderCard={(c) => <ProtocolCardBody card={c} now={now} />}
         onOpen={setOpen}
       />
-      {open && <ProtocolModal key={open.id} card={open} onClose={() => setOpen(null)} refreshBoard={refresh} />}
+      {open && (
+        <ProtocolModal
+          key={open.id}
+          card={open}
+          note={drafts[open.id] ?? ""}
+          onNote={(text) => setDraft(open.id, text)}
+          onClose={() => setOpen(null)}
+          refreshBoard={refresh}
+        />
+      )}
     </>
   );
 }
@@ -47,10 +59,7 @@ function Version({ n }: { n: number }) {
 }
 
 function ProtocolCardBody({ card: c, now }: { card: ProtocolCard; now: Date }) {
-  const quote =
-    c.status === "waiting"
-      ? c.previousNote && `Your note on v${c.version - 1}: "${c.previousNote}"`
-      : c.note && `"${c.note}"`;
+  const quote = cardQuote(c);
   return (
     <>
       <span className="lab-card-t">
@@ -68,16 +77,19 @@ function ProtocolCardBody({ card: c, now }: { card: ProtocolCard; now: Date }) {
 
 function ProtocolModal({
   card,
+  note,
+  onNote,
   onClose,
   refreshBoard,
 }: {
   card: ProtocolCard;
+  note: string;
+  onNote(text: string): void;
   onClose(): void;
   refreshBoard(): void;
 }) {
   const [detail, setDetail] = useState<ProtocolDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -99,6 +111,7 @@ function ProtocolModal({
     setMessage(null);
     try {
       await postJson(`/api/lab/protocols/${encodeURIComponent(card.id)}/decision`, { verdict, note: note.trim() });
+      onNote("");
       refreshBoard();
       onClose();
       return;
@@ -122,7 +135,7 @@ function ProtocolModal({
   if (detail?.status === "waiting") {
     footer = (
       <>
-        <NoteBox label="Your note (required)" value={note} onChange={setNote} required />
+        <NoteBox label="Your note (required)" value={note} onChange={onNote} required />
         <div className="lab-actions">
           <button type="button" className="lab-btn lab-btn-ok" disabled={!canDecide} onClick={() => decide("accepted")}>
             Accept

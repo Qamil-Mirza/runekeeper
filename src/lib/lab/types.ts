@@ -81,6 +81,8 @@ export interface ProtocolCard {
   note: string | null;
   /** The owner's note on the version this one revises. */
   previousNote: string | null;
+  /** The status of the version this one revises; null for a first version. */
+  previousStatus: ProtocolStatus | null;
   createdAt: string;
   decidedAt: string | null;
 }

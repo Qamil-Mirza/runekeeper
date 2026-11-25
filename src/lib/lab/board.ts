@@ -51,6 +51,7 @@ export function protocolCard(p: BoardProtocol): ProtocolCard {
     excerpt: excerptOf(p.bodyStart),
     note: p.decisionNote,
     previousNote: p.previous?.note ?? null,
+    previousStatus: p.previous?.status ?? null,
     createdAt: p.createdAt.toISOString(),
     decidedAt: iso(p.decidedAt),
   };

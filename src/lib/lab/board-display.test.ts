@@ -1,6 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cardDate, fullDate, protocolColumns, reportColumn, revisesLine, titleOf } from "./board-display";
+import {
+  cardDate,
+  cardQuote,
+  fullDate,
+  protocolColumns,
+  reportColumn,
+  revisesLine,
+  titleOf,
+} from "./board-display";
 import type { ProtocolCard, ReportCard } from "./types";
 
 // 2:30 PM Pacific on Nov 24.
@@ -16,6 +24,7 @@ function protocol(over: Partial<ProtocolCard>): ProtocolCard {
     excerpt: "",
     note: null,
     previousNote: null,
+    previousStatus: null,
     createdAt: "2026-11-24T20:00:00.000Z",
     decidedAt: null,
     ...over,
@@ -84,4 +93,20 @@ test("revisesLine names the verdict on the version revised", () => {
   );
   // Replaced before anyone decided it: nothing to quote.
   assert.equal(revisesLine({ version: 1, status: "superseded", note: null }), "revises v1");
+});
+
+test("cardQuote: a decided card quotes its note; a waiting revision names the earlier verdict", () => {
+  assert.equal(cardQuote(protocol({ status: "accepted", note: "Go." })), '"Go."');
+  assert.equal(cardQuote(protocol({ status: "rejected", note: null })), null);
+  assert.equal(
+    cardQuote(protocol({ version: 2, previousStatus: "rejected", previousNote: "No held-out split." })),
+    'v1 rejected: "No held-out split."',
+  );
+  assert.equal(
+    cardQuote(protocol({ version: 3, previousStatus: "accepted", previousNote: "Go." })),
+    'v2 accepted: "Go."',
+  );
+  // The earlier version was replaced before anyone decided it: nothing to quote.
+  assert.equal(cardQuote(protocol({ version: 2, previousStatus: "superseded" })), null);
+  assert.equal(cardQuote(protocol({})), null);
 });

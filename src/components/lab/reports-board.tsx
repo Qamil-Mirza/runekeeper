@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ReportCard } from "@/lib/lab/types";
 import { cardDate, fullDate, reportColumn, titleOf } from "@/lib/lab/board-display";
 import { Board } from "./board";
@@ -10,6 +10,14 @@ import { postJson, useNow, type Polled } from "./use-lab";
 
 export function ReportsBoard({ data, error, refresh }: Polled<{ cards: ReportCard[] }>) {
   const [open, setOpen] = useState<ReportCard | null>(null);
+  // Unsent replies by report id: closing the modal keeps them; a sent reply clears them.
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const setDraft = useCallback((id: string, text: string) => setDrafts((d) => ({ ...d, [id]: text })), []);
+  // Only if unchanged since it was sent: text typed while sending stays.
+  const clearDraft = useCallback(
+    (id: string, sent: string) => setDrafts((d) => (d[id] === sent ? { ...d, [id]: "" } : d)),
+    [],
+  );
   const now = useNow(60_000);
 
   if (!data) {
@@ -31,7 +39,17 @@ export function ReportsBoard({ data, error, refresh }: Polled<{ cards: ReportCar
         renderCard={(c) => <ReportCardBody card={c} now={now} />}
         onOpen={setOpen}
       />
-      {current && <ReportModal key={current.id} report={current} onClose={() => setOpen(null)} refresh={refresh} />}
+      {current && (
+        <ReportModal
+          key={current.id}
+          report={current}
+          reply={drafts[current.id] ?? ""}
+          onReply={(text) => setDraft(current.id, text)}
+          onSent={(sent) => clearDraft(current.id, sent)}
+          onClose={() => setOpen(null)}
+          refresh={refresh}
+        />
+      )}
     </>
   );
 }
@@ -48,8 +66,21 @@ function ReportCardBody({ card: c, now }: { card: ReportCard; now: Date }) {
   );
 }
 
-function ReportModal({ report: r, onClose, refresh }: { report: ReportCard; onClose(): void; refresh(): void }) {
-  const [reply, setReply] = useState("");
+function ReportModal({
+  report: r,
+  reply,
+  onReply,
+  onSent,
+  onClose,
+  refresh,
+}: {
+  report: ReportCard;
+  reply: string;
+  onReply(text: string): void;
+  onSent(sent: string): void;
+  onClose(): void;
+  refresh(): void;
+}) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const id = encodeURIComponent(r.id);
@@ -64,9 +95,10 @@ function ReportModal({ report: r, onClose, refresh }: { report: ReportCard; onCl
   const send = async () => {
     setBusy(true);
     setMessage(null);
+    const sent = reply;
     try {
-      await postJson(`/api/lab/reports/${id}/replies`, { body: reply.trim() });
-      setReply("");
+      await postJson(`/api/lab/reports/${id}/replies`, { body: sent.trim() });
+      onSent(sent);
       refresh();
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Something went wrong");
@@ -93,7 +125,7 @@ function ReportModal({ report: r, onClose, refresh }: { report: ReportCard; onCl
               ))}
             </ol>
           )}
-          <NoteBox label="Thoughts for the advisor (optional)" value={reply} onChange={setReply} />
+          <NoteBox label="Thoughts for the advisor (optional)" value={reply} onChange={onReply} />
           <div className="lab-actions">
             <button type="button" className="lab-btn" disabled={!reply.trim() || busy} onClick={send}>
               Send

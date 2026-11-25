@@ -38,6 +38,16 @@ export function reportColumn(c: Pick<ReportCard, "read" | "replies">): ReportCol
   return c.read ? "read" : "unread";
 }
 
+/**
+ * A protocol card's quote: a decided card's own note, or for a waiting
+ * revision the verdict and note on the version it revises ('v1 rejected: "…"').
+ */
+export function cardQuote(c: ProtocolCard): string | null {
+  if (c.status !== "waiting") return c.note ? `"${c.note}"` : null;
+  if ((c.previousStatus !== "accepted" && c.previousStatus !== "rejected") || !c.previousNote) return null;
+  return `v${c.version - 1} ${c.previousStatus}: "${c.previousNote}"`;
+}
+
 /** 'revises v1, which you rejected: "…"'; just "revises v1" if v1 was replaced undecided. */
 export function revisesLine(previous: ProtocolDetail["previous"]): string | null {
   if (!previous) return null;

@@ -58,11 +58,13 @@ test("protocol card", () => {
     excerpt: "Measure transfer.",
     note: "Go",
     previousNote: "Too broad",
+    previousStatus: "rejected",
     createdAt: T1.toISOString(),
     decidedAt: T2.toISOString(),
   });
   const first = protocolCard({ ...board, previous: null, decisionNote: null, decidedAt: null });
   assert.equal(first.previousNote, null);
+  assert.equal(first.previousStatus, null);
   assert.equal(first.note, null);
   assert.equal(first.decidedAt, null);
 });
@@ -80,6 +82,7 @@ test("protocol detail carries the body and the revised version", () => {
   assert.equal(d.excerpt, "Measure transfer.");
   assert.deepEqual(d.previous, { version: 1, status: "rejected", note: "Too broad" });
   assert.equal(d.previousNote, "Too broad");
+  assert.equal(d.previousStatus, "rejected");
 });
 
 test("report card", () => {
