@@ -11,6 +11,7 @@ import {
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // ─── Users ───────────────────────────────────────────────────────────────────
 
@@ -281,7 +282,10 @@ export const labRuns = pgTable(
   },
   (table) => [
     index("lab_runs_status_idx").on(table.status),
-    index("lab_runs_pod_id_idx").on(table.podId),
+    // One running run per pod.
+    uniqueIndex("lab_runs_pod_id_running_idx")
+      .on(table.podId)
+      .where(sql`${table.status} = 'running'`),
   ]
 );
 

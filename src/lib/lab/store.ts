@@ -58,7 +58,37 @@ export interface StartRunInput {
 
 export type LabRun = typeof labRuns.$inferSelect;
 
+const POD_RUNNING_INDEX = "lab_runs_pod_id_running_idx";
+
+/** Thrown by `startRun` when the pod already has a running run. */
+export class PodInUseError extends Error {
+  constructor(readonly podId: string) {
+    super("pod_in_use");
+    this.name = "PodInUseError";
+    Object.setPrototypeOf(this, PodInUseError.prototype);
+  }
+}
+
+/** True for a unique violation on the one-running-run-per-pod index (Drizzle wraps the pg error in `cause`). */
+function isPodInUseViolation(e: unknown): boolean {
+  for (let err = e; err && typeof err === "object"; err = (err as { cause?: unknown }).cause) {
+    const { code, constraint } = err as { code?: unknown; constraint?: unknown };
+    if (code === "23505" && constraint === POD_RUNNING_INDEX) return true;
+  }
+  return false;
+}
+
+/** Start a run. Throws `PodInUseError` when the pod already has a running run. */
 export async function startRun(db: Database, input: StartRunInput, role: AgentRole): Promise<{ id: string }> {
+  try {
+    return await insertRun(db, input, role);
+  } catch (e) {
+    if (isPodInUseViolation(e)) throw new PodInUseError(input.podId);
+    throw e;
+  }
+}
+
+function insertRun(db: Database, input: StartRunInput, role: AgentRole): Promise<{ id: string }> {
   return db.transaction(async (tx) => {
     await insertExperimentIfMissing(tx, input.experiment);
     const [row] = await tx
@@ -81,7 +111,10 @@ export async function listRunningRuns(db: Database): Promise<LabRun[]> {
   return db.select().from(labRuns).where(eq(labRuns.status, "running")).orderBy(asc(labRuns.startedAt));
 }
 
-/** Record progress on a running run. False when no running run has that id. */
+/**
+ * Record progress on a running run. A null `eta` keeps the stored one (a tick
+ * without an ETA does not erase it). False when no running run has that id.
+ */
 export async function updateProgress(
   db: Database,
   id: string,
@@ -92,7 +125,7 @@ export async function updateProgress(
   if (!isUuid(id)) return false;
   const rows = await db
     .update(labRuns)
-    .set({ progressPct: pct, eta, progressAt: now })
+    .set({ progressPct: pct, progressAt: now, ...(eta !== null ? { eta } : {}) })
     .where(and(eq(labRuns.id, id), eq(labRuns.status, "running")))
     .returning({ id: labRuns.id });
   return rows.length > 0;
