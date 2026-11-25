@@ -13,6 +13,7 @@ import {
   showsBar,
   spentFigure,
   staleText,
+  unassignedStatus,
   type Figure,
 } from "@/lib/lab/display";
 import { useNow, usePolled } from "./use-lab";
@@ -180,7 +181,10 @@ function PodStatus({ pod: p, now }: { pod: PodRow; now: Date }) {
     case "pod_gone":
       return <span className="lab-warn">Pod gone</span>;
     case "unassigned":
-      return <span className="lab-dim">No run reported</span>;
+    case "left_up": {
+      const { text, tone } = unassignedStatus(p.status);
+      return <span className={`lab-${tone}`}>{text}</span>;
+    }
   }
 }
 

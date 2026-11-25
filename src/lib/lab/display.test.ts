@@ -11,6 +11,7 @@ import {
   orderExperiments,
   spentFigure,
   staleText,
+  unassignedStatus,
   untilText,
 } from "./display";
 import type { ExperimentRow, OverviewDTO, PodRow } from "./types";
@@ -135,4 +136,9 @@ test("a bar only for a single stage that is running", () => {
   assert.equal(showsBar({ ...one, pods: [pod({ status: "failed" }), pod()] }), true);
   assert.equal(showsBar({ ...one, pods: [pod({ stage: "dev-a", status: "done" }), pod()] }), false);
   assert.equal(showsBar({ ...one, progressPct: null }), false);
+});
+
+test("an Unassigned row left up after a run warns; a pod no run used stays quiet", () => {
+  assert.deepEqual(unassignedStatus("left_up"), { text: "Still up", tone: "warn" });
+  assert.deepEqual(unassignedStatus("unassigned"), { text: "No run reported", tone: "dim" });
 });

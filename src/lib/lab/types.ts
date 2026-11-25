@@ -24,7 +24,9 @@ export interface OverviewRun {
 // ─── Overview DTO (server → client) ──────────────────────────────────────────
 // Times are ISO strings. Money is plain USD numbers; the UI formats it.
 
-export type PodRowStatus = RunStatus | "pod_gone" | "unassigned";
+// "left_up": an unassigned pod still listed after the run that used it ended;
+// "unassigned": a pod no run used.
+export type PodRowStatus = RunStatus | "pod_gone" | "unassigned" | "left_up";
 
 export interface PodRow {
   kind: "run" | "unassigned";

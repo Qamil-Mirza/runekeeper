@@ -344,3 +344,26 @@ test("unassigned covers every non-TERMINATED pod without a running run, whatever
   assert.deepEqual(dto.experiments[0].pods.map((p) => [p.podId, p.stage]), [["pc", "fresh"]]);
   assert.ok(close(dto.experiments[0].cost, 0));
 });
+
+test("a pod left up after its run reads as such: status left_up, and the pods-running label says so", () => {
+  const { runs, snap, now } = leftUp("RUNNING");
+  snap.pods.push(pod("pn", "spare", "RUNNING", 0.2, "2026-11-24T20:00:00Z"));
+  const dto = buildOverview({ runs, snapshot: snap, runpodState: "ok", now });
+  const [up, spare] = dto.experiments[0].pods;
+  assert.equal(up.status, "left_up");
+  assert.equal(up.kind, "unassigned");
+  assert.equal(spare.status, "unassigned", "a pod no run used keeps its status");
+  assert.equal(dto.podsRunning, 2);
+  assert.equal(dto.podsRunningLabel, "still up after E9 dev-a, spare");
+});
+
+test("the pods-running label names a pod's running run, not an earlier ended one", () => {
+  const runs = [
+    run({ experimentId: "E9", stage: "dev-a", status: "done", podId: "pp",
+      startedAt: at("2026-11-24T08:00:00Z"), endedAt: at("2026-11-24T10:00:00Z") }),
+    run({ experimentId: "E9", stage: "dev-b", status: "running", podId: "pp", startedAt: at("2026-11-24T10:00:00Z") }),
+  ];
+  const snap: RunpodSnapshot = { pods: [pod("pp", "shared", "RUNNING", 0.5, null)], accountHours: [], podHours: [] };
+  const dto = buildOverview({ runs, snapshot: snap, runpodState: "ok", now: NOW });
+  assert.equal(dto.podsRunningLabel, "E9 dev-b");
+});

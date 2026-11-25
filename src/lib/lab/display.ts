@@ -77,6 +77,11 @@ export function orderExperiments(rows: ExperimentRow[]): ExperimentRow[] {
   return [...rows.filter((r) => r.id === UNASSIGNED_ID), ...rows.filter((r) => r.id !== UNASSIGNED_ID)];
 }
 
+/** An Unassigned row's status: a pod left up after its run warns; a pod no run used is quiet. */
+export function unassignedStatus(status: "unassigned" | "left_up"): { text: string; tone: "warn" | "dim" } {
+  return status === "left_up" ? { text: "Still up", tone: "warn" } : { text: "No run reported", tone: "dim" };
+}
+
 /** "E9 · probe transfer"; the synthetic unassigned row is just its title. */
 export function experimentLabel(e: ExperimentRow): string {
   if (e.id === UNASSIGNED_ID) return e.title ?? "Unassigned pods";

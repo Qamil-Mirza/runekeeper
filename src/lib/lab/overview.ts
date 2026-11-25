@@ -2,7 +2,7 @@
 // Pure: no I/O, no clock reads (the caller passes `now`).
 
 import type { ExperimentRow, OverviewDTO, OverviewRun, PodRow, RunStatus } from "./types";
-import type { RunpodSnapshot } from "./runpod";
+import type { RunpodPod, RunpodSnapshot } from "./runpod";
 import { podCost, runCost, spentToday, type Spend } from "./spend";
 import { formatIn } from "./time";
 
@@ -28,6 +28,10 @@ function lastRunOn(runs: OverviewRun[], podId: string): OverviewRun | null {
   for (const r of runs) if (r.podId === podId && (!last || endMs(r) > endMs(last))) last = r;
   return last;
 }
+
+// How a pod without a running run is named: after the run it outlived, or by its own name.
+const strayLabel = (last: OverviewRun | null, p: RunpodPod) =>
+  last ? `still up after ${runLabel(last)}` : p.name || p.id;
 
 function stageSummary(runs: OverviewRun[]): string {
   const latest = new Map<string, OverviewRun>();
@@ -137,12 +141,12 @@ export function buildOverview({ runs, snapshot, runpodState, now }: BuildOvervie
         return {
           kind: "unassigned",
           runId: null,
-          stage: last ? `still up after ${runLabel(last)}` : p.name || p.id,
+          stage: strayLabel(last, p),
           setupId: null,
           podId: p.id,
           capUsd: null,
           cost: total(podCost(p.id, snap.podHours, p, now, since)),
-          status: "unassigned",
+          status: last ? "left_up" : "unassigned",
           progressPct: null,
           eta: null,
           staleMinutes: null,
@@ -171,11 +175,8 @@ export function buildOverview({ runs, snapshot, runpodState, now }: BuildOvervie
     podsRunning = live.length;
     podsRunningLabel = live
       .map((p) => {
-        const owners = runs.filter((r) => r.podId === p.id);
-        const owner =
-          owners.find((r) => r.status === "running") ??
-          owners.sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
-        return owner ? runLabel(owner) : p.name || p.id;
+        const owner = runs.find((r) => r.podId === p.id && r.status === "running");
+        return owner ? runLabel(owner) : strayLabel(lastRunOn(runs, p.id), p);
       })
       .join(", ");
   }
