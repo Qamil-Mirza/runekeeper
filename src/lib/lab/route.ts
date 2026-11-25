@@ -1,153 +1,108 @@
-import { NextResponse } from "next/server";
-import { rateLimit } from "@/lib/rate-limit";
 import { createLogger } from "@/lib/logger";
-import { isLabOwner, loadLabConfig, type LabConfig } from "./config";
-import {
-  LabManagerError,
-  isValidIdempotencyKey,
-  type LabActor,
-} from "./manager";
-import type { SecretReader } from "./secrets";
-import type { LabClientErrorCode, LabErrorBody } from "./types";
+import { rateLimit } from "@/lib/rate-limit";
+import { agentRoleFor, cameThroughProxy } from "./agent-auth";
+import { isLabOwner, loadLabSettings, type AgentRole, type LabSettings } from "./settings";
 
 const log = createLogger("lab");
 
-const mutationLimiter = rateLimit({ key: "lab-mutation", limit: 30, windowMs: 60_000 });
+type Env = Record<string, string | undefined>;
 
-export interface LabRouteContext {
-  config: LabConfig;
-  actor: LabActor;
-  /** Present on mutating requests. */
-  idempotencyKey: string;
+export interface OwnerDeps {
+  getUser?: () => Promise<{ id: string } | null>;
+  env?: Env;
 }
 
-export function labError(
-  status: number,
-  code: LabClientErrorCode,
-  message: string,
-  retryable = false,
-  details?: Record<string, unknown>
-) {
-  const body: LabErrorBody = {
-    error: { code, message, retryable, ...(details ? { details } : {}) },
-  };
-  return NextResponse.json(body, { status });
+export interface AgentDeps {
+  env?: Env;
 }
 
-// The same answer for "feature off", "misconfigured", "signed out" and "not an
-// owner", so nothing about the Lab is visible to anyone else.
-function notFound() {
-  return labError(404, "not_found", "Not found");
+const ownerLimiter = rateLimit({ key: "lab-owner", limit: 30, windowMs: 60_000 });
+const agentLimiter = rateLimit({ key: "lab-agent", limit: 120, windowMs: 60_000 });
+
+export function labError(status: number, code: string, message: string): Response {
+  return Response.json({ error: { code, message } }, { status });
 }
 
-/**
- * A browser always sends Origin on a cross-site POST, and on same-origin
- * fetch POSTs too. Requiring it to match our own host blocks cross-site
- * requests that would otherwise ride the session cookie.
- */
-export function isSameOrigin(
-  headers: Headers,
-  env: Record<string, string | undefined> = process.env
-): boolean {
-  const origin = headers.get("origin");
-  if (!origin) return false;
-  let originHost: string;
+const notFound = () => labError(404, "not_found", "Not found");
+
+async function defaultGetUser(): Promise<{ id: string } | null> {
+  // Lazy so importing this module does not load the database.
+  const { getAuthenticatedUser } = await import("@/lib/api-helpers");
+  return getAuthenticatedUser();
+}
+
+function hostOf(url: string | undefined | null): string | null {
+  if (!url) return null;
   try {
-    originHost = new URL(origin).host;
-  } catch {
-    return false;
-  }
-
-  const allowed = new Set<string>();
-  const host = headers.get("host");
-  if (host) allowed.add(host);
-  if (env.NEXTAUTH_URL) {
-    try {
-      allowed.add(new URL(env.NEXTAUTH_URL).host);
-    } catch {
-      // ignore a malformed NEXTAUTH_URL; the Host header still applies
-    }
-  }
-  return allowed.has(originHost);
-}
-
-export interface LabRouteDeps {
-  getUser: () => Promise<{ id: string; email: string } | null>;
-  env: Record<string, string | undefined>;
-  /** Overridden in tests; defaults to reading the real file. */
-  readSecret?: SecretReader;
-}
-
-// Loaded on first use so this module can be imported without the database.
-const defaultDeps: LabRouteDeps = {
-  getUser: async () => (await import("@/lib/api-helpers")).getAuthenticatedUser(),
-  env: process.env,
-};
-
-/**
- * Wraps every /api/lab route: feature switch, session, owner allowlist, and
- * for mutations the origin check, idempotency key and rate limit.
- */
-export async function withLabOwner(
-  req: Request,
-  handler: (ctx: LabRouteContext) => Promise<Response>,
-  deps: LabRouteDeps = defaultDeps
-): Promise<Response> {
-  const loaded = loadLabConfig(deps.env, deps.readSecret);
-  if (loaded.status === "disabled") return notFound();
-  if (loaded.status === "invalid") {
-    log.error({ reason: loaded.reason }, "lab config invalid; denying all access");
-    return notFound();
-  }
-  const { config } = loaded;
-
-  const user = await deps.getUser();
-  if (!user || !isLabOwner(user.id, config)) return notFound();
-
-  let idempotencyKey = "";
-  if (req.method !== "GET") {
-    if (!isSameOrigin(req.headers, deps.env)) {
-      log.warn({ userId: user.id }, "lab mutation rejected: origin mismatch");
-      return labError(403, "forbidden_origin", "Cross-origin request refused");
-    }
-    const key = req.headers.get("idempotency-key");
-    if (!isValidIdempotencyKey(key)) {
-      return labError(400, "validation_failed", "Missing or invalid Idempotency-Key");
-    }
-    idempotencyKey = key;
-    if (!mutationLimiter.check(user.id).success) {
-      return labError(429, "rate_limited", "Too many Lab actions; try again shortly", true);
-    }
-  }
-
-  try {
-    return await handler({
-      config,
-      actor: { id: user.id, email: user.email },
-      idempotencyKey,
-    });
-  } catch (err) {
-    if (err instanceof LabManagerError) {
-      if (err.code === "manager_unreachable" || err.status >= 500) {
-        log.warn({ code: err.code, status: err.status }, err.message);
-      }
-      return labError(err.status, err.code, err.message, err.retryable, err.details);
-    }
-    log.error({ err }, "unexpected lab route failure");
-    return labError(500, "internal_error", "Unexpected error");
-  }
-}
-
-/** Parses a JSON object body; returns null when it is not one. */
-export async function readJsonObject(
-  req: Request
-): Promise<Record<string, unknown> | null> {
-  if (!req.headers.get("content-type")?.includes("application/json")) return null;
-  try {
-    const body: unknown = await req.json();
-    if (typeof body !== "object" || body === null || Array.isArray(body)) return null;
-    return body as Record<string, unknown>;
+    return new URL(url).host;
   } catch {
     return null;
   }
+}
+
+function isSameOrigin(req: Request, env: Env): boolean {
+  const origin = hostOf(req.headers.get("origin"));
+  if (!origin) return false;
+  return origin === req.headers.get("host") || origin === hostOf(env.NEXTAUTH_URL);
+}
+
+async function run(handler: () => Promise<Response>): Promise<Response> {
+  try {
+    return await handler();
+  } catch (err) {
+    log.error({ err }, "lab route failed");
+    return labError(500, "internal", "Something went wrong");
+  }
+}
+
+/**
+ * Owner-only route. Anyone not in LAB_OWNER_USER_IDS gets 404. Writes also
+ * need a same-origin request and are rate limited per user.
+ */
+export async function withOwner(
+  req: Request,
+  handler: (ctx: { userId: string; settings: LabSettings }) => Promise<Response>,
+  deps: OwnerDeps = {},
+): Promise<Response> {
+  const env = deps.env ?? process.env;
+  const settings = loadLabSettings(env);
+  if (!settings.ownerIds) return notFound();
+
+  const user = await (deps.getUser ?? defaultGetUser)();
+  if (!user || !isLabOwner(user.id, settings)) return notFound();
+
+  if (req.method !== "GET" && req.method !== "HEAD") {
+    if (!isSameOrigin(req, env)) return labError(403, "bad_origin", "Cross-origin request refused");
+    if (!ownerLimiter.check(user.id).success) {
+      return labError(429, "rate_limited", "Too many requests");
+    }
+  }
+
+  return run(() => handler({ userId: user.id, settings }));
+}
+
+/**
+ * Agent route, authenticated by a role's bearer token. Only for callers on
+ * the host itself: requests that came through a proxy are refused.
+ */
+export async function withAgent(
+  req: Request,
+  roles: AgentRole[],
+  handler: (ctx: { role: AgentRole; settings: LabSettings }) => Promise<Response>,
+  deps: AgentDeps = {},
+): Promise<Response> {
+  const settings = loadLabSettings(deps.env ?? process.env);
+  if (Object.keys(settings.tokenHashes).length === 0) return notFound();
+
+  if (cameThroughProxy(req.headers)) {
+    return labError(403, "proxied", "Agent routes are only reachable from the host");
+  }
+
+  const role = agentRoleFor(req.headers, settings);
+  if (!role) return labError(401, "unauthorized", "Missing or invalid token");
+  if (!roles.includes(role)) return labError(403, "wrong_role", `Not allowed for ${role}`);
+
+  if (!agentLimiter.check(role).success) return labError(429, "rate_limited", "Too many requests");
+
+  return run(() => handler({ role, settings }));
 }

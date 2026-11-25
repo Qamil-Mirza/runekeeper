@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { PlannerProvider, usePlanner } from "@/context/planner-context";
 import type { ViewId, TransitionMode } from "@/context/planner-context";
@@ -16,7 +17,6 @@ import { ProfileView } from "@/components/profile/profile-view";
 import { useOnboarding } from "@/components/onboarding/use-onboarding";
 import { OnboardingOverlay } from "@/components/onboarding/onboarding-overlay";
 import { UpdateBanner } from "@/components/update-banner";
-import { LabView } from "@/components/lab/lab-view";
 import { useLabAccess } from "@/components/lab/use-lab";
 const viewTitles: Record<ViewId, string> = {
   home: "Hearth",
@@ -24,13 +24,11 @@ const viewTitles: Record<ViewId, string> = {
   "quest-log": "Quest Log",
   calendar: "Calendar",
   integrations: "Nexus",
-  lab: "The Lab",
   profile: "Profile",
 };
 
 const viewSubtitles: Partial<Record<ViewId, string>> = {
   integrations: "Connect your tools and let the flame tend your workflow.",
-  lab: "Research agents, their state, and the controls to run them.",
 };
 
 const bottomNavItems: { id: ViewId; label: string; icon: (active: boolean) => React.ReactNode }[] = [
@@ -108,27 +106,27 @@ function PlannerShell() {
   const { showOnboarding, completeOnboarding } = useOnboarding();
   // The Lab exists only for configured owners; everyone else never sees it.
   const labEnabled = useLabAccess() === true;
+  const router = useRouter();
+  useEffect(() => {
+    if (labEnabled) router.prefetch("/lab");
+  }, [labEnabled, router]);
+  // The Lab is its own page; it plays the warp as it opens.
+  const openLab = () => router.push("/lab");
 
   const handleNavigate = (view: ViewId) => {
     setCurrentView(view);
     setSidebarOpen(false);
   };
 
-  // The Lab is its own full-window world; the Runekeeper shell stays mounted
-  // underneath but is taken out of focus and the accessibility tree.
-  const inLab = currentView === "lab" && labEnabled;
-
   return (
-    <>
-    {inLab && <LabView onExit={() => setCurrentView("home")} />}
-    <div className="flex h-dvh overflow-hidden" inert={inLab} aria-hidden={inLab || undefined}>
+    <div className="flex h-dvh overflow-hidden">
       {/* Sidebar — desktop (hidden during voice mode) */}
       <div className={`hidden lg:flex ${isVoiceMode ? "!hidden" : ""}`}>
         <Sidebar
           currentView={currentView}
           onNavigate={handleNavigate}
           collapsed={false}
-          showLab={labEnabled}
+          onOpenLab={labEnabled ? openLab : undefined}
         />
       </div>
 
@@ -156,7 +154,7 @@ function PlannerShell() {
                 currentView={currentView}
                 onNavigate={handleNavigate}
                 collapsed={false}
-                showLab={labEnabled}
+                onOpenLab={labEnabled ? openLab : undefined}
               />
             </motion.div>
           </>
@@ -228,7 +226,6 @@ function PlannerShell() {
       {/* New-deployment notice */}
       <UpdateBanner />
     </div>
-    </>
   );
 }
 

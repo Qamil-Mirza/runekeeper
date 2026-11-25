@@ -10,8 +10,8 @@ interface SidebarProps {
   currentView: ViewId;
   onNavigate: (view: ViewId) => void;
   collapsed?: boolean;
-  /** The Lab is shown only to configured lab owners. */
-  showLab?: boolean;
+  /** Opens the Lab, its own page. Given only for configured lab owners. */
+  onOpenLab?: () => void;
 }
 
 const navItems: { id: ViewId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -22,11 +22,11 @@ const navItems: { id: ViewId; label: string; icon: React.ComponentType<{ classNa
   { id: "integrations", label: "Nexus", icon: NexusIcon },
 ];
 
-const labNavItem: (typeof navItems)[number] = { id: "lab", label: "The Lab", icon: LabIcon };
+const navIdle =
+  "text-[rgba(212,168,96,0.35)] hover:bg-[rgba(212,168,96,0.08)] hover:text-[rgba(212,168,96,0.6)]";
 
-export function Sidebar({ currentView, onNavigate, collapsed, showLab }: SidebarProps) {
+export function Sidebar({ currentView, onNavigate, collapsed, onOpenLab }: SidebarProps) {
   const { user } = usePlanner();
-  const items = showLab ? [...navItems, labNavItem] : navItems;
 
   return (
     <aside
@@ -48,7 +48,7 @@ export function Sidebar({ currentView, onNavigate, collapsed, showLab }: Sidebar
 
       {/* Navigation */}
       <nav className="flex-1 flex flex-col gap-1 px-2" role="navigation" aria-label="Main navigation">
-        {items.map((item) => (
+        {navItems.map((item) => (
           <button
             key={item.id}
             onClick={() => onNavigate(item.id)}
@@ -56,7 +56,7 @@ export function Sidebar({ currentView, onNavigate, collapsed, showLab }: Sidebar
               "flex items-center gap-3 rounded-none px-3 py-2.5 w-full text-left transition-colors duration-200 cursor-pointer",
               currentView === item.id
                 ? "bg-[rgba(212,168,96,0.15)] text-[#d4a860]"
-                : "text-[rgba(212,168,96,0.35)] hover:bg-[rgba(212,168,96,0.08)] hover:text-[rgba(212,168,96,0.6)]"
+                : navIdle
             )}
             aria-current={currentView === item.id ? "page" : undefined}
           >
@@ -68,6 +68,20 @@ export function Sidebar({ currentView, onNavigate, collapsed, showLab }: Sidebar
             )}
           </button>
         ))}
+        {onOpenLab && (
+          <button
+            onClick={onOpenLab}
+            className={cn(
+              "flex items-center gap-3 rounded-none px-3 py-2.5 w-full text-left transition-colors duration-200 cursor-pointer",
+              navIdle
+            )}
+          >
+            <LabIcon className="w-5 h-5 shrink-0" />
+            {!collapsed && (
+              <span className="font-label text-label-lg font-medium tracking-wide">The Lab</span>
+            )}
+          </button>
+        )}
       </nav>
 
       {/* User */}

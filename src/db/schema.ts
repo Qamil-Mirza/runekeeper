@@ -6,9 +6,12 @@ import {
   boolean,
   timestamp,
   jsonb,
+  numeric,
   primaryKey,
+  index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // ─── Users ───────────────────────────────────────────────────────────────────
 
@@ -248,3 +251,83 @@ export const processedEmails = pgTable(
     ),
   ]
 );
+
+// ─── Lab ─────────────────────────────────────────────────────────────────────
+
+export const labExperiments = pgTable("lab_experiments", {
+  id: text("id").primaryKey(), // the agents' own code, e.g. "E9"
+  title: text("title"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const labRuns = pgTable(
+  "lab_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    experimentId: text("experiment_id")
+      .notNull()
+      .references(() => labExperiments.id),
+    stage: text("stage").notNull(),
+    setupId: text("setup_id").notNull(),
+    podId: text("pod_id").notNull(),
+    capUsd: numeric("cap_usd", { precision: 10, scale: 2 }).notNull(),
+    status: text("status").$type<"running" | "done" | "failed" | "stopped">().notNull(),
+    progressPct: integer("progress_pct"),
+    eta: timestamp("eta", { withTimezone: true }),
+    progressAt: timestamp("progress_at", { withTimezone: true }),
+    startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
+    endedAt: timestamp("ended_at", { withTimezone: true }),
+    endNote: text("end_note"),
+    createdBy: text("created_by").notNull(), // agent role
+  },
+  (table) => [
+    index("lab_runs_status_idx").on(table.status),
+    // One running run per pod.
+    uniqueIndex("lab_runs_pod_id_running_idx")
+      .on(table.podId)
+      .where(sql`${table.status} = 'running'`),
+  ]
+);
+
+export const labProtocols = pgTable(
+  "lab_protocols",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    lineageId: uuid("lineage_id").notNull(), // id of the lineage's v1
+    version: integer("version").notNull(),
+    revisesId: uuid("revises_id"),
+    experimentId: text("experiment_id")
+      .notNull()
+      .references(() => labExperiments.id),
+    title: text("title").notNull(),
+    bodyMd: text("body_md").notNull(),
+    status: text("status").$type<"waiting" | "accepted" | "rejected" | "superseded">().notNull(),
+    decisionNote: text("decision_note"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    seenByAdvisorAt: timestamp("seen_by_advisor_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("lab_protocols_lineage_version_idx").on(table.lineageId, table.version),
+  ]
+);
+
+export const labReports = pgTable("lab_reports", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  experimentId: text("experiment_id").references(() => labExperiments.id),
+  title: text("title").notNull(),
+  summary: text("summary").notNull(),
+  html: text("html").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  readAt: timestamp("read_at", { withTimezone: true }),
+});
+
+export const labReportReplies = pgTable("lab_report_replies", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  reportId: uuid("report_id")
+    .notNull()
+    .references(() => labReports.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  seenByAdvisorAt: timestamp("seen_by_advisor_at", { withTimezone: true }),
+});
