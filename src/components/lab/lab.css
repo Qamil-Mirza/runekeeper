@@ -678,3 +678,109 @@
   .lab-root .lab-stat-v { font-size: 22px; }
   .lab-root .lab-stat-quiet { font-size: 16px; line-height: calc(22px * 1.2); }
 }
+
+/* --- Warp: stepping between Runekeeper and The Lab ---------------------- */
+
+/* The page itself: the whole window, in the Lab's dark. */
+.lab-screen {
+  position: fixed;
+  inset: 0;
+  background: #07090c;
+}
+
+.lab-stage {
+  height: 100%;
+  animation: lab-arrive 620ms cubic-bezier(0.2, 0.8, 0.2, 1) 180ms both;
+}
+.lab-screen[data-leaving="true"] .lab-stage {
+  animation: lab-depart 380ms cubic-bezier(0.6, 0, 0.8, 0.2) both;
+}
+
+.lab-warp {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  pointer-events: none;
+  overflow: hidden;
+  /* Starts as Runekeeper's timber and falls away. */
+  background: #2c1810;
+  animation: lab-warp-veil 760ms ease-out both;
+}
+.lab-warp::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 220vmax;
+  height: 220vmax;
+  margin: -110vmax;
+  background: repeating-conic-gradient(
+    from 0deg,
+    transparent 0deg 1.1deg,
+    rgba(56, 214, 255, 0.7) 1.1deg 1.22deg,
+    transparent 1.22deg 2.9deg,
+    rgba(255, 255, 255, 0.55) 2.9deg 2.97deg,
+    transparent 2.97deg 4.6deg,
+    rgba(120, 150, 255, 0.5) 4.6deg 4.7deg,
+    transparent 4.7deg 7deg
+  );
+  -webkit-mask-image: radial-gradient(circle, transparent 0 3%, #000 16%, transparent 58%);
+  mask-image: radial-gradient(circle, transparent 0 3%, #000 16%, transparent 58%);
+  animation: lab-warp-streaks 760ms cubic-bezier(0.5, 0, 0.2, 1) both;
+}
+.lab-warp::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(200, 245, 255, 0.9), rgba(56, 214, 255, 0.25) 22%, transparent 55%);
+  animation: lab-warp-flash 760ms ease-out both;
+}
+.lab-warp[data-direction="out"] {
+  animation: lab-warp-veil-out 400ms ease-in both;
+}
+.lab-warp[data-direction="out"]::before {
+  animation: lab-warp-streaks-out 400ms cubic-bezier(0.6, 0, 0.9, 0.4) both;
+}
+.lab-warp[data-direction="out"]::after {
+  animation: none;
+  opacity: 0;
+}
+
+@keyframes lab-warp-veil {
+  0% { background-color: rgba(44, 24, 16, 1); }
+  45% { background-color: rgba(7, 9, 12, 0.85); }
+  100% { background-color: rgba(7, 9, 12, 0); }
+}
+@keyframes lab-warp-veil-out {
+  0% { background-color: rgba(7, 9, 12, 0); }
+  100% { background-color: rgba(44, 24, 16, 1); }
+}
+@keyframes lab-warp-streaks {
+  0% { transform: scale(0.12) rotate(-6deg); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: scale(2.6) rotate(10deg); opacity: 0; }
+}
+@keyframes lab-warp-streaks-out {
+  0% { transform: scale(2.2) rotate(8deg); opacity: 0; }
+  40% { opacity: 1; }
+  100% { transform: scale(0.1) rotate(-4deg); opacity: 0; }
+}
+@keyframes lab-warp-flash {
+  0% { opacity: 0; transform: scale(0.2); }
+  30% { opacity: 0.9; }
+  100% { opacity: 0; transform: scale(1.8); }
+}
+@keyframes lab-arrive {
+  0% { opacity: 0; transform: scale(1.06); filter: blur(10px); }
+  100% { opacity: 1; transform: none; filter: none; }
+}
+@keyframes lab-depart {
+  0% { opacity: 1; transform: none; filter: none; }
+  100% { opacity: 0; transform: scale(0.94); filter: blur(8px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lab-warp { display: none; }
+  .lab-stage,
+  .lab-screen[data-leaving="true"] .lab-stage { animation: none; }
+}

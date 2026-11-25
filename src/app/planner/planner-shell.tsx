@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { PlannerProvider, usePlanner } from "@/context/planner-context";
 import type { ViewId, TransitionMode } from "@/context/planner-context";
@@ -17,7 +18,6 @@ import { useOnboarding } from "@/components/onboarding/use-onboarding";
 import { OnboardingOverlay } from "@/components/onboarding/onboarding-overlay";
 import { UpdateBanner } from "@/components/update-banner";
 import { useLabAccess } from "@/components/lab/use-lab";
-import { useLabDoor } from "@/components/lab/lab-door";
 const viewTitles: Record<ViewId, string> = {
   home: "Hearth",
   chat: "Oracle",
@@ -106,8 +106,12 @@ function PlannerShell() {
   const { showOnboarding, completeOnboarding } = useOnboarding();
   // The Lab exists only for configured owners; everyone else never sees it.
   const labEnabled = useLabAccess() === true;
-  // The Lab is its own page; the door is how you get there.
-  const labDoor = useLabDoor(labEnabled);
+  const router = useRouter();
+  useEffect(() => {
+    if (labEnabled) router.prefetch("/lab");
+  }, [labEnabled, router]);
+  // The Lab is its own page; it plays the warp as it opens.
+  const openLab = () => router.push("/lab");
 
   const handleNavigate = (view: ViewId) => {
     setCurrentView(view);
@@ -122,7 +126,7 @@ function PlannerShell() {
           currentView={currentView}
           onNavigate={handleNavigate}
           collapsed={false}
-          onOpenLab={labEnabled ? labDoor.open : undefined}
+          onOpenLab={labEnabled ? openLab : undefined}
         />
       </div>
 
@@ -150,7 +154,7 @@ function PlannerShell() {
                 currentView={currentView}
                 onNavigate={handleNavigate}
                 collapsed={false}
-                onOpenLab={labEnabled ? labDoor.open : undefined}
+                onOpenLab={labEnabled ? openLab : undefined}
               />
             </motion.div>
           </>
@@ -213,8 +217,6 @@ function PlannerShell() {
           </button>
         ))}
       </nav>
-
-      {labDoor.overlay}
 
       {/* Onboarding overlay for first-time users */}
       <AnimatePresence>

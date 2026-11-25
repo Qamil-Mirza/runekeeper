@@ -70,7 +70,6 @@ export function Sidebar({ currentView, onNavigate, collapsed, onOpenLab }: Sideb
         ))}
         {onOpenLab && (
           <button
-            data-lab-nav
             onClick={onOpenLab}
             className={cn(
               "flex items-center gap-3 rounded-none px-3 py-2.5 w-full text-left transition-colors duration-200 cursor-pointer",
