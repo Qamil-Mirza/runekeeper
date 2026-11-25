@@ -16,6 +16,8 @@ import { ProfileView } from "@/components/profile/profile-view";
 import { useOnboarding } from "@/components/onboarding/use-onboarding";
 import { OnboardingOverlay } from "@/components/onboarding/onboarding-overlay";
 import { UpdateBanner } from "@/components/update-banner";
+import { LabView } from "@/components/lab/lab-view";
+import { useLabAccess } from "@/components/lab/use-lab";
 const viewTitles: Record<ViewId, string> = {
   home: "Hearth",
   chat: "Oracle",
@@ -28,7 +30,7 @@ const viewTitles: Record<ViewId, string> = {
 
 const viewSubtitles: Partial<Record<ViewId, string>> = {
   integrations: "Connect your tools and let the flame tend your workflow.",
-  lab: "Research agents, their state, and the controls to run them.",
+  lab: "Experiments, protocols and reports from the research agents.",
 };
 
 const bottomNavItems: { id: ViewId; label: string; icon: (active: boolean) => React.ReactNode }[] = [
@@ -104,6 +106,8 @@ function PlannerShell() {
   const { currentView, setCurrentView, transitionMode, setTransitionMode, isVoiceMode } = usePlanner();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { showOnboarding, completeOnboarding } = useOnboarding();
+  // The Lab exists only for configured owners; everyone else never sees it.
+  const labEnabled = useLabAccess() === true;
 
   const handleNavigate = (view: ViewId) => {
     setCurrentView(view);
@@ -118,7 +122,7 @@ function PlannerShell() {
           currentView={currentView}
           onNavigate={handleNavigate}
           collapsed={false}
-          showLab={false}
+          showLab={labEnabled}
         />
       </div>
 
@@ -146,7 +150,7 @@ function PlannerShell() {
                 currentView={currentView}
                 onNavigate={handleNavigate}
                 collapsed={false}
-                showLab={false}
+                showLab={labEnabled}
               />
             </motion.div>
           </>
@@ -183,6 +187,7 @@ function PlannerShell() {
               {currentView === "quest-log" && <InventoryPanel />}
               {currentView === "calendar" && <CalendarView />}
               {currentView === "integrations" && <IntegrationsGraph />}
+              {currentView === "lab" && labEnabled && <LabView />}
               {currentView === "profile" && <ProfileView />}
             </motion.div>
           </AnimatePresence>
