@@ -48,16 +48,20 @@ export function spentToday(hours: BillingBucket[], pods: RunpodPod[], now: Date)
 
 // One pod's cost: its billed hours plus, while it runs, its cost since its
 // own last billed hour (or since it started, before its first bill).
+// With `sinceMs` (the end of the last run on the pod) only the hours starting
+// at or after it count, and accrual starts no earlier than it: the hours
+// before belong to that run (see runCost), so nothing is counted twice.
 export function podCost(
   podId: string,
   podHours: BillingBucket[],
   pod: RunpodPod | undefined,
   now: Date,
+  sinceMs = -Infinity,
 ): Spend {
-  const own = podHours.filter((b) => b.podId === podId);
-  const billed = sum(own);
+  const all = podHours.filter((b) => b.podId === podId);
+  const billed = sum(all.filter((b) => b.startTime.getTime() >= sinceMs));
   if (!isRunning(pod)) return { billed, accruing: 0 };
-  return { billed, accruing: accrual(pod, lastEnd(own) ?? -Infinity, now) };
+  return { billed, accruing: accrual(pod, Math.max(lastEnd(all) ?? -Infinity, sinceMs), now) };
 }
 
 export interface RunWindow {

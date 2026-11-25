@@ -29,7 +29,7 @@ export type PodRowStatus = RunStatus | "pod_gone" | "unassigned";
 export interface PodRow {
   kind: "run" | "unassigned";
   runId: string | null;
-  // The run's stage, or the pod's name for an unassigned pod.
+  // The run's stage; for an unassigned pod "still up after E9 dev-a" or, if no run used it, its name.
   stage: string;
   setupId: string | null;
   podId: string;

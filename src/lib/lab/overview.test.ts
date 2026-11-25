@@ -129,8 +129,12 @@ test("a pod no run claims appears first under Unassigned pods with its cost", ()
   const first = dto.experiments[0];
   assert.equal(first.id, "—");
   assert.equal(first.title, "Unassigned pods");
-  assert.equal(first.pods.length, 1, "claimed pods (even of finished runs) and terminated pods are not unassigned");
-  const stray = first.pods[0];
+  // ph has a running run and pt is TERMINATED; pb's run ended, so it shows as left up.
+  assert.deepEqual(first.pods.map((p) => p.podId), ["pb", "px"]);
+  const leftUp = first.pods[0];
+  assert.equal(leftUp.stage, "still up after E9 dev-b");
+  assert.ok(close(leftUp.cost, 0), "nothing billed on pb after dev-b ended");
+  const stray = first.pods[1];
   assert.equal(stray.kind, "unassigned");
   assert.equal(stray.status, "unassigned");
   assert.equal(stray.podId, "px");
@@ -148,7 +152,7 @@ test("an EXITED pod still listed and unclaimed is unassigned too", () => {
   const dto = buildOverview({ runs: e9Runs(), snapshot: snap, runpodState: "ok", now: NOW });
   assert.deepEqual(
     dto.experiments[0].pods.map((p) => p.podId),
-    ["px", "pz"],
+    ["pb", "px", "pz"],
   );
   assert.equal(dto.podsRunning, 2, "EXITED pods are not counted as running");
 });
@@ -261,4 +265,71 @@ test("without RunPod, money is unknown: costs are null, not zero", () => {
       for (const p of e.pods) assert.equal(p.cost, null, `${runpodState}: pod row ${p.stage}`);
     }
   }
+});
+
+// A run ended at 15:10 on a pod still up at 20:30, billed hourly at $0.50.
+function leftUp(status: string): { runs: OverviewRun[]; snap: RunpodSnapshot; now: Date } {
+  const hours = ["13", "14", "15", "16", "17", "18", "19"].map((h) =>
+    bucket("pd", `2026-11-24T${h}:00:00Z`, `2026-11-24T${String(Number(h) + 1).padStart(2, "0")}:00:00Z`, 0.5),
+  );
+  return {
+    runs: [
+      run({ experimentId: "E9", stage: "dev-a", status: "done", podId: "pd",
+        startedAt: at("2026-11-24T13:00:00Z"), endedAt: at("2026-11-24T15:10:00Z") }),
+    ],
+    snap: {
+      pods: [pod("pd", "e9-dev-a", status, 0.5, "2026-11-24T13:00:00Z")],
+      accountHours: [],
+      podHours: hours,
+    },
+    now: at("2026-11-24T20:30:00Z"),
+  };
+}
+
+test("a pod left running after its run ended: post-run spend is on an Unassigned row, not lost", () => {
+  const { runs, snap, now } = leftUp("RUNNING");
+  const dto = buildOverview({ runs, snapshot: snap, runpodState: "ok", now });
+  const devA = dto.experiments.find((e) => e.id === "E9")!.pods[0];
+  // Buckets starting before 15:10: 13:00, 14:00 and 15:00.
+  assert.ok(close(devA.cost, 1.5), `run cost ${devA.cost}`);
+
+  const first = dto.experiments[0];
+  assert.equal(first.id, "—");
+  assert.equal(first.expanded, true);
+  assert.equal(first.pods.length, 1);
+  const up = first.pods[0];
+  assert.equal(up.kind, "unassigned");
+  assert.equal(up.podId, "pd");
+  assert.equal(up.stage, "still up after E9 dev-a");
+  // 16:00–20:00 billed ($2.00) plus 30 min at $0.50/h since the last billed hour.
+  assert.ok(close(up.cost, 2.25), `unassigned cost ${up.cost}`);
+
+  // Every bucket counted once, plus the accrual.
+  const all = dto.experiments.reduce((s, e) => s + (e.cost ?? 0), 0);
+  assert.ok(close(all, 3.5 + 0.25), `total ${all}`);
+});
+
+test("a pod stopped after its run ended still bills disk on an Unassigned row, with no accrual", () => {
+  const { runs, snap, now } = leftUp("EXITED");
+  const dto = buildOverview({ runs, snapshot: snap, runpodState: "ok", now });
+  const up = dto.experiments[0].pods[0];
+  assert.equal(dto.experiments[0].id, "—");
+  assert.equal(up.stage, "still up after E9 dev-a");
+  assert.ok(close(up.cost, 2.0), `unassigned cost ${up.cost}`);
+  assert.ok(close(dto.experiments.find((e) => e.id === "E9")!.cost, 1.5));
+});
+
+test("unassigned covers every non-TERMINATED pod without a running run, whatever its status", () => {
+  const snap: RunpodSnapshot = {
+    pods: [
+      pod("pc", "fresh", "CREATED", 0.4, null),
+      pod("pt", "old", "TERMINATED", 0.5, null),
+    ],
+    accountHours: [],
+    podHours: [bucket("pt", "2026-11-24T10:00:00Z", "2026-11-24T11:00:00Z", 0.5)],
+  };
+  const dto = buildOverview({ runs: [], snapshot: snap, runpodState: "ok", now: NOW });
+  assert.equal(dto.experiments.length, 1);
+  assert.deepEqual(dto.experiments[0].pods.map((p) => [p.podId, p.stage]), [["pc", "fresh"]]);
+  assert.ok(close(dto.experiments[0].cost, 0));
 });

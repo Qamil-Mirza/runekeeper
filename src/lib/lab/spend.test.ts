@@ -115,3 +115,26 @@ test("runCost: only the pod's buckets inside the run's window; accrual only whil
   assert.equal(c.billed, 0);
   assert.ok(Math.abs(c.accruing - 0.25) < 1e-9, `accruing ${c.accruing}`);
 });
+
+test("podCost since a run's end: only buckets starting at or after it; accrual never re-counts a billed hour", () => {
+  const hours = [
+    bucket("2026-11-24T14:00:00Z", "2026-11-24T15:00:00Z", 0.5, "p"),
+    bucket("2026-11-24T15:00:00Z", "2026-11-24T16:00:00Z", 0.5, "p"), // straddles the 15:10 end: the run's
+    bucket("2026-11-24T16:00:00Z", "2026-11-24T17:00:00Z", 0.5, "p"),
+  ];
+  const ended = at("2026-11-24T15:10:00Z").getTime();
+  const p = pod("p", "RUNNING", 0.5, "2026-11-24T14:00:00Z");
+  const r = podCost("p", hours, p, at("2026-11-24T17:30:00Z"), ended);
+  assert.equal(r.billed, 0.5);
+  assert.ok(Math.abs(r.accruing - 0.25) < 1e-9, `accruing ${r.accruing}`);
+
+  // Nothing billed after the end yet: accrual starts at the straddling bucket's end, not at 15:10.
+  const early = podCost("p", hours.slice(0, 2), p, at("2026-11-24T16:30:00Z"), ended);
+  assert.equal(early.billed, 0);
+  assert.ok(Math.abs(early.accruing - 0.25) < 1e-9, `accruing ${early.accruing}`);
+
+  // Before any bucket closes past the end, accrual starts at the end itself.
+  const fresh = podCost("p", hours.slice(0, 1), p, at("2026-11-24T15:40:00Z"), ended);
+  assert.equal(fresh.billed, 0);
+  assert.ok(Math.abs(fresh.accruing - 0.25) < 1e-9, `accruing ${fresh.accruing}`);
+});

@@ -2,7 +2,7 @@
 // Pure: no I/O, no clock reads (the caller passes `now`).
 
 import type { ExperimentRow, OverviewDTO, OverviewRun, PodRow, RunStatus } from "./types";
-import type { RunpodPod, RunpodSnapshot } from "./runpod";
+import type { RunpodSnapshot } from "./runpod";
 import { podCost, runCost, spentToday, type Spend } from "./spend";
 import { formatIn } from "./time";
 
@@ -20,8 +20,14 @@ export interface BuildOverviewInput {
 const total = (c: Spend) => c.billed + c.accruing;
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
 const runLabel = (r: OverviewRun) => `${r.experimentId} ${r.stage}`;
-// A pod that exists and may still bill: running, or stopped but keeping its disk.
-const isListedBilling = (p: RunpodPod) => p.status === "RUNNING" || p.status === "EXITED";
+const endMs = (r: OverviewRun) => r.endedAt?.getTime() ?? Infinity;
+
+// The run on a pod that ended last (none of them is running), or null if no run used it.
+function lastRunOn(runs: OverviewRun[], podId: string): OverviewRun | null {
+  let last: OverviewRun | null = null;
+  for (const r of runs) if (r.podId === podId && (!last || endMs(r) > endMs(last))) last = r;
+  return last;
+}
 
 function stageSummary(runs: OverviewRun[]): string {
   const latest = new Map<string, OverviewRun>();
@@ -116,26 +122,33 @@ export function buildOverview({ runs, snapshot, runpodState, now }: BuildOvervie
   );
   const rows: ExperimentRow[] = experiments.map(({ _running, _activity, ...row }) => row);
 
-  // Pods RunPod lists that no run (running or finished) claims: no spend is hidden.
+  // Every listed pod without a running run, so no spend is hidden. A pod an
+  // earlier run used carries only what it cost after that run ended; the
+  // hours before are on the run's own row.
   if (snap) {
-    const claimed = new Set(runs.map((r) => r.podId));
-    const stray = snap.pods.filter((p) => isListedBilling(p) && !claimed.has(p.id));
+    const busy = new Set(runs.filter((r) => r.status === "running").map((r) => r.podId));
+    const stray = snap.pods.filter((p) => p.status !== "TERMINATED" && !busy.has(p.id));
     if (stray.length > 0) {
-      const pods: PodRow[] = stray.map((p) => ({
-        kind: "unassigned",
-        runId: null,
-        stage: p.name || p.id,
-        setupId: null,
-        podId: p.id,
-        capUsd: null,
-        cost: total(podCost(p.id, snap.podHours, p, now)),
-        status: "unassigned",
-        progressPct: null,
-        eta: null,
-        staleMinutes: null,
-        endedAt: null,
-        endNote: null,
-      }));
+      const pods: PodRow[] = stray.map((p) => {
+        const last = lastRunOn(runs, p.id);
+        // An ended run without an end time keeps every hour after its start (runCost).
+        const since = last ? (last.endedAt?.getTime() ?? Infinity) : -Infinity;
+        return {
+          kind: "unassigned",
+          runId: null,
+          stage: last ? `still up after ${runLabel(last)}` : p.name || p.id,
+          setupId: null,
+          podId: p.id,
+          capUsd: null,
+          cost: total(podCost(p.id, snap.podHours, p, now, since)),
+          status: "unassigned",
+          progressPct: null,
+          eta: null,
+          staleMinutes: null,
+          endedAt: null,
+          endNote: null,
+        };
+      });
       rows.unshift({
         id: UNASSIGNED_ID,
         title: "Unassigned pods",
