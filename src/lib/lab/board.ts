@@ -7,20 +7,30 @@ const EXCERPT_CHARS = 200;
 
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
 
+const isHeading = (line: string) => /^\s*#/.test(line);
+
 /**
- * The first non-empty paragraph of some markdown as one plain line: heading
- * and emphasis markers removed, at most 200 chars.
+ * The first paragraph of text in some markdown as one plain line, at most 200
+ * chars. Heading lines are skipped; a document of only headings gives its
+ * first heading's text. Emphasis markers are removed.
  */
 export function excerptOf(md: string): string {
-  const para = md
-    .replace(/\r\n?/g, "\n")
-    .split(/\n\s*\n/)
-    .find((p) => p.trim() !== "");
-  if (!para) return "";
-  const text = para
-    .split("\n")
-    .map((line) => line.replace(/^\s{0,3}#{1,6}(\s+|$)/, "").replace(/\s+#+\s*$/, ""))
-    .join(" ")
+  const lines = md.replace(/\r\n?/g, "\n").split("\n");
+  const firstText = lines.findIndex((l) => l.trim() !== "" && !isHeading(l));
+  let raw: string;
+  if (firstText >= 0) {
+    const para: string[] = [];
+    for (const l of lines.slice(firstText)) {
+      if (l.trim() === "" || isHeading(l)) break;
+      para.push(l);
+    }
+    raw = para.join(" ");
+  } else {
+    const heading = lines.find(isHeading);
+    if (!heading) return "";
+    raw = heading.replace(/^\s*#+\s*/, "").replace(/\s+#+\s*$/, "");
+  }
+  const text = raw
     .replace(/(\*\*|__|~~)(\S(?:.*?\S)?)\1/g, "$2")
     .replace(/\*(\S(?:.*?\S)?)\*/g, "$1")
     .replace(/(^|[^\w])_(\S(?:.*?\S)?)_(?![\w])/g, "$1$2")

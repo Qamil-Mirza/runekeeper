@@ -12,8 +12,16 @@ test("excerpt is the first non-empty paragraph, on one line", () => {
   assert.equal(excerptOf("   \n\n "), "");
 });
 
-test("excerpt strips heading and emphasis markers", () => {
-  assert.equal(excerptOf("## Goal\n\nbody"), "Goal");
+test("excerpt skips heading lines and uses the first paragraph of text", () => {
+  assert.equal(excerptOf("# Probe transfer\n\n## Goal\n\nMeasure *transfer*.\n\nMore"), "Measure transfer.");
+  assert.equal(excerptOf("# Title\nFirst line under it\n\nNext"), "First line under it");
+});
+
+test("excerpt falls back to the first heading's text when there are only headings", () => {
+  assert.equal(excerptOf("\n## **Goal** ##\n\n### Method"), "Goal");
+});
+
+test("excerpt strips emphasis markers", () => {
   assert.equal(excerptOf("Run **held-out** on *two* seeds, __not__ _three_."), "Run held-out on two seeds, not three.");
   assert.equal(excerptOf("Keep snake_case_names and 2 * 3 intact"), "Keep snake_case_names and 2 * 3 intact");
 });
