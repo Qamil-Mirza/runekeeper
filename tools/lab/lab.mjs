@@ -184,7 +184,7 @@ export function formatResult(command, status, json) {
       text = items
         .map((it) =>
           it.kind === "decision"
-            ? `${it.experiment} v${it.version} "${it.title}" — ${String(it.verdict).toUpperCase()} (${pt(it.decidedAt)})\n  note: ${it.note}`
+            ? `${it.experiment} v${it.version} "${it.title}" — ${String(it.verdict).toUpperCase()} (${pt(it.decidedAt)})  id ${it.protocolId}\n  note: ${it.note}`
             : `reply on "${it.reportTitle}" (${pt(it.createdAt)})\n  ${it.body}`,
         )
         .join("\n\n");

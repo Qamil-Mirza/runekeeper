@@ -13,8 +13,9 @@ says what went wrong.
 
 - Post every protocol before asking the owner anything about it:
   `lab protocol post <file.md> --experiment E10 --title "..."`
-- To revise a protocol, post again with `--revises <id>` (the id the earlier
-  post printed).
+- To revise a protocol, post again with
+  `--revises <id from lab inbox or from the post>`: `lab inbox` prints each
+  verdict's protocol id, and `lab protocol post` prints the new id.
 - Post each report as one self-contained HTML file: plots inline as SVG or PNG
   data or inlined JS, no external URLs, at most 4 MB:
   `lab report post <file.html> --experiment E9 --title "..." --summary "..."`

@@ -61,14 +61,14 @@ test("formatResult inbox", () => {
   assert.deepEqual(formatResult("inbox", 200, { items: [] }), { text: "nothing new", exitCode: 0 });
   const r = formatResult("inbox", 200, {
     items: [
-      { kind: "decision", protocolId: "p", experiment: "E10", title: "Title", version: 2, verdict: "accepted", note: "go", decidedAt: "2026-11-25T02:10:00.000Z" },
+      { kind: "decision", protocolId: "3f2a9c1e-0b7d-4e8a-9c55-2d1e6f7a8b90", experiment: "E10", title: "Title", version: 2, verdict: "rejected", note: "go", decidedAt: "2026-11-25T02:10:00.000Z" },
       { kind: "reply", reportId: "r", reportTitle: "Report title", body: "thanks", createdAt: "2026-11-25T02:10:00.000Z" },
     ],
   });
   assert.equal(r.exitCode, 0);
   assert.equal(
     r.text,
-    'E10 v2 "Title" — ACCEPTED (Nov 24, 6:10 PM PT)\n  note: go\n\nreply on "Report title" (Nov 24, 6:10 PM PT)\n  thanks',
+    'E10 v2 "Title" — REJECTED (Nov 24, 6:10 PM PT)  id 3f2a9c1e-0b7d-4e8a-9c55-2d1e6f7a8b90\n  note: go\n\nreply on "Report title" (Nov 24, 6:10 PM PT)\n  thanks',
   );
 });
 
