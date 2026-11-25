@@ -26,6 +26,17 @@ test("excerpt strips emphasis markers", () => {
   assert.equal(excerptOf("Keep snake_case_names and 2 * 3 intact"), "Keep snake_case_names and 2 * 3 intact");
 });
 
+test("excerpt reads only the first 2000 chars of the body", () => {
+  assert.equal(excerptOf("x".repeat(2000) + "\n\nSecond"), "x".repeat(199) + "…");
+  assert.equal(excerptOf("# T\n" + " ".repeat(2000) + "Late text"), "T");
+});
+
+test("a heading needs 1-6 #s and a space; #hashtag is a paragraph", () => {
+  assert.equal(excerptOf("#hashtag line\n\nNext"), "#hashtag line");
+  assert.equal(excerptOf("####### seven\n\nNext"), "####### seven");
+  assert.equal(excerptOf("###### Six\n\nBody"), "Body");
+});
+
 test("excerpt is at most 200 chars", () => {
   const long = "word ".repeat(100);
   const e = excerptOf(long);
@@ -83,6 +94,17 @@ test("protocol detail carries the body and the revised version", () => {
   assert.deepEqual(d.previous, { version: 1, status: "rejected", note: "Too broad" });
   assert.equal(d.previousNote, "Too broad");
   assert.equal(d.previousStatus, "rejected");
+});
+
+test("excerpt work is capped: 100 000 chars of `*a ` finish in under 200 ms", () => {
+  const big = "*a ".repeat(100_000 / 3 + 1).slice(0, 100_000);
+  const t0 = performance.now();
+  excerptOf(big);
+  const { bodyStart, ...rest } = board;
+  void bodyStart;
+  protocolDetail({ ...rest, revisesId: "p1", bodyMd: big, seenByAdvisorAt: null });
+  const ms = performance.now() - t0;
+  assert.ok(ms < 200, `took ${ms.toFixed(0)} ms`);
 });
 
 test("report card", () => {

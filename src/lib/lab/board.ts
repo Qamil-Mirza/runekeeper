@@ -4,18 +4,22 @@ import type { BoardProtocol, BoardReport, LabProtocol } from "./store";
 import type { ProtocolCard, ProtocolDetail, ReportCard } from "./types";
 
 const EXCERPT_CHARS = 200;
+// The excerpt reads only the body's opening, so its work is bounded (the
+// board's `bodyStart` is the same 2000 chars).
+const EXCERPT_INPUT_CHARS = 2000;
 
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
 
-const isHeading = (line: string) => /^\s*#/.test(line);
+// An ATX heading (CommonMark): 1-6 #s, then a space or the end of the line.
+const isHeading = (line: string) => /^\s*#{1,6}(?:\s|$)/.test(line);
 
 /**
- * The first paragraph of text in some markdown as one plain line, at most 200
- * chars. Heading lines are skipped; a document of only headings gives its
- * first heading's text. Emphasis markers are removed.
+ * The first paragraph of text in the first 2000 chars of some markdown as one
+ * plain line, at most 200 chars. Heading lines are skipped; a document of only
+ * headings gives its first heading's text. Emphasis markers are removed.
  */
 export function excerptOf(md: string): string {
-  const lines = md.replace(/\r\n?/g, "\n").split("\n");
+  const lines = md.slice(0, EXCERPT_INPUT_CHARS).replace(/\r\n?/g, "\n").split("\n");
   const firstText = lines.findIndex((l) => l.trim() !== "" && !isHeading(l));
   let raw: string;
   if (firstText >= 0) {
