@@ -1,5 +1,7 @@
 // Shared Lab shapes. Keep this file free of database imports: the client uses it too.
 
+import type { ProtocolStatus } from "./protocols";
+
 export type RunStatus = "running" | "done" | "failed" | "stopped";
 
 export interface OverviewRun {
@@ -60,4 +62,39 @@ export interface OverviewDTO {
   spent: { billed: number; accruing: number } | null;
   next: { at: string; label: string } | null;
   experiments: ExperimentRow[];
+}
+
+// ─── Board DTOs (server → client) ────────────────────────────────────────────
+// Columns are derived on the client: protocols from `status`, reports from
+// `read` and `replies.length`. Times are ISO strings.
+
+export interface ProtocolCard {
+  id: string;
+  experiment: string;
+  title: string;
+  version: number;
+  status: ProtocolStatus;
+  /** First paragraph of the markdown, plain text, at most 200 chars. */
+  excerpt: string;
+  note: string | null;
+  /** The owner's note on the version this one revises. */
+  previousNote: string | null;
+  createdAt: string;
+  decidedAt: string | null;
+}
+
+export type ProtocolDetail = ProtocolCard & {
+  bodyMd: string;
+  previous: { version: number; status: ProtocolStatus; note: string | null } | null;
+};
+
+export interface ReportCard {
+  id: string;
+  experiment: string | null;
+  title: string;
+  summary: string;
+  createdAt: string;
+  read: boolean;
+  /** Oldest first. */
+  replies: { body: string; createdAt: string }[];
 }
